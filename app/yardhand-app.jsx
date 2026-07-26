@@ -486,7 +486,6 @@ function TopBar({ state, mode, setMode }) {
           </div>
           <div className="leading-tight">
             <div className="font-extrabold tracking-tight text-white" style={{ letterSpacing: "-0.01em" }}>{state.business.name}</div>
-            <div className="text-[11px] uppercase tracking-widest" style={{ color: T.amber }}>Trailer Rental Manager</div>
           </div>
         </div>
         <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: "rgba(255,255,255,0.08)" }}>
