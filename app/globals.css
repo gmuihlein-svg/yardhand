@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* The YardHand app sets its own colors, fonts, and backgrounds inline.
+   Keep the global base minimal so nothing overrides the prototype. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #f1eee7; /* T.paper — matches the app so there is no flash behind it */
+}
