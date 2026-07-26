@@ -141,7 +141,7 @@ const mkAvail = (pattern) => {
 /* ---------------- seed data (mirrors the financial model) --------------- */
 const SEED = {
   business: {
-    name: "Whole Yard Trailer Rental",
+    name: "Ext Professionals",
     yard: "Charlotte, NC",
     phone: "(704) 555-0100",
     pickupHours: WINDOWS,
@@ -485,7 +485,7 @@ function TopBar({ state, mode, setMode }) {
             <Truck size={20} style={{ color: T.steelDk }} />
           </div>
           <div className="leading-tight">
-            <div className="font-extrabold tracking-tight text-white" style={{ letterSpacing: "-0.01em" }}>YardHand</div>
+            <div className="font-extrabold tracking-tight text-white" style={{ letterSpacing: "-0.01em" }}>{state.business.name}</div>
             <div className="text-[11px] uppercase tracking-widest" style={{ color: T.amber }}>Trailer Rental Manager</div>
           </div>
         </div>
