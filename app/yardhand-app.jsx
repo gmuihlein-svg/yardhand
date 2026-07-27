@@ -27,6 +27,24 @@ const STATUS = {
   maintenance:{ label: "Down",     c: T.gray,  bg: T.graySoft },
 };
 
+/* ---------------- brand theme (white-label logo + colors) --------------- */
+const DEFAULT_THEME = { accent: "#F2A900", dark: "#2B3A44" };
+const isHex = (h) => /^#[0-9a-fA-F]{6}$/.test(h || "");
+const _hex2rgb = (h) => { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
+const _rgb2hex = (r, g, b) => "#" + [r, g, b].map((x) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0")).join("");
+const _mix = (hex, t, amt) => { const [r, g, b] = _hex2rgb(hex); return _rgb2hex(r + (t[0] - r) * amt, g + (t[1] - g) * amt, b + (t[2] - b) * amt); };
+const darken = (hex, amt) => _mix(hex, [0, 0, 0], amt);
+const tint = (hex, amt) => _mix(hex, [255, 255, 255], amt);
+/* mutate the shared token object so every component recolors on next render */
+function applyTheme(biz) {
+  const th = (biz && biz.theme) || DEFAULT_THEME;
+  const accent = isHex(th.accent) ? th.accent : DEFAULT_THEME.accent;
+  const dark = isHex(th.dark) ? th.dark : DEFAULT_THEME.dark;
+  T.amber = accent; T.amberDk = darken(accent, 0.18); T.amberSoft = tint(accent, 0.84);
+  T.steel = dark; T.steelDk = darken(dark, 0.16);
+  STATUS.reserved.c = T.amberDk; STATUS.reserved.bg = T.amberSoft;
+}
+
 /* ---------------- date helpers (ISO yyyy-mm-dd) --------------- */
 const iso = (d) => d.toISOString().slice(0, 10);
 const today = () => iso(new Date());
@@ -185,6 +203,7 @@ const SEED = {
     name: "Ext Professionals",
     yard: "Charlotte, NC",
     phone: "(704) 555-0100",
+    logo: "", theme: { accent: "#F2A900", dark: "#2B3A44" },
     pickupHours: WINDOWS,
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
@@ -315,6 +334,8 @@ export default function App() {
     );
   }
 
+  applyTheme(state.business); // recolor tokens from saved brand theme before children render
+
   const typeBySize = (sz) => state.types.find((t) => t.size === sz);
 
   /* derive status for a trailer on a given day */
@@ -410,7 +431,7 @@ function Landing({ state, typeBySize, go, owner }) {
       <header className="sticky top-0 z-40" style={{ background: T.steelDk }}>
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-md flex items-center justify-center" style={{ background: T.amber }}><Truck size={20} style={{ color: T.steelDk }} /></div>
+            <BrandMark logo={b.logo} size={36} />
             <div className="leading-tight">
               <div className="font-extrabold tracking-tight text-white">{b.name}</div>
               <div className="text-[11px] uppercase tracking-widest" style={{ color: T.amber }}>{b.yard}</div>
@@ -537,14 +558,17 @@ function Landing({ state, typeBySize, go, owner }) {
 }
 
 /* ---------------- top bar --------------- */
+function BrandMark({ logo, size = 36 }) {
+  if (logo) return <img src={logo} alt="logo" className="rounded-md object-contain shrink-0" style={{ width: size, height: size, background: "#fff", padding: 2 }} />;
+  return <div className="rounded-md flex items-center justify-center shrink-0" style={{ width: size, height: size, background: T.amber }}><Truck size={Math.round(size * 0.56)} style={{ color: T.steelDk }} /></div>;
+}
+
 function TopBar({ state, mode, setMode }) {
   return (
     <div style={{ background: T.steelDk }} className="sticky top-0 z-40 border-b" >
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-md flex items-center justify-center" style={{ background: T.amber }}>
-            <Truck size={20} style={{ color: T.steelDk }} />
-          </div>
+          <BrandMark logo={state.business.logo} size={36} />
           <div className="leading-tight">
             <div className="font-extrabold tracking-tight text-white" style={{ letterSpacing: "-0.01em" }}>{state.business.name}</div>
           </div>
@@ -1078,7 +1102,7 @@ const monthLabel = (key) => { const [y, m] = key.split("-"); return new Date(+y,
 const REV_OK = (b) => b.status === "reserved" || b.status === "out" || b.status === "returned";
 
 /* downscale an uploaded image to a small JPEG data URL so it fits in browser storage */
-function fileToScaledDataURL(file, maxW = 900) {
+function fileToScaledDataURL(file, maxW = 900, mime = "image/jpeg", quality = 0.82) {
   return new Promise((res) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -1088,7 +1112,7 @@ function fileToScaledDataURL(file, maxW = 900) {
       const c = document.createElement("canvas"); c.width = w; c.height = h;
       c.getContext("2d").drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(url);
-      try { res(c.toDataURL("image/jpeg", 0.82)); } catch (e) { res(null); }
+      try { res(c.toDataURL(mime, quality)); } catch (e) { res(null); }
     };
     img.onerror = () => { URL.revokeObjectURL(url); res(null); };
     img.src = url;
@@ -1746,6 +1770,7 @@ function SettingsView({ state, setState, flash }) {
   const addType = (t) => { setState((s) => ({ ...s, types: [...s.types, t] })); setAddingType(false); flash(`Added ${t.name}.`); };
   const removeType = (size) => { if (state.trailers.some((tr) => tr.size === size)) { flash("Remove its units first."); return; } setState((s) => ({ ...s, types: s.types.filter((t) => t.size !== size) })); flash("Equipment type removed."); };
   const onPhoto = async (size, file) => { if (!file) return; const url = await fileToScaledDataURL(file); if (url) { setType(size, { image: url }); flash("Photo updated."); } else flash("Couldn't read that image."); };
+  const onLogo = async (file) => { if (!file) return; const url = await fileToScaledDataURL(file, 400, "image/png"); if (url) { set({ logo: url }); flash("Logo updated."); } else flash("Couldn't read that image."); };
   return (
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
@@ -1757,6 +1782,50 @@ function SettingsView({ state, setState, flash }) {
         <Field label="Business name"><input value={b.name} onChange={(e) => set({ name: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Yard location"><input value={b.yard} onChange={(e) => set({ yard: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Business phone (shown to customers · used for the “Text to book” button)"><input value={b.phone} onChange={(e) => set({ phone: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><ImageIcon size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Branding · logo & colors</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Your logo and colors apply everywhere — the top bar, your public site, and the customer booking pages. Changes preview instantly.</p>
+        <Field label="Logo (top-left, and throughout)">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: T.steelDk }}>
+              <BrandMark logo={b.logo} size={32} />
+              <span className="text-sm font-bold text-white">{b.name}</span>
+            </div>
+            <label className="text-xs font-bold px-2.5 py-1.5 rounded-lg cursor-pointer" style={{ background: T.steel, color: "#fff" }}>
+              {b.logo ? "Replace logo" : "Upload logo"}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => onLogo(e.target.files?.[0])} />
+            </label>
+            {b.logo && <button onClick={() => set({ logo: "" })} className="text-xs font-bold px-2.5 py-1.5 rounded-lg" style={{ background: T.redSoft, color: T.red }}>Remove</button>}
+          </div>
+          <p className="text-[11px] mt-1" style={{ color: T.sub }}>A transparent PNG looks best. Auto-shrunk to fit; saved to this browser (moves to cloud storage when you go live).</p>
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Accent color (buttons & highlights)">
+            <div className="flex items-center gap-2">
+              <input type="color" value={isHex(b.theme?.accent) ? b.theme.accent : DEFAULT_THEME.accent} onChange={(e) => set({ theme: { ...(b.theme || DEFAULT_THEME), accent: e.target.value } })} style={{ width: 46, height: 36, borderRadius: 8, border: `1px solid ${T.line}`, background: "#fff", cursor: "pointer" }} />
+              <span className="text-xs tabular-nums" style={{ color: T.sub }}>{(b.theme?.accent || DEFAULT_THEME.accent).toUpperCase()}</span>
+            </div>
+          </Field>
+          <Field label="Header color (top bar)">
+            <div className="flex items-center gap-2">
+              <input type="color" value={isHex(b.theme?.dark) ? b.theme.dark : DEFAULT_THEME.dark} onChange={(e) => set({ theme: { ...(b.theme || DEFAULT_THEME), dark: e.target.value } })} style={{ width: 46, height: 36, borderRadius: 8, border: `1px solid ${T.line}`, background: "#fff", cursor: "pointer" }} />
+              <span className="text-xs tabular-nums" style={{ color: T.sub }}>{(b.theme?.dark || DEFAULT_THEME.dark).toUpperCase()}</span>
+            </div>
+          </Field>
+        </div>
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: T.sub }}>Live preview</div>
+          <div className="rounded-lg p-3 flex flex-wrap items-center gap-2" style={{ background: T.paper }}>
+            <button className="px-3 py-1.5 rounded-lg text-sm font-extrabold" style={{ background: T.amber, color: T.steelDk }}>Book now</button>
+            <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.amberSoft, color: T.amberDk }}>Reserved</span>
+            <span className="px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: T.steel }}>Top bar</span>
+          </div>
+        </div>
+        <button onClick={() => set({ theme: { ...DEFAULT_THEME } })} className="text-xs font-bold" style={{ color: T.steel }}>Reset to default colors</button>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
