@@ -539,7 +539,7 @@ function Badge({ status }) {
     style={{ color: s.c, background: s.bg }}><CircleDot size={10} /> {s.label}</span>;
 }
 function Card({ children, className = "", style = {} }) {
-  return <div className={`rounded-xl ${className}`} style={{ background: T.panel, border: `1px solid ${T.line}`, ...style }}>{children}</div>;
+  return <div className={`rounded-2xl ${className}`} style={{ background: T.panel, border: `1px solid ${T.line}`, boxShadow: "0 1px 2px rgba(24,27,31,0.04)", ...style }}>{children}</div>;
 }
 
 /* ---------------- DASHBOARD --------------- */
@@ -564,15 +564,25 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
   const upcoming = state.bookings.filter((b) => b.status === "reserved" && b.start > today()).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 5);
 
   const kpis = [
-    { label: "Out on rent", val: stats.out + stats.overdue, icon: Truck, c: T.blue, onClick: () => setKpiList({ title: "Out on rent — return timing", items: outNow }) },
-    { label: "Available", val: stats.available, icon: PackageCheck, c: T.green, onClick: () => setKpiList({ title: "Available now", units: availUnits }) },
-    { label: "Due back today", val: dueToday.length, icon: CalendarClock, c: T.amberDk, onClick: () => setKpiList({ title: "Due back today", items: dueToday }) },
-    { label: "Overdue", val: overdue.length, icon: AlertTriangle, c: T.red, onClick: () => setKpiList({ title: "Overdue", items: overdue }) },
+    { label: "Out on rent", val: stats.out + stats.overdue, icon: Truck, c: T.blue, bg: T.blueSoft, onClick: () => setKpiList({ title: "Out on rent — return timing", items: outNow }) },
+    { label: "Available", val: stats.available, icon: PackageCheck, c: T.green, bg: T.greenSoft, onClick: () => setKpiList({ title: "Available now", units: availUnits }) },
+    { label: "Due back today", val: dueToday.length, icon: CalendarClock, c: T.amberDk, bg: T.amberSoft, onClick: () => setKpiList({ title: "Due back today", items: dueToday }) },
+    { label: "Overdue", val: overdue.length, icon: AlertTriangle, c: T.red, bg: T.redSoft, onClick: () => setKpiList({ title: "Overdue", items: overdue }) },
   ];
 
   return (
-    <div className="space-y-5">
-      <SectionTitle>Today at the yard</SectionTitle>
+    <div className="space-y-6">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: T.amberDk }}>Today at the yard</div>
+          <h2 className="text-2xl font-extrabold tracking-tight" style={{ letterSpacing: "-0.02em" }}>
+            {new Date(today() + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+          </h2>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full" style={{ background: T.greenSoft, color: T.green }}>
+          <span className="w-2 h-2 rounded-full" style={{ background: T.green }} /> {stats.available} of {state.trailers.length} trailers free
+        </div>
+      </div>
       {(() => {
         const conflicts = findConflicts(state);
         if (conflicts.length === 0) return null;
@@ -605,27 +615,42 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
       })()}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {kpis.map((k) => (
-          <button key={k.label} onClick={k.onClick} className="text-left rounded-xl p-4 transition hover:shadow-sm" style={{ background: T.panel, border: `1px solid ${T.line}` }}>
-            <div className="flex items-center justify-between">
-              <span className="text-3xl font-extrabold tabular-nums" style={{ color: T.ink }}>{k.val}</span>
-              <k.icon size={22} style={{ color: k.c }} />
+          <button key={k.label} onClick={k.onClick}
+            className="group text-left rounded-2xl p-4 transition hover:-translate-y-0.5"
+            style={{ background: T.panel, border: `1px solid ${T.line}`, boxShadow: "0 1px 2px rgba(24,27,31,0.04)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: k.bg }}>
+                <k.icon size={20} style={{ color: k.c }} />
+              </span>
+              <ChevronRight size={16} style={{ color: T.gray }} />
             </div>
-            <div className="text-xs font-semibold mt-1 uppercase tracking-wide flex items-center gap-1" style={{ color: T.sub }}>{k.label} <ChevronRight size={12} /></div>
+            <div className="text-3xl font-extrabold tabular-nums leading-none" style={{ color: T.ink }}>{k.val}</div>
+            <div className="text-[11px] font-bold mt-1.5 uppercase tracking-wide" style={{ color: T.sub }}>{k.label}</div>
           </button>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <Card className="p-4 lg:col-span-1" style={{ background: T.steelDk }}>
-          <div className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: T.amber }}>Revenue booked · this month</div>
-          <div className="text-4xl font-extrabold text-white tabular-nums">${monthRev.toLocaleString()}</div>
-          <div className="text-xs mt-2" style={{ color: "#B7C0C6" }}>+ tax collected & remitted separately</div>
-        </Card>
+        <div className="rounded-2xl p-5 lg:col-span-1 flex flex-col justify-between" style={{ background: T.steelDk, boxShadow: "0 1px 2px rgba(24,27,31,0.06)" }}>
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: T.amber }}>Revenue booked · this month</div>
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(242,169,0,0.15)" }}><DollarSign size={16} style={{ color: T.amber }} /></span>
+          </div>
+          <div>
+            <div className="text-4xl font-extrabold text-white tabular-nums mt-4">${monthRev.toLocaleString()}</div>
+            <div className="text-xs mt-2" style={{ color: "#B7C0C6" }}>+ tax collected &amp; remitted separately</div>
+          </div>
+        </div>
 
-        <Card className="p-4 lg:col-span-2">
-          <div className="flex items-center gap-2 mb-3">
-            <CalendarClock size={16} style={{ color: T.steel }} />
-            <h3 className="font-bold text-sm uppercase tracking-wide">Pickups & returns today</h3>
+        <div className="rounded-2xl p-5 lg:col-span-2" style={{ background: T.panel, border: `1px solid ${T.line}`, boxShadow: "0 1px 2px rgba(24,27,31,0.04)" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><CalendarClock size={16} style={{ color: T.amberDk }} /></span>
+              <h3 className="font-bold text-sm uppercase tracking-wide">Pickups &amp; returns today</h3>
+            </div>
+            {(overdue.length + dueToday.length + pickupsToday.length) > 0 && (
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: T.paper, color: T.sub }}>{overdue.length + dueToday.length + pickupsToday.length}</span>
+            )}
           </div>
           {pickupsToday.length === 0 && dueToday.length === 0 && overdue.length === 0 ? (
             <Empty>Nothing scheduled today. The yard's quiet.</Empty>
@@ -636,12 +661,12 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
               {pickupsToday.map((b) => <TodayRow key={b.id} b={b} kind="pickup" state={state} setBooking={setBooking} flash={flash} openDetail={openDetail} />)}
             </div>
           )}
-        </Card>
+        </div>
       </div>
 
-      <Card className="p-4">
+      <Card className="p-5">
         <div className="flex items-center gap-2 mb-3">
-          <CalendarDays size={16} style={{ color: T.steel }} />
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><CalendarDays size={16} style={{ color: T.blue }} /></span>
           <h3 className="font-bold text-sm uppercase tracking-wide">Upcoming reservations</h3>
         </div>
         {upcoming.length === 0 ? <Empty>No upcoming reservations yet.</Empty> : (
