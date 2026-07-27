@@ -8,20 +8,17 @@
 
 ## 🔴 NEXT SESSION — START HERE (owner's standing request)
 
-**Update all documentation + instructions to reflect everything built so far, and add
-guidance on managing customers (multi-tenant).** Specifically:
+**Remaining: create the customer-management (multi-tenant) admin guide.** Status:
 
-1. **Update the Operator's Guide** (the staff how-to-use-the-app doc) to include the
-   newer features: the **Insights** analytics tab, **equipment photos & descriptions**,
-   **Add equipment (new product) vs. Add unit**, **branding (logo + theme colors)**,
-   the **owner login / sign-out**, **transparent step-by-step pricing**, and the
-   **workforce email** field.
-2. **Create a new "Managing Customers" / Platform-Admin guide** — for the platform owner
-   (not end businesses): how to onboard a new business, customize per-customer via
-   settings + feature flags, keep others on defaults, and roll out safe platform-wide
-   updates. Base it on the "Multi-tenant principles" section below.
-3. **Refresh the Partnership Pitch** doc with the new capabilities (analytics, branding,
-   logins) as selling points.
+1. ✅ **DONE** — Operator's Guide updated (Insights, equipment photos/descriptions,
+   Add equipment vs Add unit, branding, owner login/sign-out, transparent pricing,
+   workforce email).
+2. ⬜ **TODO** — **Create a new "Managing Customers" / Platform-Admin guide** — for the
+   platform owner (not end businesses): how to onboard a new business, customize
+   per-customer via settings + feature flags, keep others on defaults, and roll out safe
+   platform-wide updates. Base it on the "Multi-tenant principles" section below.
+3. ✅ **DONE** — Partnership Pitch refreshed with new capabilities (analytics, branding,
+   logins, transparent pricing).
 
 _(This note exists because the owner asked to be reminded next time — surface it.)_
 
