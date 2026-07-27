@@ -254,6 +254,15 @@ function priceFor(type, days) {
   else if (days <= 14) total = Math.min(total, biweekly);
   return Math.round(total);
 }
+/* explain the price to the customer: which tier they land on + what longer rentals save */
+function priceExplain(type, days) {
+  if (!type) return { total: 0, saved: 0, perDay: 0, tierLabel: "daily rate" };
+  const total = priceFor(type, days);
+  const saved = Math.max(0, days * type.daily - total);
+  const perDay = days > 0 ? Math.round(total / days) : 0;
+  const tierLabel = days >= 28 ? "4-week rate" : days >= 14 ? "2-week rate" : days >= 7 ? "weekly rate" : "daily rate";
+  return { total, saved, perDay, tierLabel };
+}
 
 /* ---------------- storage --------------- */
 const KEY = "yardhand_state_v1";
@@ -986,9 +995,9 @@ function FleetView({ state, typeBySize, trailerStatus, currentBooking, update, f
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <SectionTitle>Fleet · {state.trailers.length} trailers</SectionTitle>
+        <SectionTitle>Fleet · {state.trailers.length} units</SectionTitle>
         <button onClick={() => setAdding(true)} className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5" style={{ background: T.amber, color: T.steelDk }}>
-          <Plus size={16} /> Add trailer
+          <Plus size={16} /> Add equipment
         </button>
       </div>
       {bySize.map((grp) => (
@@ -1040,7 +1049,7 @@ function AddTrailerModal({ state, onClose, onAdd }) {
   const [vin, setVin] = useState("");
   const [cost, setCost] = useState(0);
   return (
-    <Modal onClose={onClose} title="Add a trailer">
+    <Modal onClose={onClose} title="Add equipment">
       <div className="space-y-3">
         <Field label="Size">
           <select value={size} onChange={(e) => setSize(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
@@ -2120,6 +2129,31 @@ function CustLogistics({ b, state, setBooking, flash, done }) {
 }
 
 
+/* live, itemized price — shown on every booking step so cost is never a surprise */
+function PriceBreakdown({ type, days, base, waiver, waiverAmt, outMethod, returnMethod, outFee, returnFee, tax, total, deposit, pe, heading }) {
+  return (
+    <div className="rounded-xl p-4" style={{ background: T.paper, border: `1px solid ${T.line}` }}>
+      {heading && (
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-bold uppercase tracking-wide" style={{ color: T.sub }}>{heading}</span>
+          {days > 0 && <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full tabular-nums" style={{ background: T.amberSoft, color: T.amberDk }}>≈ ${pe.perDay}/day</span>}
+        </div>
+      )}
+      <Row l={`${type.name} · ${days} day${days > 1 ? "s" : ""}`} r={`$${base}`} />
+      <div className="text-[11px] mb-1.5" style={{ color: T.sub }}>
+        Billed at your {pe.tierLabel}{pe.saved > 0 ? <span style={{ color: T.green, fontWeight: 700 }}> · saves ${pe.saved} vs daily</span> : ""}
+      </div>
+      {waiver && <Row l="Damage waiver (optional)" r={`$${waiverAmt}`} />}
+      <Row l={outMethod === "delivery" ? "Delivery (we bring it)" : "Yard pickup (will-call)"} r={`$${outFee}`} />
+      <Row l={returnMethod === "collect" ? "Collection (we get it)" : "Yard drop-off (you return it)"} r={`$${returnFee}`} />
+      <Row l="Sales tax (NC)" r={`$${tax}`} />
+      <div className="border-t my-2" style={{ borderColor: T.line }} />
+      <Row l="Total today" r={`$${total}`} bold big />
+      <Row l="Refundable deposit hold" r={`$${deposit} (released at return)`} />
+    </div>
+  );
+}
+
 function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode }) {
   const [stepN, setStepN] = useState(0);
   const [lastCode, setLastCode] = useState("");
@@ -2141,6 +2175,8 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
   const sub = base + waiverAmt + legFees;
   const tax = Math.round(sub * b.taxRate);
   const total = sub + tax;
+  const pe = priceExplain(type, form.days);
+  const priceProps = { type, days: form.days, base, waiver: form.waiver, waiverAmt, outMethod: form.outMethod, returnMethod: form.returnMethod, outFee, returnFee, tax, total, deposit: b.deposit, pe };
 
   const steps = ["Trailer", "Dates", "Details", "Review"];
 
@@ -2222,7 +2258,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
         {/* step 0: trailer */}
         {stepN === 0 && (
           <div className="space-y-3">
-            <StepHead icon={Truck} title="Pick your trailer size" sub="All tow on a normal license behind a properly rated truck." />
+            <StepHead icon={Truck} title="Pick your trailer size" sub="All tow on a normal license. You'll see your full price — itemized — the moment you pick dates." />
             {state.types.map((t) => {
               const avail = countAvail(t.size, form.start, end);
               const active = form.size === t.size;
@@ -2237,7 +2273,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                         : <div className="w-16 h-16 rounded-lg flex items-center justify-center shrink-0" style={{ background: active ? T.amber : T.paper }}><Truck size={26} style={{ color: active ? T.steelDk : T.steel }} /></div>}
                       <div className="min-w-0">
                         <div className="font-bold">{t.name}</div>
-                        <div className="text-xs" style={{ color: T.sub }}>{t.cuyd} · from ${t.daily}/24hr</div>
+                        <div className="text-xs" style={{ color: T.sub }}>{t.cuyd} · from ${t.daily}/day</div>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -2317,6 +2353,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                 <AlertTriangle size={16} /> No {form.size} free for those dates — try a different day or size.
               </div>
             )}
+            {type && <PriceBreakdown heading="Your price so far" {...priceProps} />}
             <NavBtns onBack={() => setStepN(0)} onNext={() => setStepN(2)}
               nextOk={countAvail(form.size, form.start, end) > 0 && (form.outMethod === "delivery"
                 ? windowCovered(state, form.start, form.pickupTime)
@@ -2366,6 +2403,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               {form.returnMethod === "collect" && <div className="text-[11px] mt-1.5" style={{ color: T.sub }}>We'll schedule a driver to collect it on your return date ({fmtLong(end)}).</div>}
             </div>
             <Field label="Anything we should know? (optional)"><textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} placeholder="Job type, what you're hauling…" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+            {type && <PriceBreakdown heading="Your price so far" {...priceProps} />}
             <NavBtns onBack={() => setStepN(1)} onNext={() => setStepN(3)} nextOk={form.name && form.phone && (!(form.outMethod === "delivery" || form.returnMethod === "collect") || form.address)} />
           </div>
         )}
@@ -2374,16 +2412,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
         {stepN === 3 && (
           <div className="space-y-4">
             <StepHead icon={CreditCard} title="Review & pay" sub="Card holds your deposit; you're charged the rental now." />
-            <div className="rounded-xl p-4" style={{ background: T.paper }}>
-              <Row l={`${type.name} × ${form.days}d`} r={`$${base}`} />
-              {form.waiver && <Row l="Damage waiver" r={`$${waiverAmt}`} />}
-              <Row l={form.outMethod === "delivery" ? "Delivery (we bring it)" : "Yard pickup (will-call)"} r={`$${outFee}`} />
-              <Row l={form.returnMethod === "collect" ? "Collection (we get it)" : "Yard drop-off (you return it)"} r={`$${returnFee}`} />
-              <Row l="Sales tax (NC)" r={`$${tax}`} />
-              <div className="border-t my-2" style={{ borderColor: T.line }} />
-              <Row l="Total today" r={`$${total}`} bold big />
-              <Row l="Refundable deposit hold" r={`$${b.deposit}`} />
-            </div>
+            <PriceBreakdown heading="Order summary" {...priceProps} />
             {/* SIGN the agreement & waiver */}
             <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
               <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: T.steelDk }}>
