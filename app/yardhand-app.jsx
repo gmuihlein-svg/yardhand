@@ -151,9 +151,9 @@ const SEED = {
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
   types: [
-    { size: "7x14", name: "7×14 Dump (14K GVWR)", cuyd: "7.3 cu yd", daily: 155, weekly: 580, monthly: 1880 },
-    { size: "7x12", name: "7×12 Dump (9,990 GVWR)", cuyd: "6 cu yd", daily: 130, weekly: 490, monthly: 1600 },
-    { size: "5x8",  name: "5×8 Dump (5K GVWR)", cuyd: "2.5 cu yd", daily: 95, weekly: 350, monthly: 1150 },
+    { size: "7x14", name: "7×14 Dump (14K GVWR)", cuyd: "7.3 cu yd", daily: 155, weekly: 580, biweekly: 1120, monthly: 1880 },
+    { size: "7x12", name: "7×12 Dump (9,990 GVWR)", cuyd: "6 cu yd", daily: 130, weekly: 490, biweekly: 950, monthly: 1600 },
+    { size: "5x8",  name: "5×8 Dump (5K GVWR)", cuyd: "2.5 cu yd", daily: 95, weekly: 350, biweekly: 680, monthly: 1150 },
   ],
   contractors: [
     { id: "c1", name: "Marcus Reed", phone: "704-555-0301", vehicle: "F-250", active: true,
@@ -196,14 +196,17 @@ const SEED = {
 /* ---------------- pricing --------------- */
 function priceFor(type, days) {
   if (!type || days < 1) return 0;
-  // best-of tiered: fill 4-week blocks, then weeks, then days, using the cheaper stack
+  const biweekly = type.biweekly ?? type.weekly * 2; // fallback for older saved data
+  // best-of tiered: fill 4-week blocks, then 2-week blocks, then weeks, then days
   let d = days, total = 0;
   const months = Math.floor(d / 28); total += months * type.monthly; d -= months * 28;
+  const biweeks = Math.floor(d / 14); total += biweeks * biweekly; d -= biweeks * 14;
   const weeks = Math.floor(d / 7); total += weeks * type.weekly; d -= weeks * 7;
   total += d * type.daily;
-  // guard: never charge more than next tier up
+  // guards: never charge more than the next tier up
   total = Math.min(total, Math.ceil(days / 28) * type.monthly);
   if (days <= 7) total = Math.min(days * type.daily, type.weekly);
+  else if (days <= 14) total = Math.min(total, biweekly);
   return Math.round(total);
 }
 
@@ -1422,6 +1425,7 @@ function AddContractorModal({ onClose, onAdd }) {
 function SettingsView({ state, setState, flash }) {
   const b = state.business;
   const set = (patch) => setState((s) => ({ ...s, business: { ...s.business, ...patch } }));
+  const setType = (size, patch) => setState((s) => ({ ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) }));
   return (
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
@@ -1433,6 +1437,24 @@ function SettingsView({ state, setState, flash }) {
         <Field label="Business name"><input value={b.name} onChange={(e) => set({ name: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Yard location"><input value={b.yard} onChange={(e) => set({ yard: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Business phone (shown to customers · used for the “Text to book” button)"><input value={b.phone} onChange={(e) => set({ phone: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><Truck size={16} style={{ color: T.green }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Trailer pricing</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Set the rate for each trailer size. A customer's total blends these automatically — longer rentals use the cheaper weekly, 2-week, and 4-week rates.</p>
+        {state.types.map((t) => (
+          <div key={t.size} className="rounded-lg p-3" style={{ background: T.paper }}>
+            <div className="font-bold text-sm mb-2">{t.name}</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Field label="Per 24 hrs ($)"><NumInput v={t.daily} on={(v) => setType(t.size, { daily: v })} /></Field>
+              <Field label="Per week ($)"><NumInput v={t.weekly} on={(v) => setType(t.size, { weekly: v })} /></Field>
+              <Field label="Per 2 weeks ($)"><NumInput v={t.biweekly ?? t.weekly * 2} on={(v) => setType(t.size, { biweekly: v })} /></Field>
+              <Field label="Per 4 weeks ($)"><NumInput v={t.monthly} on={(v) => setType(t.size, { monthly: v })} /></Field>
+            </div>
+          </div>
+        ))}
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -1851,8 +1873,14 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                     style={form.days === d ? { background: T.steel, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>{l}</button>
                 ))}
               </div>
-              <input type="range" min="1" max="60" value={form.days} onChange={(e) => set({ days: +e.target.value })} className="w-full mt-3" style={{ accentColor: T.amber }} />
-              <div className="text-xs text-center" style={{ color: T.sub }}>{form.days} day{form.days > 1 ? "s" : ""} · return by {fmtLong(end)}</div>
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: T.steel }}>
+                  <ArrowLeft size={13} /><ArrowRight size={13} /> Or slide to pick any number of days
+                </span>
+                <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full tabular-nums" style={{ background: T.amberSoft, color: T.amberDk }}>{form.days} day{form.days > 1 ? "s" : ""}</span>
+              </div>
+              <input type="range" min="1" max="60" value={form.days} onChange={(e) => set({ days: +e.target.value })} className="w-full mt-2" style={{ accentColor: T.amber, height: 8 }} />
+              <div className="text-xs text-center mt-1" style={{ color: T.sub }}>Rent for {form.days} day{form.days > 1 ? "s" : ""} · return by {fmtLong(end)}</div>
             </Field>
             <Field label="How do you want it?">
               <div className="grid grid-cols-2 gap-2">
