@@ -757,7 +757,7 @@ function CalendarBoard({ state, trailerStatus, openDetail }) {
     state.bookings.find((b) => b.trailerId === tr.id && b.status !== "returned" && b.status !== "cancelled" && day >= b.start && day <= b.end);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <SectionTitle>Availability board · next {horizon} days</SectionTitle>
       <Card className="p-3 overflow-x-auto">
         <div style={{ minWidth: 60 + horizon * 34 }}>
@@ -818,7 +818,7 @@ function BookingsView({ state, typeBySize, setBooking, flash, openDetail, openEx
   const filters = [["active", "Active"], ["overdue", "Overdue"], ["completed", "Completed"], ["cancelled", "Cancelled"], ["all", "All"]];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <SectionTitle>Bookings</SectionTitle>
       <div className="flex gap-1.5 flex-wrap">
         {filters.map(([id, l]) => (
@@ -934,7 +934,7 @@ function FleetView({ state, typeBySize, trailerStatus, currentBooking, update, f
   const [adding, setAdding] = useState(false);
   const bySize = state.types.map((t) => ({ ...t, units: state.trailers.filter((tr) => tr.size === t.size) }));
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <SectionTitle>Fleet · {state.trailers.length} trailers</SectionTitle>
         <button onClick={() => setAdding(true)} className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5" style={{ background: T.amber, color: T.steelDk }}>
@@ -1067,7 +1067,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
   const days = Array.from({ length: horizon }, (_, i) => addDays(today(), i));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <SectionTitle>Drivers & dispatch</SectionTitle>
         <button onClick={() => setAdding(true)} className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5" style={{ background: T.amber, color: T.steelDk }}>
@@ -1335,7 +1335,7 @@ function YardView({ state, setBooking, update, flash, openDetail }) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <SectionTitle>Yard counter</SectionTitle>
       <Card className="p-4" style={{ background: T.blueSoft }}>
         <div className="text-sm" style={{ color: T.blue }}>
@@ -1423,16 +1423,22 @@ function SettingsView({ state, setState, flash }) {
   const b = state.business;
   const set = (patch) => setState((s) => ({ ...s, business: { ...s.business, ...patch } }));
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
       <Card className="p-4 space-y-3">
-        <h3 className="font-bold text-sm uppercase tracking-wide">Business</h3>
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Building2 size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Business</h3>
+        </div>
         <Field label="Business name"><input value={b.name} onChange={(e) => set({ name: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Yard location"><input value={b.yard} onChange={(e) => set({ yard: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Business phone (shown to customers · used for the “Text to book” button)"><input value={b.phone} onChange={(e) => set({ phone: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
       </Card>
       <Card className="p-4 space-y-3">
-        <h3 className="font-bold text-sm uppercase tracking-wide">Rental policy</h3>
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><DollarSign size={16} style={{ color: T.green }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Rental policy</h3>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Security deposit hold ($)"><NumInput v={b.deposit} on={(v) => set({ deposit: v })} /></Field>
           <Field label="We-handle-a-leg fee ($) · delivery/collect"><NumInput v={b.deliveryFee} on={(v) => set({ deliveryFee: v })} /></Field>
@@ -1444,7 +1450,10 @@ function SettingsView({ state, setState, flash }) {
         <p className="text-xs" style={{ color: T.sub }}>These feed the customer booking summary. Sales tax is shown to the customer and remitted to NCDOR — it isn't your revenue.</p>
       </Card>
       <Card className="p-4 space-y-3">
-        <h3 className="font-bold text-sm uppercase tracking-wide">Cancellation & refund policy</h3>
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><RotateCcw size={16} style={{ color: T.blue }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Cancellation & refund policy</h3>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Full refund if cancelled (hrs before pickup)"><NumInput v={b.refundFullHrs} on={(v) => set({ refundFullHrs: v })} /></Field>
           <Field label="Late-cancel refund (% of rental)"><NumInput v={Math.round(b.refundLatePct * 100)} on={(v) => set({ refundLatePct: v / 100 })} /></Field>
@@ -1452,7 +1461,10 @@ function SettingsView({ state, setState, flash }) {
         <p className="text-xs" style={{ color: T.sub }}>Cancel {b.refundFullHrs}h+ before pickup → full refund. Inside {b.refundFullHrs}h → {Math.round(b.refundLatePct * 100)}% back. After pickup → no refund. The deposit hold is always released. Shown to the customer before they confirm a cancellation.</p>
       </Card>
       <Card className="p-4 space-y-3">
-        <h3 className="font-bold text-sm uppercase tracking-wide">Rental agreement & waiver</h3>
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><ShieldCheck size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Rental agreement & waiver</h3>
+        </div>
         <p className="text-xs" style={{ color: T.sub }}>Customers read and e-sign this before paying. Their typed signature + timestamp is saved to the booking; you can view or download it from any booking. Edit the text to fit your attorney-reviewed agreement.</p>
         <textarea value={b.agreementText} onChange={(e) => set({ agreementText: e.target.value })} rows={8}
           className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}`, fontFamily: "ui-monospace, monospace" }} />
@@ -1984,7 +1996,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
 }
 
 /* ---------------- small UI bits --------------- */
-function SectionTitle({ children }) { return <h2 className="text-lg font-extrabold tracking-tight" style={{ letterSpacing: "-0.01em" }}>{children}</h2>; }
+function SectionTitle({ children }) { return <h2 className="text-2xl font-extrabold tracking-tight" style={{ letterSpacing: "-0.02em" }}>{children}</h2>; }
 function Empty({ children }) { return <div className="text-sm py-6 text-center" style={{ color: T.sub }}>{children}</div>; }
 function StepHead({ icon: Icon, title, sub }) {
   return (<div className="mb-2"><div className="flex items-center gap-2"><Icon size={18} style={{ color: T.amberDk }} /><h3 className="font-extrabold text-lg">{title}</h3></div><p className="text-sm mt-0.5" style={{ color: T.sub }}>{sub}</p></div>);
