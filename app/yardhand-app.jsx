@@ -219,9 +219,9 @@ const SEED = {
       desc: "Compact and light. 2.5 cubic yards, tows behind a half-ton truck or SUV — ideal for small landscaping jobs, garage cleanouts, and tight driveways." },
   ],
   contractors: [
-    { id: "c1", name: "Marcus Reed", phone: "704-555-0301", vehicle: "F-250", active: true,
+    { id: "c1", name: "Marcus Reed", phone: "704-555-0301", email: "marcus@extpro.com", vehicle: "F-250", active: true,
       avail: mkAvail((dow) => dow === 0 ? null : WINDOWS) },          // Mon–Sat, all windows
-    { id: "c2", name: "Tanya Brooks", phone: "704-555-0302", vehicle: "Ram 2500", active: true,
+    { id: "c2", name: "Tanya Brooks", phone: "704-555-0302", email: "tanya@extpro.com", vehicle: "Ram 2500", active: true,
       avail: mkAvail((dow) => (dow >= 1 && dow <= 5) ? ["10:00 AM", "12:00 PM", "2:00 PM"] : null) }, // weekdays midday
   ],
   trailers: [
@@ -1539,6 +1539,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
                 <div>
                   <div className="font-bold text-sm">{c.name} {!c.active && <span className="text-xs font-normal" style={{ color: T.sub }}>· inactive</span>}</div>
                   <div className="text-xs" style={{ color: T.sub }}>{c.vehicle} · {c.phone}</div>
+                  {c.email && <div className="text-xs truncate" style={{ color: T.sub }}>{c.email}</div>}
                 </div>
               </div>
               <div className="text-right">
@@ -1746,16 +1747,19 @@ function YardView({ state, setBooking, update, flash, openDetail }) {
 }
 
 function AddContractorModal({ onClose, onAdd }) {
-  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [vehicle, setVehicle] = useState("");
+  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); const [vehicle, setVehicle] = useState("");
   return (
     <Modal onClose={onClose} title="Add a driver">
       <div className="space-y-3">
         <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
-        <Field label="Phone"><input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
-        <Field label="Tow vehicle"><input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. F-250" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Phone"><input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+          <Field label="Tow vehicle"><input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. F-250" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        </div>
+        <Field label="Email (for job alerts & their portal login)"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@yourcompany.com" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
       </div>
       <p className="text-xs mt-3" style={{ color: T.sub }}>At launch, collect a signed contractor agreement, W-9, and COI before their first run (see the guide). You'll 1099 anyone paid $600+/yr.</p>
-      <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, vehicle: vehicle || "—", active: true })}
+      <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, email, vehicle: vehicle || "—", active: true })}
         className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add driver</button>
     </Modal>
   );
