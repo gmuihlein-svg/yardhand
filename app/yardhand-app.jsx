@@ -125,7 +125,7 @@ function cancelRefund(b, biz) {
   return { amt: Math.round(b.price * latePct), label: `${Math.round(latePct * 100)}% refund (within ${fullHrs}h of pickup)` };
 }
 
-const WINDOWS = ["8:00 AM", "10:00 AM", "12:00 PM", "2:00 PM", "4:00 PM"];
+const WINDOWS = ["8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM"];
 // build a driver's 14-day availability: pattern(dayOfWeek) -> array of windows (or null)
 const mkAvail = (pattern) => {
   const o = {};
@@ -1864,14 +1864,19 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                 ))}
               </div>
             </Field>
-            <Field label={form.outMethod === "delivery" ? "Delivery time (driver availability)" : "Pickup time"}>
+            <Field label={form.outMethod === "delivery" ? "Delivery time (driver availability)" : "Pickup time (staff availability)"}>
               {(() => {
-                const slots = form.outMethod === "delivery"
-                  ? b.pickupHours.filter((h) => windowCovered(state, form.start, h))
-                  : b.pickupHours;
-                if (form.outMethod === "delivery" && slots.length === 0) {
+                // A delivery needs a driver free; a will-call needs someone at the yard to hand off —
+                // that's you when you cover the counter yourself, otherwise an available staff member.
+                const covers = (h) => form.outMethod === "delivery"
+                  ? windowCovered(state, form.start, h)
+                  : (state.business.counterMode === "self" ? true : windowCovered(state, form.start, h));
+                const slots = b.pickupHours.filter(covers);
+                if (slots.length === 0) {
                   return <div className="p-3 rounded-lg text-sm flex items-center gap-2" style={{ background: T.redSoft, color: T.red }}>
-                    <AlertTriangle size={16} /> No driver is available to deliver that day — pick another date, or choose will-call.
+                    <AlertTriangle size={16} /> {form.outMethod === "delivery"
+                      ? "No driver is available to deliver that day — pick another date, or choose will-call."
+                      : "No one is scheduled at the yard for those hours that day — pick another date, or choose delivery."}
                   </div>;
                 }
                 return (
@@ -1890,7 +1895,9 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               </div>
             )}
             <NavBtns onBack={() => setStepN(0)} onNext={() => setStepN(2)}
-              nextOk={countAvail(form.size, form.start, end) > 0 && (form.outMethod !== "delivery" || windowCovered(state, form.start, form.pickupTime))} />
+              nextOk={countAvail(form.size, form.start, end) > 0 && (form.outMethod === "delivery"
+                ? windowCovered(state, form.start, form.pickupTime)
+                : (state.business.counterMode === "self" || windowCovered(state, form.start, form.pickupTime)))} />
           </div>
         )}
 
