@@ -6,7 +6,8 @@ import {
   Plus, X, Check, AlertTriangle, Clock, DollarSign, ArrowRight, ArrowLeft,
   Phone, Mail, MapPin, Wrench, RotateCcw, ShieldCheck, CreditCard, Search,
   ChevronRight, CircleDot, PackageCheck, CalendarClock, Building2, User, Home,
-  BarChart3, TrendingUp, TrendingDown, Percent, Image as ImageIcon, Sparkles, Trash2
+  BarChart3, TrendingUp, TrendingDown, Percent, Image as ImageIcon, Sparkles, Trash2,
+  LogOut, Lock
 } from "lucide-react";
 
 /* ---------------- design tokens (inline styles; no arbitrary Tailwind) --------------- */
@@ -203,7 +204,7 @@ const SEED = {
     name: "Ext Professionals",
     yard: "Charlotte, NC",
     phone: "(704) 555-0100",
-    logo: "", theme: { accent: "#F2A900", dark: "#2B3A44" },
+    logo: "", theme: { accent: "#F2A900", dark: "#2B3A44" }, ownerPass: "admin",
     pickupHours: WINDOWS,
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
@@ -311,6 +312,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [detail, setDetail] = useState(null);   // booking detail modal
   const [extend, setExtend] = useState(null);   // extend modal
+  const [authed, setAuthed] = useState(false);  // owner signed in this browser session
 
   useEffect(() => {
     (async () => {
@@ -318,6 +320,7 @@ export default function App() {
       setState(s || SEED);
       setLoading(false);
     })();
+    try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_owner") === "1") setAuthed(true); } catch (e) { /* ignore */ }
   }, []);
   useEffect(() => { if (state && !loading) saveState(state); }, [state, loading]);
 
@@ -376,9 +379,13 @@ export default function App() {
     <div className="min-h-screen" style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
       {mode === "landing" ? (
         <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} />
+      ) : mode === "owner" && !authed ? (
+        <OwnerLogin state={state} onBack={() => setMode("landing")}
+          onAuthed={() => { setAuthed(true); try { sessionStorage.setItem("yardhand_owner", "1"); } catch (e) {} }} />
       ) : (
         <>
-          <TopBar state={state} mode={mode} setMode={setMode} />
+          <TopBar state={state} mode={mode} setMode={setMode}
+            signOut={() => { setAuthed(false); try { sessionStorage.removeItem("yardhand_owner"); } catch (e) {} setMode("landing"); }} />
           {mode === "owner" ? (
             <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24">
               <OwnerNav tab={tab} setTab={setTab} />
@@ -563,28 +570,66 @@ function BrandMark({ logo, size = 36 }) {
   return <div className="rounded-md flex items-center justify-center shrink-0" style={{ width: size, height: size, background: T.amber }}><Truck size={Math.round(size * 0.56)} style={{ color: T.steelDk }} /></div>;
 }
 
-function TopBar({ state, mode, setMode }) {
+function TopBar({ state, mode, setMode, signOut }) {
   return (
     <div style={{ background: T.steelDk }} className="sticky top-0 z-40 border-b" >
-      <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+      <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           <BrandMark logo={state.business.logo} size={36} />
-          <div className="leading-tight">
-            <div className="font-extrabold tracking-tight text-white" style={{ letterSpacing: "-0.01em" }}>{state.business.name}</div>
+          <div className="leading-tight min-w-0">
+            <div className="font-extrabold tracking-tight text-white truncate" style={{ letterSpacing: "-0.01em" }}>{state.business.name}</div>
           </div>
         </div>
-        <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: "rgba(255,255,255,0.08)" }}>
-          <button onClick={() => setMode("landing")} className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2" }}>
-            <Home size={15} /> <span className="hidden sm:inline">Site</span>
-          </button>
-          {[["owner", "Owner", LayoutDashboard], ["customer", "Book a trailer", Truck]].map(([m, label, Icon]) => (
-            <button key={m} onClick={() => setMode(m)}
-              className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5 transition"
-              style={mode === m ? { background: T.amber, color: T.steelDk } : { color: "#D8DEE2" }}>
-              <Icon size={15} /> <span className="hidden sm:inline">{label}</span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: "rgba(255,255,255,0.08)" }}>
+            <button onClick={() => setMode("landing")} className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2" }}>
+              <Home size={15} /> <span className="hidden sm:inline">Site</span>
             </button>
-          ))}
+            {[["owner", "Owner", LayoutDashboard], ["customer", "Book a trailer", Truck]].map(([m, label, Icon]) => (
+              <button key={m} onClick={() => setMode(m)}
+                className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5 transition"
+                style={mode === m ? { background: T.amber, color: T.steelDk } : { color: "#D8DEE2" }}>
+                <Icon size={15} /> <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
+          </div>
+          {mode === "owner" && signOut && (
+            <button onClick={signOut} title="Sign out" className="px-2.5 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2", border: "1px solid rgba(255,255,255,0.15)" }}>
+              <LogOut size={15} /> <span className="hidden md:inline">Sign out</span>
+            </button>
+          )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function OwnerLogin({ state, onAuthed, onBack }) {
+  const b = state.business;
+  const [pass, setPass] = useState("");
+  const [err, setErr] = useState(false);
+  const expected = b.ownerPass || "admin";
+  const submit = () => { if (pass === expected) onAuthed(); else setErr(true); };
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: T.steelDk }}>
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center text-center mb-6">
+          <BrandMark logo={b.logo} size={56} />
+          <div className="mt-3 text-xl font-extrabold text-white">{b.name}</div>
+          <div className="text-sm" style={{ color: "#B7C0C6" }}>Owner dashboard</div>
+        </div>
+        <div className="rounded-2xl p-5" style={{ background: T.panel }}>
+          <label className="text-xs font-bold uppercase tracking-wide block mb-1.5" style={{ color: T.sub }}>Password</label>
+          <input type="password" value={pass} autoFocus placeholder="Enter your password"
+            onChange={(e) => { setPass(e.target.value); setErr(false); }}
+            onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+            className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${err ? T.red : T.line}` }} />
+          {err && <div className="text-xs mt-1.5 font-semibold" style={{ color: T.red }}>Incorrect password — try again.</div>}
+          <button onClick={submit} className="w-full mt-3 py-2.5 rounded-lg font-extrabold" style={{ background: T.amber, color: T.steelDk }}>Sign in</button>
+          {expected === "admin" && <div className="text-[11px] mt-3 p-2 rounded-lg text-center" style={{ background: T.amberSoft, color: T.amberDk }}>Prototype demo · default password is <b>admin</b> — change it in Settings → Owner access.</div>}
+        </div>
+        <button onClick={onBack} className="w-full mt-4 text-xs font-semibold" style={{ color: "#B7C0C6" }}>← Back to public site</button>
+        <p className="text-[11px] text-center mt-3" style={{ color: "#6C7178" }}>Prototype sign-in. Real accounts, roles, and secure passwords get wired up when this goes live.</p>
       </div>
     </div>
   );
@@ -1014,25 +1059,33 @@ function ExtendModal({ b, state, typeBySize, onClose, onConfirm }) {
 
 /* ---------------- FLEET --------------- */
 function FleetView({ state, typeBySize, trailerStatus, currentBooking, update, flash }) {
-  const [adding, setAdding] = useState(false);
+  const [addingType, setAddingType] = useState(false);
+  const [unitSize, setUnitSize] = useState(null);
   const bySize = state.types.map((t) => ({ ...t, units: state.trailers.filter((tr) => tr.size === t.size) }));
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <SectionTitle>Fleet · {state.trailers.length} units</SectionTitle>
-        <button onClick={() => setAdding(true)} className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5" style={{ background: T.amber, color: T.steelDk }}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <SectionTitle>Fleet · {state.trailers.length} units</SectionTitle>
+          <p className="text-xs mt-1" style={{ color: T.sub }}><b>Add equipment</b> = a brand-new product or rental. <b>Add unit</b> = another physical one of a product you already offer.</p>
+        </div>
+        <button onClick={() => setAddingType(true)} className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 shrink-0" style={{ background: T.amber, color: T.steelDk }}>
           <Plus size={16} /> Add equipment
         </button>
       </div>
       {bySize.map((grp) => (
         <Card key={grp.size} className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="font-bold">{grp.name}</h3>
-              <div className="text-xs" style={{ color: T.sub }}>{grp.cuyd} · ${grp.daily}/24hr · ${grp.weekly}/wk · ${grp.monthly}/4wk</div>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="min-w-0">
+              <h3 className="font-bold truncate">{grp.name}</h3>
+              <div className="text-xs" style={{ color: T.sub }}>{grp.cuyd} · ${grp.daily}/day · ${grp.weekly}/wk · ${grp.monthly}/4wk</div>
             </div>
-            <span className="text-xs font-bold px-2 py-1 rounded" style={{ background: T.paper, color: T.sub }}>{grp.units.length} units</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs font-bold px-2 py-1 rounded" style={{ background: T.paper, color: T.sub }}>{grp.units.length} unit{grp.units.length !== 1 ? "s" : ""}</span>
+              <button onClick={() => setUnitSize(grp.size)} className="text-xs font-bold px-2 py-1 rounded flex items-center gap-1" style={{ background: T.steel, color: "#fff" }}><Plus size={12} /> Add unit</button>
+            </div>
           </div>
+          {grp.units.length === 0 && <div className="text-xs text-center py-3 rounded-lg" style={{ color: T.sub, background: T.paper }}>No units yet — click “Add unit” to add your first one.</div>}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {grp.units.map((tr) => {
               const st = trailerStatus(tr);
@@ -1061,21 +1114,23 @@ function FleetView({ state, typeBySize, trailerStatus, currentBooking, update, f
           </div>
         </Card>
       ))}
-      {adding && <AddTrailerModal state={state} onClose={() => setAdding(false)}
-        onAdd={(tr) => { update((n) => n.trailers.push(tr)); setAdding(false); flash(`Added ${tr.assetId}.`); }} />}
+      {addingType && <AddTypeModal existing={state.types} onPhoto={fileToScaledDataURL} onClose={() => setAddingType(false)}
+        onAdd={(t) => { update((n) => n.types.push(t)); setAddingType(false); flash(`Added ${t.name}.`); }} />}
+      {unitSize && <AddTrailerModal state={state} initialSize={unitSize} onClose={() => setUnitSize(null)}
+        onAdd={(tr) => { update((n) => n.trailers.push(tr)); setUnitSize(null); flash(`Added ${tr.assetId}.`); }} />}
     </div>
   );
 }
 
-function AddTrailerModal({ state, onClose, onAdd }) {
-  const [size, setSize] = useState(state.types[0].size);
+function AddTrailerModal({ state, onClose, onAdd, initialSize }) {
+  const [size, setSize] = useState(initialSize || state.types[0].size);
   const [assetId, setAssetId] = useState("");
   const [vin, setVin] = useState("");
   const [cost, setCost] = useState(0);
   return (
-    <Modal onClose={onClose} title="Add equipment">
+    <Modal onClose={onClose} title="Add a unit">
       <div className="space-y-3">
-        <Field label="Size">
+        <Field label="Equipment type">
           <select value={size} onChange={(e) => setSize(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
             {state.types.map((t) => <option key={t.size} value={t.size}>{t.name}</option>)}
           </select>
@@ -1833,6 +1888,15 @@ function SettingsView({ state, setState, flash }) {
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.steel }}><Lock size={16} style={{ color: "#fff" }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Owner access</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>The password you use to sign in to this dashboard. Anyone with it can see your bookings and finances — keep it private.</p>
+        <Field label="Dashboard password"><input type="text" value={b.ownerPass || ""} onChange={(e) => set({ ownerPass: e.target.value })} placeholder="Set a password" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <p className="text-[11px]" style={{ color: T.sub }}>Prototype note: this is a simple gate stored in your browser. Real logins with individual staff accounts, roles, and encrypted passwords come with the database phase.</p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><Truck size={16} style={{ color: T.green }} /></span>
           <h3 className="font-bold text-sm uppercase tracking-wide">Trailer pricing</h3>
         </div>
@@ -1855,7 +1919,7 @@ function SettingsView({ state, setState, flash }) {
             <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><ImageIcon size={16} style={{ color: T.blue }} /></span>
             <h3 className="font-bold text-sm uppercase tracking-wide">Equipment photos & descriptions</h3>
           </div>
-          <button onClick={() => setAddingType(true)} className="text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={14} /> Add type</button>
+          <button onClick={() => setAddingType(true)} className="text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={14} /> Add equipment</button>
         </div>
         <p className="text-xs" style={{ color: T.sub }}>The photo and description customers see when they pick this equipment. Every equipment type — including new ones you add — has its own photo and write-up.</p>
         {state.types.map((t) => (
