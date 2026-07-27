@@ -5,7 +5,8 @@ import {
   Truck, LayoutDashboard, CalendarDays, ClipboardList, Boxes, Settings,
   Plus, X, Check, AlertTriangle, Clock, DollarSign, ArrowRight, ArrowLeft,
   Phone, Mail, MapPin, Wrench, RotateCcw, ShieldCheck, CreditCard, Search,
-  ChevronRight, CircleDot, PackageCheck, CalendarClock, Building2, User, Home
+  ChevronRight, CircleDot, PackageCheck, CalendarClock, Building2, User, Home,
+  BarChart3, TrendingUp, TrendingDown, Percent, Image as ImageIcon, Sparkles, Trash2
 } from "lucide-react";
 
 /* ---------------- design tokens (inline styles; no arbitrary Tailwind) --------------- */
@@ -138,6 +139,46 @@ const mkAvail = (pattern) => {
   return o;
 };
 
+/* Sample rental history (returned bookings across the past ~12 months) so the
+   Insights tab shows realistic revenue / utilization / ROI out of the box.
+   All are status:"returned", self-serve legs, and in the past — so they never
+   affect availability, dispatch, the yard queue, or conflict checks. */
+function mkHistory() {
+  const units = { "7x14": ["t1", "t2", "t3", "t4"], "7x12": ["t5", "t6", "t7"], "5x8": ["t8", "t9", "t10"] };
+  const dayRate = { "7x14": 155, "7x12": 130, "5x8": 95 };
+  const wkRate = { "7x14": 580, "7x12": 490, "5x8": 350 };
+  const names = ["Piedmont Builders", "Queen City Roofing", "Novant Grounds", "Hearth & Patio Co", "Carolina Demo", "Sardis Landscaping", "BlueLine Contracting", "Ridgeway Homes", "Metrolina Cleanup", "Elm Street Reno", "Waxhaw Excavating", "Union Fence Co", "Catawba Grading", "Steele Creek Pools", "Dilworth Decks", "Ballantyne Builders"];
+  const sizes = ["7x14", "7x12", "5x8"];
+  const out = [];
+  let seq = 2000, ni = 0;
+  for (let m = 1; m <= 12; m++) {              // months back from now
+    const count = 2 + ((m * 7) % 3);           // 2–4 rentals per month
+    for (let k = 0; k < count; k++) {
+      const size = sizes[(m + k) % 3];
+      // skew toward some units renting more than others (creates ROI spread)
+      const pool = units[size];
+      const trailerId = pool[(m + k * 2) % pool.length];
+      const dur = [2, 3, 3, 5, 7, 4][(m + k) % 6];
+      const startOffset = -(m * 30) - (k * 6) - 3;
+      const start = addDays(today(), startOffset);
+      const end = addDays(start, dur);
+      const price = dur >= 7 ? wkRate[size] + (dur - 7) * dayRate[size]
+        : Math.min(dur * dayRate[size], wkRate[size]);
+      seq += 1; ni += 1;
+      out.push({
+        id: "h" + seq, code: "WY-" + seq, trailerId, size,
+        name: names[ni % names.length], type: (m + k) % 2 ? "commercial" : "homeowner",
+        phone: "704-555-0" + (100 + ni), email: "", address: "Charlotte, NC",
+        start, end, pickupTime: "8:00 AM", returnTime: "8:00 AM", status: "returned",
+        waiver: (m + k) % 2 === 0, outMethod: "willcall", returnMethod: "yard",
+        outBy: null, returnBy: null,
+        price, deposit: 500, paid: true, coi: false, signName: names[ni % names.length], notes: "",
+      });
+    }
+  }
+  return out;
+}
+
 /* ---------------- seed data (mirrors the financial model) --------------- */
 const SEED = {
   business: {
@@ -151,9 +192,12 @@ const SEED = {
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
   types: [
-    { size: "7x14", name: "7×14 Dump (14K GVWR)", cuyd: "7.3 cu yd", daily: 155, weekly: 580, biweekly: 1120, monthly: 1880 },
-    { size: "7x12", name: "7×12 Dump (9,990 GVWR)", cuyd: "6 cu yd", daily: 130, weekly: 490, biweekly: 950, monthly: 1600 },
-    { size: "5x8",  name: "5×8 Dump (5K GVWR)", cuyd: "2.5 cu yd", daily: 95, weekly: 350, biweekly: 680, monthly: 1150 },
+    { size: "7x14", name: "7×14 Dump (14K GVWR)", cuyd: "7.3 cu yd", daily: 155, weekly: 580, biweekly: 1120, monthly: 1880, image: "",
+      desc: "Our biggest hauler. 14,000 lb GVWR, dual 7K axles, and 24\" sides that hold 7.3 cubic yards — the right pick for concrete tear-outs, roofing tear-offs, and heavy demo. Ramps and a full-height rear gate included." },
+    { size: "7x12", name: "7×12 Dump (9,990 GVWR)", cuyd: "6 cu yd", daily: 130, weekly: 490, biweekly: 950, monthly: 1600, image: "",
+      desc: "The everyday workhorse. Under 10K GVWR so it tows easy, yet still swallows 6 cubic yards of debris, brush, or dirt. The most popular size for renovations and cleanouts." },
+    { size: "5x8",  name: "5×8 Dump (5K GVWR)", cuyd: "2.5 cu yd", daily: 95, weekly: 350, biweekly: 680, monthly: 1150, image: "",
+      desc: "Compact and light. 2.5 cubic yards, tows behind a half-ton truck or SUV — ideal for small landscaping jobs, garage cleanouts, and tight driveways." },
   ],
   contractors: [
     { id: "c1", name: "Marcus Reed", phone: "704-555-0301", vehicle: "F-250", active: true,
@@ -162,16 +206,16 @@ const SEED = {
       avail: mkAvail((dow) => (dow >= 1 && dow <= 5) ? ["10:00 AM", "12:00 PM", "2:00 PM"] : null) }, // weekdays midday
   ],
   trailers: [
-    { id: "t1", assetId: "7x14-A", size: "7x14", vin: "1WC7X14A", maint: false },
-    { id: "t2", assetId: "7x14-B", size: "7x14", vin: "1WC7X14B", maint: false },
-    { id: "t3", assetId: "7x14-C", size: "7x14", vin: "1WC7X14C", maint: false },
-    { id: "t4", assetId: "7x14-D", size: "7x14", vin: "1WC7X14D", maint: false },
-    { id: "t5", assetId: "7x12-A", size: "7x12", vin: "1WC7X12A", maint: false },
-    { id: "t6", assetId: "7x12-B", size: "7x12", vin: "1WC7X12B", maint: false },
-    { id: "t7", assetId: "7x12-C", size: "7x12", vin: "1WC7X12C", maint: false },
-    { id: "t8", assetId: "5x8-A", size: "5x8", vin: "1WC5X8A", maint: false },
-    { id: "t9", assetId: "5x8-B", size: "5x8", vin: "1WC5X8B", maint: false },
-    { id: "t10", assetId: "5x8-C", size: "5x8", vin: "1WC5X8C", maint: false },
+    { id: "t1", assetId: "7x14-A", size: "7x14", vin: "1WC7X14A", maint: false, cost: 13200 },
+    { id: "t2", assetId: "7x14-B", size: "7x14", vin: "1WC7X14B", maint: false, cost: 13200 },
+    { id: "t3", assetId: "7x14-C", size: "7x14", vin: "1WC7X14C", maint: false, cost: 12800 },
+    { id: "t4", assetId: "7x14-D", size: "7x14", vin: "1WC7X14D", maint: false, cost: 13500 },
+    { id: "t5", assetId: "7x12-A", size: "7x12", vin: "1WC7X12A", maint: false, cost: 10400 },
+    { id: "t6", assetId: "7x12-B", size: "7x12", vin: "1WC7X12B", maint: false, cost: 10400 },
+    { id: "t7", assetId: "7x12-C", size: "7x12", vin: "1WC7X12C", maint: false, cost: 10900 },
+    { id: "t8", assetId: "5x8-A", size: "5x8", vin: "1WC5X8A", maint: false, cost: 6200 },
+    { id: "t9", assetId: "5x8-B", size: "5x8", vin: "1WC5X8B", maint: false, cost: 6200 },
+    { id: "t10", assetId: "5x8-C", size: "5x8", vin: "1WC5X8C", maint: false, cost: 5900 },
   ],
   bookings: [
     { id: "b1", code: "WY-1001", trailerId: "t1", size: "7x14", name: "Miller Concrete", type: "commercial", phone: "704-555-0142", email: "ops@millerconcrete.co", address: "1200 Yard St, Charlotte, NC",
@@ -190,6 +234,7 @@ const SEED = {
       start: addDays(today(), 3), end: addDays(today(), 10), pickupTime: "12:00 PM", returnTime: "12:00 PM", status: "reserved", waiver: true,
       outMethod: "delivery", returnMethod: "collect", outBy: "c2", outPaid: false, returnBy: "c1", returnPaid: false,
       price: 580, deposit: 500, paid: true, coi: true, signName: "Julio Prieto", signedAt: "2026-07-25T11:20:00Z", notes: "Kitchen gut — weekly rate." },
+    ...mkHistory(),
   ],
 };
 
@@ -308,6 +353,7 @@ export default function App() {
             <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24">
               <OwnerNav tab={tab} setTab={setTab} />
               {tab === "dashboard" && <Dashboard {...{ state, typeBySize, trailerStatus, currentBooking, setBooking, flash, openDetail: setDetail }} />}
+              {tab === "insights" && <InsightsView {...{ state }} />}
               {tab === "calendar" && <CalendarBoard {...{ state, trailerStatus, openDetail: setDetail }} />}
               {tab === "bookings" && <BookingsView {...{ state, typeBySize, setBooking, flash, openDetail: setDetail, openExtend: setExtend }} />}
               {tab === "drivers" && <DriversView {...{ state, setBooking, update, flash, openDetail: setDetail }} />}
@@ -515,6 +561,7 @@ function TopBar({ state, mode, setMode }) {
 function OwnerNav({ tab, setTab }) {
   const items = [
     ["dashboard", "Dashboard", LayoutDashboard],
+    ["insights", "Insights", BarChart3],
     ["calendar", "Calendar", CalendarDays],
     ["bookings", "Bookings", ClipboardList],
     ["drivers", "Drivers & dispatch", User],
@@ -962,6 +1009,11 @@ function FleetView({ state, typeBySize, trailerStatus, currentBooking, update, f
                   <div>
                     <div className="font-bold text-sm tabular-nums">{tr.assetId}</div>
                     <div className="text-xs" style={{ color: T.sub }}>{cb ? `${cb.name} · back ${fmt(cb.end)}` : `VIN ${tr.vin}`}</div>
+                    <div className="text-[11px] flex items-center gap-1 mt-1" style={{ color: T.sub }}>
+                      <span>Purchase $</span>
+                      <input type="number" value={tr.cost || 0} onChange={(e) => update((n) => { n.trailers.find((x) => x.id === tr.id).cost = +e.target.value; })}
+                        className="w-20 px-1.5 py-0.5 rounded tabular-nums" style={{ border: `1px solid ${T.line}`, background: "#fff" }} />
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge status={st} />
@@ -986,6 +1038,7 @@ function AddTrailerModal({ state, onClose, onAdd }) {
   const [size, setSize] = useState(state.types[0].size);
   const [assetId, setAssetId] = useState("");
   const [vin, setVin] = useState("");
+  const [cost, setCost] = useState(0);
   return (
     <Modal onClose={onClose} title="Add a trailer">
       <div className="space-y-3">
@@ -995,11 +1048,265 @@ function AddTrailerModal({ state, onClose, onAdd }) {
           </select>
         </Field>
         <Field label="Asset ID"><input value={assetId} onChange={(e) => setAssetId(e.target.value)} placeholder="e.g. 7x14-E" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
-        <Field label="VIN / serial"><input value={vin} onChange={(e) => setVin(e.target.value)} placeholder="optional" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="VIN / serial"><input value={vin} onChange={(e) => setVin(e.target.value)} placeholder="optional" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+          <Field label="Purchase price ($)"><NumInput v={cost} on={setCost} /></Field>
+        </div>
+        <p className="text-[11px]" style={{ color: T.sub }}>Purchase price powers the ROI numbers on the Insights tab.</p>
       </div>
-      <button disabled={!assetId} onClick={() => onAdd({ id: "t" + Date.now(), size, assetId, vin: vin || "—", maint: false })}
+      <button disabled={!assetId} onClick={() => onAdd({ id: "t" + Date.now(), size, assetId, vin: vin || "—", maint: false, cost })}
         className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add to fleet</button>
     </Modal>
+  );
+}
+
+/* ---------------- INSIGHTS (fleet analytics) --------------- */
+const CHART_COLORS = [T.green, T.blue, T.amber, T.red, T.steel, "#7C5CBF", "#2FA8A8", T.gray];
+const money = (v) => "$" + Math.round(v || 0).toLocaleString();
+const pct1 = (v) => (v || 0).toFixed(1) + "%";
+const monthKey = (isoStr) => (isoStr || "").slice(0, 7);
+const monthLabel = (key) => { const [y, m] = key.split("-"); return new Date(+y, +m - 1, 1).toLocaleDateString("en-US", { month: "short" }); };
+const REV_OK = (b) => b.status === "reserved" || b.status === "out" || b.status === "returned";
+
+/* downscale an uploaded image to a small JPEG data URL so it fits in browser storage */
+function fileToScaledDataURL(file, maxW = 900) {
+  return new Promise((res) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      try { res(c.toDataURL("image/jpeg", 0.82)); } catch (e) { res(null); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); res(null); };
+    img.src = url;
+  });
+}
+
+function computeInsights(state) {
+  const trailers = state.trailers || [];
+  const types = state.types || [];
+  const bookings = (state.bookings || []).filter(REV_OK);
+  const totalCost = trailers.reduce((a, t) => a + (t.cost || 0), 0);
+  const totalRev = bookings.reduce((a, b) => a + (b.price || 0), 0);
+  const fleetROI = totalCost ? (totalRev / totalCost) * 100 : 0;
+
+  const revByType = types.map((t, i) => ({
+    label: t.size, name: t.name, color: CHART_COLORS[i % CHART_COLORS.length],
+    value: bookings.filter((b) => b.size === t.size).reduce((a, b) => a + (b.price || 0), 0),
+  }));
+  const costByType = types.map((t, i) => ({
+    label: t.size, name: t.name, color: CHART_COLORS[i % CHART_COLORS.length],
+    value: trailers.filter((tr) => tr.size === t.size).reduce((a, tr) => a + (tr.cost || 0), 0),
+  }));
+
+  const months = [];
+  for (let i = 7; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }
+  const revByMonth = months.map((k) => ({ label: monthLabel(k), value: bookings.filter((b) => monthKey(b.start) === k).reduce((a, b) => a + (b.price || 0), 0) }));
+
+  const winDays = 90, winStart = addDays(today(), -winDays);
+  const perAsset = trailers.map((tr) => {
+    const bk = bookings.filter((b) => b.trailerId === tr.id);
+    const rev = bk.reduce((a, b) => a + (b.price || 0), 0);
+    let days = 0;
+    bk.forEach((b) => { if (b.end >= winStart) { const s = b.start < winStart ? winStart : b.start; days += Math.max(0, daysBetween(s, b.end) + 1); } });
+    const util = Math.min(100, (days / winDays) * 100);
+    const roi = tr.cost ? (rev / tr.cost) * 100 : 0;
+    const type = types.find((t) => t.size === tr.size);
+    return { tr, name: tr.assetId, typeName: type ? type.name : tr.size, rev, days, util, roi, cost: tr.cost || 0 };
+  });
+  const utilWeighted = trailers.length ? (perAsset.reduce((a, p) => a + p.days, 0) / (trailers.length * winDays)) * 100 : 0;
+  const worst = [...perAsset].sort((a, b) => a.roi - b.roi || a.rev - b.rev).slice(0, 8);
+  const top = [...perAsset].sort((a, b) => b.roi - a.roi).slice(0, 5);
+
+  return { totalCost, totalRev, fleetROI, revByType, costByType, revByMonth, perAsset, utilWeighted, worst, top, rentals: bookings.length, winDays };
+}
+
+/* --- tiny dependency-free charts --- */
+function BarChart({ data, height = 150, color = T.green, money: isMoney }) {
+  const max = Math.max(1, ...data.map((d) => d.value));
+  return (
+    <div>
+      <div className="flex items-end gap-1.5" style={{ height }}>
+        {data.map((d, i) => (
+          <div key={i} className="flex-1 flex flex-col items-center justify-end min-w-0 h-full">
+            {d.value > 0 && <div className="text-[9px] tabular-nums mb-0.5 whitespace-nowrap" style={{ color: T.sub }}>{isMoney ? money(d.value) : Math.round(d.value)}</div>}
+            <div className="w-full rounded-t" style={{ height: `${(d.value / max) * 84}%`, background: d.color || color, minHeight: d.value > 0 ? 3 : 0 }} title={`${d.name || d.label}: ${isMoney ? money(d.value) : d.value}`} />
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-1.5 mt-1.5">
+        {data.map((d, i) => <div key={i} className="flex-1 text-center text-[10px] truncate min-w-0" style={{ color: T.sub }}>{d.label}</div>)}
+      </div>
+    </div>
+  );
+}
+function LineChart({ data, height = 150, color = T.blue }) {
+  const max = Math.max(1, ...data.map((d) => d.value));
+  const n = data.length;
+  const xy = data.map((d, i) => [n > 1 ? (i / (n - 1)) * 100 : 50, 100 - (d.value / max) * 88 - 6]);
+  const line = xy.map((p) => p.join(",")).join(" ");
+  const area = `0,100 ${line} 100,100`;
+  return (
+    <div>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height }}>
+        {[6, 28, 50, 72, 94].map((g) => <line key={g} x1="0" y1={g} x2="100" y2={g} stroke={T.line} strokeWidth="0.5" vectorEffect="non-scaling-stroke" />)}
+        <polygon points={area} fill={color} opacity="0.10" />
+        <polyline points={line} fill="none" stroke={color} strokeWidth="2.2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+      <div className="flex mt-1.5">
+        {data.map((d, i) => <div key={i} className="flex-1 text-center text-[10px] truncate" style={{ color: T.sub }}>{d.label}</div>)}
+      </div>
+    </div>
+  );
+}
+function Donut({ data, size = 128 }) {
+  const total = data.reduce((a, d) => a + d.value, 0) || 1;
+  let acc = 0;
+  return (
+    <svg viewBox="0 0 36 36" style={{ width: size, height: size }}>
+      <circle cx="18" cy="18" r="15.9" fill="none" stroke={T.line} strokeWidth="3.4" />
+      {data.filter((d) => d.value > 0).map((d, i) => {
+        const p = (d.value / total) * 100;
+        const el = <circle key={i} cx="18" cy="18" r="15.9" fill="none" stroke={d.color} strokeWidth="3.4" pathLength="100" strokeDasharray={`${p} ${100 - p}`} strokeDashoffset={25 - acc} strokeLinecap="butt" />;
+        acc += p; return el;
+      })}
+    </svg>
+  );
+}
+function StatTile({ label, value, sub, accent = T.steel, icon: Icon }) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: T.sub }}>{label}</div>
+        {Icon && <Icon size={15} style={{ color: accent }} />}
+      </div>
+      <div className="text-3xl font-extrabold tabular-nums" style={{ color: accent }}>{value}</div>
+      {sub && <div className="text-xs mt-0.5" style={{ color: T.sub }}>{sub}</div>}
+    </Card>
+  );
+}
+function ChartCard({ title, period, children }) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-sm">{title}</h3>
+        {period && <span className="text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1" style={{ background: T.paper, color: T.sub }}><Clock size={10} /> {period}</span>}
+      </div>
+      {children}
+    </Card>
+  );
+}
+
+function InsightsView({ state }) {
+  const d = useMemo(() => computeInsights(state), [state]);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <SectionTitle>Insights</SectionTitle>
+        <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.amberSoft, color: T.amberDk }}>Sample data</span>
+      </div>
+      <p className="text-sm -mt-2" style={{ color: T.sub }}>How your fleet is performing — revenue, utilization, and return on each asset. Numbers come straight from your bookings.</p>
+
+      {/* KPI row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile label="Fleet ROI" value={pct1(d.fleetROI)} sub="revenue ÷ purchase cost" accent={T.green} icon={TrendingUp} />
+        <StatTile label="Weighted utilization" value={pct1(d.utilWeighted)} sub={`last ${d.winDays} days`} accent={T.blue} icon={Percent} />
+        <StatTile label="Revenue" value={money(d.totalRev)} sub="all recorded rentals" accent={T.steel} icon={DollarSign} />
+        <StatTile label="Rentals" value={d.rentals} sub={`across ${state.trailers.length} units`} accent={T.amberDk} icon={ClipboardList} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <ChartCard title="Revenue by month" period="Last 8 months"><LineChart data={d.revByMonth} color={T.blue} /></ChartCard>
+        <ChartCard title="Revenue by equipment type" period="All time"><BarChart data={d.revByType} color={T.green} money /></ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <ChartCard title="Fleet value by category" period="Purchase cost">
+          <div className="flex items-center gap-4">
+            <Donut data={d.costByType} />
+            <div className="space-y-1.5 min-w-0">
+              {d.costByType.map((c) => (
+                <div key={c.label} className="flex items-center gap-2 text-xs">
+                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: c.color }} />
+                  <span className="font-semibold truncate">{c.name}</span>
+                  <span className="tabular-nums ml-auto" style={{ color: T.sub }}>{money(c.value)}</span>
+                </div>
+              ))}
+              <div className="flex items-center gap-2 text-xs pt-1 border-t" style={{ borderColor: T.line }}>
+                <span className="font-bold">Total invested</span>
+                <span className="tabular-nums ml-auto font-bold">{money(d.totalCost)}</span>
+              </div>
+            </div>
+          </div>
+        </ChartCard>
+        <ChartCard title="Top performers by ROI" period="All time">
+          <div className="space-y-1.5">
+            {d.top.map((p) => (
+              <div key={p.tr.id} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: T.paper }}>
+                <span className="font-bold text-sm tabular-nums w-16 shrink-0">{p.name}</span>
+                <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: T.line }}>
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, (p.roi / (d.top[0].roi || 1)) * 100)}%`, background: T.green }} />
+                </div>
+                <span className="text-xs font-bold tabular-nums w-14 text-right" style={{ color: T.green }}>{pct1(p.roi)}</span>
+                <span className="text-xs tabular-nums w-16 text-right" style={{ color: T.sub }}>{money(p.rev)}</span>
+              </div>
+            ))}
+          </div>
+        </ChartCard>
+      </div>
+
+      {/* Worst ROI — "trash to cash" */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <TrendingDown size={16} style={{ color: T.red }} />
+            <h3 className="font-bold text-sm">Underperformers — lowest ROI</h3>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: T.paper, color: T.sub }}>Idle or low-earning assets</span>
+        </div>
+        <p className="text-xs mb-3" style={{ color: T.sub }}>The units earning least against what you paid — candidates to push harder on, relocate, or sell.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide" style={{ color: T.sub }}>
+                <th className="text-left font-bold py-1.5">Asset</th>
+                <th className="text-left font-bold py-1.5">Type</th>
+                <th className="text-right font-bold py-1.5">Purchase</th>
+                <th className="text-right font-bold py-1.5">Revenue</th>
+                <th className="text-right font-bold py-1.5">ROI</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.worst.map((p) => (
+                <tr key={p.tr.id} style={{ borderTop: `1px solid ${T.line}` }}>
+                  <td className="py-2 font-bold tabular-nums">{p.name}</td>
+                  <td className="py-2 truncate" style={{ color: T.sub }}>{p.typeName}</td>
+                  <td className="py-2 text-right tabular-nums">{money(p.cost)}</td>
+                  <td className="py-2 text-right tabular-nums">{money(p.rev)}</td>
+                  <td className="py-2 text-right tabular-nums font-bold" style={{ color: p.roi < 20 ? T.red : T.ink }}>{pct1(p.roi)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* AI assistant teaser */}
+      <Card className="p-4" style={{ border: `1px dashed ${T.amber}` }}>
+        <div className="flex items-start gap-3">
+          <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: T.amberSoft }}><Sparkles size={18} style={{ color: T.amberDk }} /></span>
+          <div>
+            <div className="font-bold text-sm flex items-center gap-2">Ask-in-plain-English dashboards <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: T.amber, color: T.steelDk }}>COMING SOON</span></div>
+            <p className="text-xs mt-1" style={{ color: T.sub }}>Soon you'll type “show me revenue by customer this quarter” or “which trailers sat idle last month” and this page builds the chart for you. Turned on when we wire up the AI backend.</p>
+          </div>
+        </div>
+      </Card>
+      <p className="text-xs text-center pt-1" style={{ color: T.sub }}>Utilization is booked days ÷ available days over the last {d.winDays} days. ROI is lifetime revenue ÷ purchase price.</p>
+    </div>
   );
 }
 
@@ -1424,8 +1731,12 @@ function AddContractorModal({ onClose, onAdd }) {
 /* ---------------- SETTINGS --------------- */
 function SettingsView({ state, setState, flash }) {
   const b = state.business;
+  const [addingType, setAddingType] = useState(false);
   const set = (patch) => setState((s) => ({ ...s, business: { ...s.business, ...patch } }));
   const setType = (size, patch) => setState((s) => ({ ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) }));
+  const addType = (t) => { setState((s) => ({ ...s, types: [...s.types, t] })); setAddingType(false); flash(`Added ${t.name}.`); };
+  const removeType = (size) => { if (state.trailers.some((tr) => tr.size === size)) { flash("Remove its units first."); return; } setState((s) => ({ ...s, types: s.types.filter((t) => t.size !== size) })); flash("Equipment type removed."); };
+  const onPhoto = async (size, file) => { if (!file) return; const url = await fileToScaledDataURL(file); if (url) { setType(size, { image: url }); flash("Photo updated."); } else flash("Couldn't read that image."); };
   return (
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
@@ -1455,6 +1766,41 @@ function SettingsView({ state, setState, flash }) {
             </div>
           </div>
         ))}
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><ImageIcon size={16} style={{ color: T.blue }} /></span>
+            <h3 className="font-bold text-sm uppercase tracking-wide">Equipment photos & descriptions</h3>
+          </div>
+          <button onClick={() => setAddingType(true)} className="text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={14} /> Add type</button>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>The photo and description customers see when they pick this equipment. Every equipment type — including new ones you add — has its own photo and write-up.</p>
+        {state.types.map((t) => (
+          <div key={t.size} className="rounded-lg p-3" style={{ background: T.paper }}>
+            <div className="flex items-start gap-3">
+              {t.image
+                ? <img src={t.image} alt={t.name} className="w-20 h-20 rounded-lg object-cover shrink-0" style={{ border: `1px solid ${T.line}` }} />
+                : <div className="w-20 h-20 rounded-lg flex items-center justify-center shrink-0" style={{ background: "#fff", border: `1px dashed ${T.line}` }}><ImageIcon size={22} style={{ color: T.gray }} /></div>}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-bold text-sm truncate">{t.name}</div>
+                  {state.types.length > 1 && <button onClick={() => removeType(t.size)} title="Remove type" className="p-1 rounded" style={{ color: T.sub }}><Trash2 size={14} /></button>}
+                </div>
+                <div className="flex gap-2 mt-1.5">
+                  <label className="text-[11px] font-bold px-2 py-1 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>
+                    {t.image ? "Replace photo" : "Upload photo"}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => onPhoto(t.size, e.target.files?.[0])} />
+                  </label>
+                  {t.image && <button onClick={() => setType(t.size, { image: "" })} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.redSoft, color: T.red }}>Remove</button>}
+                </div>
+              </div>
+            </div>
+            <textarea value={t.desc || ""} onChange={(e) => setType(t.size, { desc: e.target.value })} rows={2} placeholder="Describe this equipment for customers…"
+              className="w-full mt-2 p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
+          </div>
+        ))}
+        <p className="text-[11px]" style={{ color: T.sub }}>Photos are saved to this browser and auto-shrunk to fit. When you go live, they'll move to cloud storage.</p>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -1501,7 +1847,53 @@ function SettingsView({ state, setState, flash }) {
       <p className="text-xs text-center pt-2" style={{ color: T.sub }}>
         Prototype · data saves to this browser. Payments, texts, and customer logins get wired up when this goes live on the web.
       </p>
+      {addingType && <AddTypeModal onClose={() => setAddingType(false)} onAdd={addType} existing={state.types} onPhoto={fileToScaledDataURL} />}
     </div>
+  );
+}
+
+function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [cuyd, setCuyd] = useState("");
+  const [daily, setDaily] = useState(100);
+  const [weekly, setWeekly] = useState(400);
+  const [biweekly, setBiweekly] = useState(750);
+  const [monthly, setMonthly] = useState(1300);
+  const [desc, setDesc] = useState("");
+  const [image, setImage] = useState("");
+  const slug = (code || name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || ("type-" + Date.now());
+  const dupe = existing.some((t) => t.size === slug);
+  const pick = async (f) => { if (!f) return; const url = await onPhoto(f); if (url) setImage(url); };
+  return (
+    <Modal onClose={onClose} title="Add equipment type">
+      <div className="space-y-3">
+        <div className="flex items-start gap-3">
+          {image
+            ? <img src={image} alt="" className="w-20 h-20 rounded-lg object-cover shrink-0" style={{ border: `1px solid ${T.line}` }} />
+            : <div className="w-20 h-20 rounded-lg flex items-center justify-center shrink-0" style={{ background: T.paper, border: `1px dashed ${T.line}` }}><ImageIcon size={22} style={{ color: T.gray }} /></div>}
+          <label className="text-[11px] font-bold px-2.5 py-1.5 rounded cursor-pointer self-center" style={{ background: T.steel, color: "#fff" }}>
+            {image ? "Replace photo" : "Upload photo"}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
+          </label>
+        </div>
+        <Field label="Name (shown to customers)"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. 20-ft Roll-off Container" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Short code"><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. rolloff-20" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+          <Field label="Capacity"><input value={cuyd} onChange={(e) => setCuyd(e.target.value)} placeholder="e.g. 20 cu yd" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <Field label="Day ($)"><NumInput v={daily} on={setDaily} /></Field>
+          <Field label="Week ($)"><NumInput v={weekly} on={setWeekly} /></Field>
+          <Field label="2 wks ($)"><NumInput v={biweekly} on={setBiweekly} /></Field>
+          <Field label="4 wks ($)"><NumInput v={monthly} on={setMonthly} /></Field>
+        </div>
+        <Field label="Description"><textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} placeholder="Describe it for customers…" className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} /></Field>
+        {dupe && <p className="text-[11px]" style={{ color: T.red }}>That short code is already used — pick another.</p>}
+      </div>
+      <button disabled={!name || dupe} onClick={() => onAdd({ size: slug, name, cuyd: cuyd || "—", daily, weekly, biweekly, monthly, image, desc })}
+        className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add equipment type</button>
+    </Modal>
   );
 }
 
@@ -1836,21 +2228,24 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               const active = form.size === t.size;
               return (
                 <button key={t.size} disabled={avail === 0} onClick={() => set({ size: t.size })}
-                  className="w-full text-left p-4 rounded-xl transition disabled:opacity-50 flex items-center justify-between"
+                  className="w-full text-left p-4 rounded-xl transition disabled:opacity-50 block"
                   style={{ border: `2px solid ${active ? T.amber : T.line}`, background: active ? T.amberSoft : "#fff" }}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-lg flex items-center justify-center" style={{ background: active ? T.amber : T.paper }}>
-                      <Truck size={22} style={{ color: active ? T.steelDk : T.steel }} />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {t.image
+                        ? <img src={t.image} alt={t.name} className="w-16 h-16 rounded-lg object-cover shrink-0" style={{ border: `1px solid ${T.line}` }} />
+                        : <div className="w-16 h-16 rounded-lg flex items-center justify-center shrink-0" style={{ background: active ? T.amber : T.paper }}><Truck size={26} style={{ color: active ? T.steelDk : T.steel }} /></div>}
+                      <div className="min-w-0">
+                        <div className="font-bold">{t.name}</div>
+                        <div className="text-xs" style={{ color: T.sub }}>{t.cuyd} · from ${t.daily}/24hr</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-bold">{t.name}</div>
-                      <div className="text-xs" style={{ color: T.sub }}>{t.cuyd} · from ${t.daily}/24hr</div>
+                    <div className="text-right shrink-0">
+                      <div className="text-xs font-bold" style={{ color: avail > 0 ? T.green : T.red }}>{avail > 0 ? `${avail} available` : "None free"}</div>
+                      {active && <Check size={16} className="inline mt-1" style={{ color: T.amberDk }} />}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs font-bold" style={{ color: avail > 0 ? T.green : T.red }}>{avail > 0 ? `${avail} available` : "None free"}</div>
-                    {active && <Check size={16} className="inline mt-1" style={{ color: T.amberDk }} />}
-                  </div>
+                  {t.desc && <p className="text-xs mt-2.5 leading-snug" style={{ color: T.sub }}>{t.desc}</p>}
                 </button>
               );
             })}
