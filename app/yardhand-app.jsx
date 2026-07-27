@@ -381,6 +381,9 @@ function Landing({ state, typeBySize, go, owner }) {
             <button onClick={() => go("book")} className="px-5 py-3 rounded-xl text-base font-extrabold flex items-center gap-2" style={{ background: T.amber, color: T.steelDk }}>Book a trailer <ArrowRight size={17} /></button>
             <button onClick={() => go("manage")} className="px-5 py-3 rounded-xl text-base font-bold" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>Manage my booking</button>
           </div>
+          <a href={`sms:${(b.phone || "").replace(/\D/g, "")}`} className="inline-flex items-center gap-2 mt-4 px-5 py-3 rounded-xl text-base font-bold" style={{ background: T.steelDk, color: "#fff" }}>
+            <Phone size={17} style={{ color: T.amber }} /> Text to book a trailer · {b.phone}
+          </a>
           <div className="flex items-center gap-2 mt-4 text-sm" style={{ color: T.sub }}>
             <span style={{ color: T.amber }}>★★★★★</span> Trusted by Charlotte contractors & homeowners
           </div>
@@ -456,7 +459,7 @@ function Landing({ state, typeBySize, go, owner }) {
       <section className="max-w-6xl mx-auto px-4 md:px-6 pb-14">
         <div className="rounded-2xl p-8 md:p-10 text-center" style={{ background: T.steelDk }}>
           <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">Need a trailer this week?</h2>
-          <p className="mt-2" style={{ color: "#B7C0C6" }}>Check availability and book online now — or call {b.phone}.</p>
+          <p className="mt-2" style={{ color: "#B7C0C6" }}>Check availability and book online now — or text/call {b.phone}.</p>
           <div className="flex flex-wrap gap-3 justify-center mt-5">
             <button onClick={() => go("book")} className="px-6 py-3 rounded-xl text-base font-extrabold flex items-center gap-2" style={{ background: T.amber, color: T.steelDk }}>Book a trailer <ArrowRight size={17} /></button>
             <button onClick={() => go("manage")} className="px-6 py-3 rounded-xl text-base font-bold text-white" style={{ background: "rgba(255,255,255,0.1)" }}>Manage my booking</button>
@@ -1401,6 +1404,7 @@ function SettingsView({ state, setState, flash }) {
         <h3 className="font-bold text-sm uppercase tracking-wide">Business</h3>
         <Field label="Business name"><input value={b.name} onChange={(e) => set({ name: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Yard location"><input value={b.yard} onChange={(e) => set({ yard: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label="Business phone (shown to customers · used for the “Text to book” button)"><input value={b.phone} onChange={(e) => set({ phone: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
       </Card>
       <Card className="p-4 space-y-3">
         <h3 className="font-bold text-sm uppercase tracking-wide">Rental policy</h3>
