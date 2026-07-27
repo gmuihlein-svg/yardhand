@@ -1839,14 +1839,14 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
         {/* step 1: dates */}
         {stepN === 1 && (
           <div className="space-y-4">
-            <StepHead icon={CalendarDays} title="When do you need it?" sub="Pick your day, how long, and whether you'll grab it or we deliver. Booking is open for the next 2 weeks." />
+            <StepHead icon={CalendarDays} title="When do you need it?" sub={`Pick your day, how long, and whether you'll grab it or we deliver. Booking is open for the next ${b.bookHorizonDays || 30} days.`} />
             <Field label="Start date">
               <input type="date" min={today()} max={addDays(today(), b.bookHorizonDays)} value={form.start} onChange={(e) => set({ start: e.target.value })}
                 className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
             </Field>
             <Field label="How long?">
-              <div className="grid grid-cols-4 gap-2">
-                {[[1, "24 hrs"], [3, "3 days"], [7, "1 week"], [28, "4 weeks"]].map(([d, l]) => (
+              <div className="grid grid-cols-5 gap-2">
+                {[[1, "24 hrs"], [3, "3 days"], [7, "1 week"], [14, "2 weeks"], [28, "4 weeks"]].map(([d, l]) => (
                   <button key={d} onClick={() => set({ days: d })} className="py-2 rounded-lg text-sm font-bold"
                     style={form.days === d ? { background: T.steel, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>{l}</button>
                 ))}
