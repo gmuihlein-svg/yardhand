@@ -146,6 +146,15 @@ function cancelRefund(b, biz) {
 }
 
 const WINDOWS = ["8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM"];
+/* turn a window label ("8:00 AM") on an ISO date into a Date, for lead-time checks */
+const slotDateTime = (dateISO, label) => {
+  const d = new Date(dateISO + "T00:00:00");
+  const m = /(\d+):(\d+)\s*(AM|PM)/i.exec(label || "");
+  if (m) { let h = (+m[1]) % 12; if (/pm/i.test(m[3])) h += 12; d.setHours(h, +m[2], 0, 0); }
+  return d;
+};
+/* friendly lead-time label: 24 -> "1 day", 2 -> "2 hours" */
+const leadLabel = (h) => (h > 0 && h % 24 === 0) ? `${h / 24} day${h / 24 > 1 ? "s" : ""}` : `${h} hour${h === 1 ? "" : "s"}`;
 // build a driver's 14-day availability: pattern(dayOfWeek) -> array of windows (or null)
 const mkAvail = (pattern) => {
   const o = {};
@@ -209,6 +218,7 @@ const SEED = {
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
     dispatchMode: "auto", counterMode: "self", bookHorizonDays: 30, rr: 0,
+    leadDeliveryHours: 12, leadCounterHours: 2,
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
   types: [
@@ -1965,6 +1975,18 @@ function SettingsView({ state, setState, flash }) {
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><Clock size={16} style={{ color: T.blue }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Booking notice (lead time)</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>How much heads-up your crew needs before a job. Customers can't book a delivery, pickup, or handoff any sooner than this — so no one gets caught with too little time to prepare. Type it in hours (24 = 1 day, 6 = six hours). Set to 0 to allow last-minute bookings.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Delivery / collection notice (hours)"><NumInput v={b.leadDeliveryHours ?? 12} on={(v) => set({ leadDeliveryHours: v })} /></Field>
+          <Field label="Will-call / yard notice (hours)"><NumInput v={b.leadCounterHours ?? 2} on={(v) => set({ leadCounterHours: v })} /></Field>
+        </div>
+        <p className="text-[11px]" style={{ color: T.sub }}>Deliveries usually need more notice (load the trailer + drive) than a will-call, where the customer comes to your yard. Currently: deliveries need {leadLabel(b.leadDeliveryHours ?? 12)}, will-call/yard need {leadLabel(b.leadCounterHours ?? 2)}.</p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><RotateCcw size={16} style={{ color: T.blue }} /></span>
           <h3 className="font-bold text-sm uppercase tracking-wide">Cancellation & refund policy</h3>
         </div>
@@ -2302,6 +2324,10 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
   });
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const end = addDays(form.start, form.days - 1);
+  // minimum booking notice (lead time) before your crew can be booked for the out leg
+  const outLeadHours = form.outMethod === "delivery" ? (b.leadDeliveryHours || 0) : (b.leadCounterHours || 0);
+  const outCovers = (h) => form.outMethod === "delivery" ? windowCovered(state, form.start, h) : (b.counterMode === "self" ? true : windowCovered(state, form.start, h));
+  const slotSoonEnough = (h) => slotDateTime(form.start, h).getTime() >= Date.now() + outLeadHours * 3600000;
   const type = form.size ? typeBySize(form.size) : null;
   const base = type ? priceFor(type, form.days) : 0;
   const waiverAmt = form.waiver ? Math.round(base * b.waiverRate) : 0;
@@ -2464,15 +2490,17 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               {(() => {
                 // A delivery needs a driver free; a will-call needs someone at the yard to hand off —
                 // that's you when you cover the counter yourself, otherwise an available staff member.
-                const covers = (h) => form.outMethod === "delivery"
-                  ? windowCovered(state, form.start, h)
-                  : (state.business.counterMode === "self" ? true : windowCovered(state, form.start, h));
-                const slots = b.pickupHours.filter(covers);
+                // Slots must also be far enough out to give the crew time to prepare (lead time).
+                const availSlots = b.pickupHours.filter(outCovers);
+                const slots = availSlots.filter(slotSoonEnough);
                 if (slots.length === 0) {
-                  return <div className="p-3 rounded-lg text-sm flex items-center gap-2" style={{ background: T.redSoft, color: T.red }}>
-                    <AlertTriangle size={16} /> {form.outMethod === "delivery"
-                      ? "No driver is available to deliver that day — pick another date, or choose will-call."
-                      : "No one is scheduled at the yard for those hours that day — pick another date, or choose delivery."}
+                  const tooSoon = availSlots.length > 0;
+                  return <div className="p-3 rounded-lg text-sm flex items-start gap-2" style={{ background: T.redSoft, color: T.red }}>
+                    <AlertTriangle size={16} className="shrink-0 mt-0.5" /> {tooSoon
+                      ? `That's sooner than we can prepare — ${form.outMethod === "delivery" ? "deliveries" : "pickups"} need at least ${leadLabel(outLeadHours)} notice. Pick a later day or time.`
+                      : (form.outMethod === "delivery"
+                        ? "No driver is available to deliver that day — pick another date, or choose will-call."
+                        : "No one is scheduled at the yard for those hours that day — pick another date, or choose delivery.")}
                   </div>;
                 }
                 return (
@@ -2492,9 +2520,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
             )}
             {type && <PriceBreakdown heading="Your price so far" {...priceProps} />}
             <NavBtns onBack={() => setStepN(0)} onNext={() => setStepN(2)}
-              nextOk={countAvail(form.size, form.start, end) > 0 && (form.outMethod === "delivery"
-                ? windowCovered(state, form.start, form.pickupTime)
-                : (state.business.counterMode === "self" || windowCovered(state, form.start, form.pickupTime)))} />
+              nextOk={countAvail(form.size, form.start, end) > 0 && outCovers(form.pickupTime) && slotSoonEnough(form.pickupTime)} />
           </div>
         )}
 

@@ -56,6 +56,10 @@ Yard counter · Fleet · Settings.
 - **Equipment model:** each **type/product** has name, capacity, tiered pricing, **photo,
   description**. **Add equipment** = new product/rental; **Add unit** = another physical
   unit of an existing product. Units carry a **purchase price** (powers ROI).
+- **Booking notice (lead time):** Settings lets the owner require X hours of notice before
+  the crew can be booked — separate values for delivery/collection (`leadDeliveryHours`,
+  default 12) and will-call/yard (`leadCounterHours`, default 2). The booking flow hides
+  time slots that are too soon and shows a "needs X notice" message. Set to 0 to disable.
 - **Two-leg dispatch:** every rental has an OUT leg + RETURN leg, scheduled independently;
   delivery/collection (driver) vs will-call/yard (counter handoff). Availability-gated so
   customers can't book slots that can't be staffed.
@@ -111,7 +115,7 @@ the code per customer.
 
 - `business` — name, yard, phone, logo, theme{accent,dark}, ownerPass, fees (deposit,
   deliveryFee, dropFee, counterFee, taxRate, waiverRate), refund policy, agreementText,
-  bookHorizonDays, dispatchMode, counterMode.
+  bookHorizonDays, dispatchMode, counterMode, leadDeliveryHours, leadCounterHours.
 - `types[]` — equipment products: size (key), name, cuyd, daily/weekly/biweekly/monthly,
   image, desc.
 - `trailers[]` — physical units: id, assetId, size, vin, maint, **cost** (purchase price).
