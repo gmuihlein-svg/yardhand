@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { loadWorkspace, saveWorkspace, subscribeWorkspace, cloudEnabled } from "./db";
 import {
   Truck, LayoutDashboard, CalendarDays, ClipboardList, Boxes, Settings,
   Plus, X, Check, AlertTriangle, Clock, DollarSign, ArrowRight, ArrowLeft,
@@ -298,21 +299,7 @@ function priceExplain(type, days) {
   return { total, saved, perDay, tierLabel };
 }
 
-/* ---------------- storage --------------- */
-const KEY = "yardhand_state_v1";
-async function loadState() {
-  try {
-    if (typeof window === "undefined") return null;
-    const v = window.localStorage.getItem(KEY);
-    return v ? JSON.parse(v) : null;
-  } catch { return null; }
-}
-async function saveState(s) {
-  try {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(KEY, JSON.stringify(s));
-  } catch (e) { /* best-effort */ }
-}
+/* ---------------- storage (cloud sync with localStorage fallback — see app/db.js) --------------- */
 
 /* =====================================================================
    APP
@@ -330,13 +317,17 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const s = await loadState();
-      setState(s || SEED);
+      const s = await loadWorkspace();
+      setState(s || structuredClone(SEED));
       setLoading(false);
     })();
     try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_owner") === "1") setAuthed(true); } catch (e) { /* ignore */ }
+    // realtime: pick up changes made on another device (ignore our own echoes)
+    return subscribeWorkspace((incoming) => {
+      setState((prev) => JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming);
+    });
   }, []);
-  useEffect(() => { if (state && !loading) saveState(state); }, [state, loading]);
+  useEffect(() => { if (state && !loading) saveWorkspace(state); }, [state, loading]);
 
   // flash a toast; pass undoable=true to offer a one-tap Undo that restores the pre-action state.
   // (When called right after a mutation in the same handler, `state` here is still the pre-action snapshot.)
@@ -2237,7 +2228,9 @@ function SettingsView({ state, setState, flash }) {
           className="px-3 py-2 rounded-lg text-sm font-bold" style={{ background: T.redSoft, color: T.red }}>Reset everything</button>
       </Card>
       <p className="text-xs text-center pt-2" style={{ color: T.sub }}>
-        Prototype · data saves to this browser. Payments, texts, and customer logins get wired up when this goes live on the web.
+        {cloudEnabled
+          ? "✓ Synced to the cloud — your data is backed up and shared across your devices."
+          : "Prototype · data saves to this browser. Payments, texts, and customer logins get wired up when this goes live on the web."}
       </p>
       {addingType && <AddTypeModal onClose={() => setAddingType(false)} onAdd={addType} existing={state.types} onPhoto={fileToScaledDataURL} />}
       {confirm && <ConfirmModal {...confirm} onConfirm={() => { confirm.onYes(); setConfirm(null); }} onClose={() => setConfirm(null)} />}
