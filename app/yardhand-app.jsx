@@ -1207,6 +1207,17 @@ function downloadStoredFile(dataUrl, filename) {
   } catch (e) { openStoredFile(dataUrl); }
 }
 
+/* Certificate-of-Insurance requirement: a per-equipment policy combined with who's renting.
+   policy: "none" (never) · "commercial" (business customers only, default) · "all" (everyone). */
+const COI_POLICIES = [["commercial", "Business customers only"], ["all", "All customers"], ["none", "Not required"]];
+const COI_POLICY_LABEL = { commercial: "Business customers only", all: "All customers", none: "Not required" };
+function coiRequired(type, ctype) {
+  const p = (type && type.coiPolicy) || "commercial";
+  if (p === "none") return false;
+  if (p === "all") return true;
+  return ctype === "commercial";
+}
+
 /* channel label for customer notifications */
 const channelLabel = (ch) => ch === "text" ? "text" : ch === "email" ? "email" : "text & email";
 /* build the notification schedule for a booking from the business's notify settings.
@@ -1222,6 +1233,11 @@ function notifyTimeline(state, b) {
   (biz.notifyReminders || []).slice().sort((a, c) => c - a).forEach((h) => {
     items.push({ label: `Reminder · ${leadLabel(h)} before pickup`, at: pickup - h * 3600000, kind: "reminder", hours: h });
   });
+  const type = (state.types || []).find((t) => t.size === b.size);
+  if (coiRequired(type, b.type) && !b.coiFile) {
+    const h = (biz.notifyReminders && biz.notifyReminders.length) ? Math.min(...biz.notifyReminders) : 24;
+    items.push({ label: "Reminder · upload Certificate of Insurance", at: pickup - h * 3600000, kind: "coi" });
+  }
   return items.map((it) => ({ ...it, sent: it.at != null && it.at <= now }));
 }
 
@@ -2134,6 +2150,10 @@ function SettingsView({ state, setState, flash }) {
             </div>
             <input value={t.cuyd || ""} onChange={(e) => setType(t.size, { cuyd: e.target.value })} placeholder="Capacity / size (optional) — e.g. 20 cu yd, 6,500 W, 26 ft"
               className="w-full mt-2 p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
+            <div className="text-[10px] font-bold uppercase tracking-wide mt-2 mb-1 flex items-center gap-1" style={{ color: T.blue }}><ShieldCheck size={11} /> Certificate of Insurance required?</div>
+            <select value={t.coiPolicy || "commercial"} onChange={(e) => setType(t.size, { coiPolicy: e.target.value })} className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+              {COI_POLICIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
             <textarea value={t.desc || ""} onChange={(e) => setType(t.size, { desc: e.target.value })} rows={2} placeholder="Describe this equipment for customers…"
               className="w-full mt-2 p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
             <div className="text-[10px] font-bold uppercase tracking-wide mt-2 mb-1 flex items-center gap-1" style={{ color: T.blue }}><Info size={11} /> Requirements & specs (shown to customers)</div>
@@ -2259,6 +2279,7 @@ function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
   const [desc, setDesc] = useState("");
   const [reqLabel, setReqLabel] = useState("");
   const [tow, setTow] = useState("");
+  const [coiPolicy, setCoiPolicy] = useState("commercial");
   const [image, setImage] = useState("");
   const slug = (code || name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || ("type-" + Date.now());
   const dupe = existing.some((t) => t.size === slug);
@@ -2289,9 +2310,10 @@ function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
         <Field label="Description"><textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} placeholder="Describe it for customers…" className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Requirements & specs — heading"><input value={reqLabel} onChange={(e) => setReqLabel(e.target.value)} placeholder="e.g. You'll need to tow this · Operator & transport · Power & fuel" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Requirements & specs — details"><textarea value={tow} onChange={(e) => setTow(e.target.value)} rows={2} placeholder="Vehicle & hitch, operator license, transport, fuel/power, PPE… whatever renters must know." className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label="Certificate of Insurance required?"><select value={coiPolicy} onChange={(e) => setCoiPolicy(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>{COI_POLICIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
         {dupe && <p className="text-[11px]" style={{ color: T.red }}>That short code is already used — pick another.</p>}
       </div>
-      <button disabled={!name || dupe} onClick={() => onAdd({ size: slug, name, cuyd: cuyd.trim(), daily, weekly, biweekly, monthly, image, desc, reqLabel, tow })}
+      <button disabled={!name || dupe} onClick={() => onAdd({ size: slug, name, cuyd: cuyd.trim(), daily, weekly, biweekly, monthly, image, desc, reqLabel, tow, coiPolicy })}
         className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add equipment type</button>
     </Modal>
   );
@@ -2403,8 +2425,8 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, flash, setMod
           <Row l="Deposit hold" r={`$${b.deposit} (refundable)`} />
         </div>
 
-        {/* Certificate of Insurance — self-upload for business rentals */}
-        {b.type === "commercial" && (
+        {/* Certificate of Insurance — self-upload when required */}
+        {coiRequired(type, b.type) && (
           <div className="mt-4 rounded-xl overflow-hidden" style={{ border: `1px solid ${b.coiFile ? T.green : T.amber}` }}>
             <div className="px-3 py-2.5 flex items-center justify-between gap-2" style={{ background: b.coiFile ? T.greenSoft : T.amberSoft }}>
               <div className="flex items-center gap-2 min-w-0">
@@ -2633,6 +2655,12 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
         </div>
         <h2 className="text-2xl font-extrabold">You're booked!</h2>
         <p className="mt-2" style={{ color: T.sub }}>A {type.name} is reserved for {fmtLong(form.start)} at {form.pickupTime}{form.outMethod === "delivery" ? ", delivered to you" : " for pickup"}. We sent your confirmation{b.notifyWaiver !== false ? " and a copy of your signed agreement" : ""} by {channelLabel(b.notifyChannel)}{(b.notifyReminders && b.notifyReminders.length) ? `, and we'll remind you ${b.notifyReminders.slice().sort((x, y) => y - x).map(leadLabel).join(" and ")} before pickup` : ""}.</p>
+        {coiRequired(type, form.ctype) && !form.coiFile && (
+          <div className="mt-4 rounded-xl p-3 text-sm text-left flex items-start gap-2" style={{ background: T.blueSoft, color: T.blue }}>
+            <ShieldCheck size={16} className="shrink-0 mt-0.5" />
+            <span><b>Action needed:</b> this rental requires a Certificate of Insurance. Ask your insurance agent for a COI naming <b>{b.name}</b> as additionally insured, then upload it under <b>“Manage my booking”</b> before pickup. We'll remind you.</span>
+          </div>
+        )}
         <div className="mt-5 rounded-xl p-4" style={{ background: T.amberSoft, border: `1px solid ${T.amber}` }}>
           <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amberDk }}>Your confirmation code</div>
           <div className="text-3xl font-extrabold tabular-nums mt-1" style={{ color: T.ink }}>{lastCode}</div>
@@ -2819,12 +2847,12 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               <input value={form.address} onChange={(e) => set({ address: e.target.value })} placeholder="Street, city, ZIP"
                 className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${(form.outMethod === "delivery" || form.returnMethod === "collect") && !form.address ? T.red : T.line}` }} />
             </Field>
-            {form.ctype === "commercial" && (
+            {coiRequired(type, form.ctype) && (
               <div className="p-3 rounded-lg" style={{ background: T.blueSoft }}>
                 <div className="flex items-center gap-2 text-sm font-bold" style={{ color: T.blue }}>
-                  <ShieldCheck size={15} /> Certificate of Insurance
+                  <ShieldCheck size={15} /> Certificate of Insurance — required
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: T.blue }}>Required for business rentals — upload it now (PDF or photo), or we'll follow up before pickup.</div>
+                <div className="text-xs mt-1" style={{ color: T.blue }}>This {type ? type.name : "rental"} requires a COI. Ask your insurance agent for a Certificate of Insurance naming <b>{b.name}</b> as additionally insured — most send it the same day. Upload the PDF or a photo now, or add it later under “Manage my booking.”</div>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <label className="text-xs font-bold px-2.5 py-1.5 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>
                     {form.coiFile ? "Replace COI" : "Upload COI"}
@@ -3077,13 +3105,13 @@ function BookingDetail({ b, state, typeBySize, onClose, setBooking, flash, onExt
       )}
 
       {/* CERTIFICATE OF INSURANCE */}
-      {(b.type === "commercial" || b.coiFile || b.coi) && (
+      {(coiRequired(type, b.type) || b.coiFile || b.coi) && (
         <div className="rounded-lg mb-3 overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
           <div className="px-3 py-2 flex items-center justify-between gap-2" style={{ background: b.coiFile ? T.greenSoft : T.amberSoft }}>
             <div className="flex items-center gap-2 min-w-0">
               <FileText size={15} style={{ color: b.coiFile ? T.green : T.amberDk }} />
               <div className="min-w-0">
-                <div className="text-xs font-bold" style={{ color: b.coiFile ? T.green : T.amberDk }}>Certificate of Insurance {b.coiFile ? "on file" : (b.type === "commercial" ? "— not uploaded yet" : "(optional)")}</div>
+                <div className="text-xs font-bold" style={{ color: b.coiFile ? T.green : T.amberDk }}>Certificate of Insurance {b.coiFile ? "on file" : (coiRequired(type, b.type) ? "— required, not uploaded yet" : "(optional)")}</div>
                 {b.coiName && <div className="text-[11px] truncate" style={{ color: T.sub }}>{b.coiName}</div>}
               </div>
             </div>
