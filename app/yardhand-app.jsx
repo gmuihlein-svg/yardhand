@@ -401,8 +401,7 @@ export default function App() {
               {tab === "calendar" && <CalendarBoard {...{ state, trailerStatus, openDetail: setDetail }} />}
               {tab === "bookings" && <BookingsView {...{ state, typeBySize, setBooking, flash, openDetail: setDetail, openExtend: setExtend }} />}
               {tab === "customers" && <CustomersView {...{ state, openDetail: setDetail }} />}
-              {tab === "drivers" && <DriversView {...{ state, setBooking, update, flash, openDetail: setDetail }} />}
-              {tab === "yard" && <YardView {...{ state, setBooking, update, flash, openDetail: setDetail }} />}
+              {tab === "team" && <TeamView {...{ state, setBooking, update, flash, openDetail: setDetail }} />}
               {tab === "fleet" && <FleetView {...{ state, typeBySize, trailerStatus, currentBooking, update, flash }} />}
               {tab === "settings" && <SettingsView {...{ state, setState, flash }} />}
             </div>
@@ -657,8 +656,7 @@ function OwnerNav({ tab, setTab }) {
     ["calendar", "Calendar", CalendarDays],
     ["bookings", "Bookings", ClipboardList],
     ["customers", "Customers", Users],
-    ["drivers", "Drivers & dispatch", User],
-    ["yard", "Yard counter", Building2],
+    ["team", "Team & dispatch", User],
     ["fleet", "Fleet", Boxes],
     ["settings", "Settings", Settings],
   ];
@@ -1611,18 +1609,77 @@ function CustomersView({ state, openDetail }) {
 }
 
 /* ---------------- DRIVERS & PAY --------------- */
-function DriversView({ state, setBooking, update, flash, openDetail }) {
+function TeamView({ state, setBooking, update, flash, openDetail }) {
   const [adding, setAdding] = useState(false);
   const [editAvail, setEditAvail] = useState(null); // {driverId, date}
   const runs = legRuns(state);
   const fee = state.business.contractorFee;
-  const owedTotal = runs.filter((r) => r.by && !r.paid).length * fee;
+  const yardFee = state.business.counterFee;
+  const events = yardEvents(state).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  const owedRoad = runs.filter((r) => r.by && !r.paid).length * fee;
+  const owedYardTotal = events.filter((e) => e.by && e.by !== "owner" && !e.paid).length * yardFee;
+  const owedTotal = owedRoad + owedYardTotal;
   const unassigned = runs.filter((r) => !r.by).sort((a, b) => a.date.localeCompare(b.date));
   const auto = state.business.dispatchMode === "auto";
+  const counterAuto = state.business.counterMode === "auto";
+  const staff = state.contractors.filter((c) => c.active);
+  const nameOf = (id) => id === "owner" ? "You" : (state.contractors.find((c) => c.id === id)?.name.split(" ")[0] || "—");
+  // combined "you owe" per person, across road runs (contractor fee) + yard handoffs (counter fee)
+  const owedBy = {};
+  runs.forEach((r) => { if (r.by && !r.paid) owedBy[r.by] = (owedBy[r.by] || 0) + fee; });
+  events.forEach((e) => { if (e.by && e.by !== "owner" && !e.paid) owedBy[e.by] = (owedBy[e.by] || 0) + yardFee; });
 
   const reassign = (r, cid) => setBooking(r.bookingId, r.leg === "out" ? { outBy: cid } : { returnBy: cid });
-  const markPaid = (r) => { setBooking(r.bookingId, r.leg === "out" ? { outPaid: true } : { returnPaid: true }); flash(`Marked paid $${fee}.`, true); };
+  const markPaidJob = (r, jobFee) => { setBooking(r.bookingId, r.leg === "out" ? { outPaid: true } : { returnPaid: true }); flash(`Marked paid $${jobFee}.`, true); };
+  const markPaid = (r) => markPaidJob(r, fee);
   const setMode = (m) => update((n) => { n.business.dispatchMode = m; });
+  const setCounterMode = (m) => update((n) => { n.business.counterMode = m; });
+
+  // yard handoffs (will-call pickups / yard returns) — same crew, counter fee, can be covered by You
+  const setStaff = (e, id) => setBooking(e.bookingId, e.leg === "out" ? { outBy: id } : { returnBy: id });
+  const assignAutoYard = (e, rot = Date.now()) => {
+    const cid = assignRun(state, e.date, e.time, null, rot);
+    if (!cid) { flash("No one available then — you'll cover it, or adjust availability."); return; }
+    setStaff(e, cid);
+  };
+  const autoAssignAllYard = () => {
+    let s = structuredClone(state); let rot = 0; let n = 0;
+    yardEvents(s).filter((e) => !e.by || e.by === "owner").forEach((e) => {
+      const cid = assignRun(s, e.date, e.time, null, rot++);
+      if (!cid) return;
+      const bk = s.bookings.find((x) => x.id === e.bookingId);
+      if (e.leg === "out") bk.outBy = cid; else bk.returnBy = cid;
+      n++;
+    });
+    update((nn) => { nn.bookings = s.bookings; });
+    flash(n ? `Auto-assigned ${n} handoff${n > 1 ? "s" : ""} to available staff.` : "No coverable handoffs to assign.", !!n);
+  };
+  const todays = events.filter((e) => e.date === today());
+  const upcoming = events.filter((e) => e.date > today() && (e.status === "reserved" || e.status === "out"));
+  const EventRow = ({ e }) => {
+    const avail = availableDrivers(state, e.date, e.time, null);
+    return (
+      <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
+        <button onClick={() => openDetail(state.bookings.find((x) => x.id === e.bookingId))} className="flex items-center gap-2 min-w-0 text-left">
+          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ color: "#fff", background: e.leg === "out" ? T.amberDk : T.blue }}>{e.leg === "out" ? "Pickup" : "Return"}</span>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold truncate">{e.name}</div>
+            <div className="text-xs" style={{ color: T.sub }}>{fmt(e.date)}{e.time ? ` · ${e.time}` : ""}</div>
+          </div>
+        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {e.paid ? <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ color: T.green, background: T.greenSoft }}>Paid</span> : <>
+            <select value={e.by || "owner"} onChange={(ev) => setStaff(e, ev.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${T.line}`, color: T.sub }}>
+              <option value="owner">You</option>
+              {staff.map((c) => <option key={c.id} value={c.id} disabled={!avail.some((a) => a.id === c.id)}>{c.name.split(" ")[0]}{avail.some((a) => a.id === c.id) ? "" : " (off)"}</option>)}
+            </select>
+            {(!e.by || e.by === "owner") && avail.length > 0 && <button onClick={() => assignAutoYard(e)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Auto</button>}
+            {e.by && e.by !== "owner" && <button onClick={() => markPaidJob(e, yardFee)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Paid ${yardFee}</button>}
+          </>}
+        </div>
+      </div>
+    );
+  };
 
   const assignOne = (r, rot = 0) => {
     const cid = assignRun(state, r.date, r.time, null, rot);
@@ -1682,18 +1739,24 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <SectionTitle>Drivers & dispatch</SectionTitle>
+        <SectionTitle>Team & dispatch</SectionTitle>
         <button onClick={() => setAdding(true)} className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5" style={{ background: T.amber, color: T.steelDk }}>
-          <Plus size={16} /> Add driver
+          <Plus size={16} /> Add employee
         </button>
       </div>
 
-      {/* dispatch mode */}
-      <Card className="p-4">
+      <Card className="p-4" style={{ background: T.blueSoft }}>
+        <div className="text-sm" style={{ color: T.blue }}>
+          One crew covers everything. <b>Delivery &amp; collection runs</b> are road jobs someone drives to the customer; <b>will-call pickups &amp; yard returns</b> are counter handoffs someone staffs at the yard. Add each person once — you (or auto-dispatch) decide who covers which job.
+        </div>
+      </Card>
+
+      {/* assignment modes — road runs + yard handoffs */}
+      <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <div className="text-sm font-bold">Dispatch mode</div>
-            <div className="text-xs" style={{ color: T.sub }}>{auto ? "Round-robin auto-assigns each run to an available driver as bookings come in." : "New runs wait in the queue below for you to assign."}</div>
+            <div className="text-sm font-bold">Delivery &amp; collection runs</div>
+            <div className="text-xs" style={{ color: T.sub }}>{auto ? "Round-robin auto-assigns each run to an available employee as bookings come in." : "New runs wait in the queue below for you to assign."}</div>
           </div>
           <div className="flex gap-1 p-1 rounded-lg" style={{ background: T.graySoft }}>
             {[["auto", "Auto (round-robin)"], ["manual", "Manual"]].map(([m, l]) => (
@@ -1702,21 +1765,40 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
             ))}
           </div>
         </div>
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
+          <div>
+            <div className="text-sm font-bold">Will-call &amp; yard handoffs</div>
+            <div className="text-xs" style={{ color: T.sub }}>{counterAuto ? "New handoffs auto-assign (round-robin) to available employees." : "You cover handoffs by default; assign an employee as needed."}</div>
+          </div>
+          <div className="flex gap-1 p-1 rounded-lg" style={{ background: T.graySoft }}>
+            {[["self", "I cover it"], ["auto", "Auto to staff"]].map(([m, l]) => (
+              <button key={m} onClick={() => setCounterMode(m)} className="px-3 py-1.5 rounded-md text-xs font-bold"
+                style={state.business.counterMode === m ? { background: "#fff", color: T.ink } : { color: T.sub }}>{l}</button>
+            ))}
+          </div>
+        </div>
       </Card>
 
-      {/* owed summary */}
+      {/* owed summary — road runs + yard handoffs combined */}
       <Card className="p-4" style={{ background: T.steelDk }}>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amber }}>You owe drivers</div>
+            <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amber }}>You owe your team</div>
             <div className="text-4xl font-extrabold text-white tabular-nums">${owedTotal}</div>
-            <div className="text-xs mt-1" style={{ color: "#B7C0C6" }}>{runs.filter((r) => r.by && !r.paid).length} unpaid runs · ${fee} per run</div>
+            <div className="text-xs mt-1" style={{ color: "#B7C0C6" }}>${owedRoad} road runs · ${owedYardTotal} yard handoffs · anything you cover yourself is $0</div>
           </div>
           <div className="text-right text-xs max-w-[220px]" style={{ color: "#B7C0C6" }}>
             <CreditCard size={18} style={{ color: T.amber }} className="inline mb-1" /><br />
-            Pay drivers in Stripe, then mark runs paid here to clear the balance.
+            Pay in Stripe, then mark each job paid to clear the balance.
           </div>
         </div>
+        {Object.keys(owedBy).length > 0 && (
+          <div className="mt-3 pt-3 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+            {Object.entries(owedBy).map(([id, amt]) => (
+              <div key={id} className="flex justify-between text-sm text-white"><span>{nameOf(id)}</span><span className="tabular-nums font-bold">${amt}</span></div>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* NEEDS DISPATCH queue */}
@@ -1724,7 +1806,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
         <Card className="p-4" style={{ border: `1px solid ${T.amber}` }}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2"><AlertTriangle size={16} style={{ color: T.amberDk }} />
-              <span className="text-sm font-bold">Needs dispatch · {unassigned.length}</span></div>
+              <span className="text-sm font-bold">Runs needing a driver · {unassigned.length}</span></div>
             <button onClick={autoAssignAll} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.amber, color: T.steelDk }}>Auto-assign all</button>
           </div>
           <div className="space-y-1.5">
@@ -1738,7 +1820,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
                       <div className="text-xs" style={{ color: T.sub }}>{fmt(r.date)} · {r.time}</div></div>
                   </button>
                   {avail.length === 0 ? (
-                    <span className="text-[11px] font-bold px-2 py-1 rounded shrink-0" style={{ color: T.red, background: T.redSoft }}>No driver free</span>
+                    <span className="text-[11px] font-bold px-2 py-1 rounded shrink-0" style={{ color: T.red, background: T.redSoft }}>No one free</span>
                   ) : (
                     <div className="flex items-center gap-1.5 shrink-0">
                       <select defaultValue="" onChange={(e) => e.target.value && reassign(r, e.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${T.line}`, color: T.sub }}>
@@ -1752,6 +1834,23 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
               );
             })}
           </div>
+        </Card>
+      )}
+
+      {/* YARD HANDOFFS — will-call pickups & yard returns (counter appointments) */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-bold">Yard handoffs today · {todays.length}</div>
+          {events.some((e) => (!e.by || e.by === "owner") && !e.paid) && <button onClick={autoAssignAllYard} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.amber, color: T.steelDk }}>Auto-assign all</button>}
+        </div>
+        {todays.length === 0 ? <Empty>No will-call pickups or yard returns today.</Empty> : (
+          <div className="space-y-1.5">{todays.map((e) => <EventRow key={e.key} e={e} />)}</div>
+        )}
+      </Card>
+      {upcoming.length > 0 && (
+        <Card className="p-4">
+          <div className="text-sm font-bold mb-2">Upcoming yard handoffs · {upcoming.length}</div>
+          <div className="space-y-1.5">{upcoming.slice(0, 20).map((e) => <EventRow key={e.key} e={e} />)}</div>
         </Card>
       )}
 
@@ -1773,7 +1872,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
               <div className="text-xs font-bold truncate pr-2">{c.name.split(" ")[0]} {!c.active && <span style={{ color: T.sub }}>·off</span>}</div>
               {days.map((d) => {
                 const wins = (c.avail && c.avail[d]) || [];
-                const dayRuns = runs.filter((r) => r.by === c.id && r.date === d);
+                const dayRuns = [...runs, ...events].filter((r) => r.by === c.id && r.date === d);
                 const cover = wins.length;
                 return (
                   <div key={d} className="h-full flex items-center px-0.5">
@@ -1795,10 +1894,13 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
         </div>
       </Card>
 
-      {/* per-driver runs & pay */}
+      {/* per-employee jobs & pay — road runs + yard handoffs together */}
       {state.contractors.map((c) => {
-        const cr = runs.filter((r) => r.by === c.id).sort((a, b) => a.date.localeCompare(b.date));
-        const owed = cr.filter((r) => !r.paid).length * fee;
+        const cr = [
+          ...runs.filter((r) => r.by === c.id).map((r) => ({ ...r, jobFee: fee })),
+          ...events.filter((e) => e.by === c.id).map((e) => ({ ...e, jobFee: yardFee })),
+        ].sort((a, b) => a.date.localeCompare(b.date));
+        const owed = cr.filter((r) => !r.paid).reduce((s, r) => s + r.jobFee, 0);
         return (
           <Card key={c.id} className="p-4">
             <div className="flex items-center justify-between mb-2">
@@ -1820,7 +1922,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
                 </div>
               </div>
             </div>
-            {cr.length === 0 ? <div className="text-xs py-2" style={{ color: T.sub }}>No runs assigned.</div> : (
+            {cr.length === 0 ? <div className="text-xs py-2" style={{ color: T.sub }}>No jobs assigned.</div> : (
               <div className="space-y-1.5">
                 {cr.map((r) => (
                   <div key={r.key} className="flex items-center justify-between gap-2 p-2 rounded-lg" style={{ background: T.paper }}>
@@ -1835,9 +1937,10 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
                       {r.paid ? <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ color: T.green, background: T.greenSoft }}>Paid</span>
                         : <>
                           <select value={r.by} onChange={(e) => reassign(r, e.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${T.line}`, color: T.sub }}>
+                            {r.jobFee === yardFee && <option value="owner">You</option>}
                             {state.contractors.filter((x) => x.active || x.id === r.by).map((x) => <option key={x.id} value={x.id}>{x.name.split(" ")[0]}</option>)}
                           </select>
-                          <button onClick={() => markPaid(r)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Mark paid ${fee}</button>
+                          <button onClick={() => markPaidJob(r, r.jobFee)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Mark paid ${r.jobFee}</button>
                         </>}
                     </div>
                   </div>
@@ -1847,7 +1950,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
           </Card>
         );
       })}
-      <p className="text-xs text-center" style={{ color: T.sub }}>Round-robin pulls only from drivers available that day/time and spreads jobs evenly. Switch to Manual to assign every run yourself. Collection runs are scheduled to the return date — long rentals just book a driver for a slot ~a month out.</p>
+      <p className="text-xs text-center" style={{ color: T.sub }}>Round-robin pulls only from employees available that day/time and spreads jobs evenly. Switch to Manual to assign every job yourself. Yard handoffs default to you and cost $0 unless you assign staff. Collection runs are scheduled to the return date — long rentals just book someone for a slot ~a month out.</p>
 
       {adding && <AddContractorModal onClose={() => setAdding(false)}
         onAdd={(c) => { update((n) => n.contractors.push(c)); setAdding(false); flash(`Added ${c.name}.`, true); }} />}
@@ -1887,150 +1990,21 @@ function AvailabilityEditor({ driverId, date, state, update, onClose }) {
   );
 }
 
-/* ---------------- YARD COUNTER (will-call pickups & yard returns) --------------- */
-function YardView({ state, setBooking, update, flash, openDetail }) {
-  const fee = state.business.counterFee;
-  const auto = state.business.counterMode === "auto";
-  const events = yardEvents(state).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-  const staff = state.contractors.filter((c) => c.active);
-  const nameOf = (id) => id === "owner" ? "You" : (state.contractors.find((c) => c.id === id)?.name.split(" ")[0] || "—");
-
-  const owedBy = {};
-  events.forEach((e) => { if (e.by && e.by !== "owner" && !e.paid) owedBy[e.by] = (owedBy[e.by] || 0) + fee; });
-  const owedTotal = Object.values(owedBy).reduce((a, b) => a + b, 0);
-
-  const setStaff = (e, id) => setBooking(e.bookingId, e.leg === "out" ? { outBy: id } : { returnBy: id });
-  const markPaid = (e) => { setBooking(e.bookingId, e.leg === "out" ? { outPaid: true } : { returnPaid: true }); flash(`Marked paid $${fee}.`, true); };
-  const setMode = (m) => update((n) => { n.business.counterMode = m; });
-  const assignAuto = (e, rot = Date.now()) => {
-    const cid = assignRun(state, e.date, e.time, null, rot);
-    if (!cid) { flash("No staff available for that day/time — you'll cover it, or adjust availability."); return; }
-    setStaff(e, cid);
-  };
-  const autoAssignAll = () => {
-    let s = structuredClone(state); let rot = 0; let n = 0;
-    yardEvents(s).filter((e) => !e.by || e.by === "owner").forEach((e) => {
-      const cid = assignRun(s, e.date, e.time, null, rot++);
-      if (!cid) return;
-      const bk = s.bookings.find((x) => x.id === e.bookingId);
-      if (e.leg === "out") bk.outBy = cid; else bk.returnBy = cid;
-      n++;
-    });
-    update((nn) => { nn.bookings = s.bookings; });
-    flash(n ? `Auto-assigned ${n} handoff${n > 1 ? "s" : ""} to available staff.` : "No coverable handoffs to assign.", !!n);
-  };
-
-  const todays = events.filter((e) => e.date === today());
-  const upcoming = events.filter((e) => e.date > today() && (e.status === "reserved" || e.status === "out"));
-
-  const EventRow = ({ e }) => {
-    const avail = availableDrivers(state, e.date, e.time, null);
-    return (
-      <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
-        <button onClick={() => openDetail(state.bookings.find((x) => x.id === e.bookingId))} className="flex items-center gap-2 min-w-0 text-left">
-          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ color: "#fff", background: e.leg === "out" ? T.amberDk : T.blue }}>{e.leg === "out" ? "Pickup" : "Return"}</span>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold truncate">{e.name}</div>
-            <div className="text-xs" style={{ color: T.sub }}>{fmt(e.date)}{e.time ? ` · ${e.time}` : ""}</div>
-          </div>
-        </button>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {e.paid ? <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ color: T.green, background: T.greenSoft }}>Paid</span> : <>
-            <select value={e.by || "owner"} onChange={(ev) => setStaff(e, ev.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${T.line}`, color: T.sub }}>
-              <option value="owner">You</option>
-              {staff.map((c) => <option key={c.id} value={c.id} disabled={!avail.some((a) => a.id === c.id)}>{c.name.split(" ")[0]}{avail.some((a) => a.id === c.id) ? "" : " (off)"}</option>)}
-            </select>
-            {(!e.by || e.by === "owner") && avail.length > 0 && <button onClick={() => assignAuto(e)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Auto</button>}
-            {e.by && e.by !== "owner" && <button onClick={() => markPaid(e)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Paid ${fee}</button>}
-          </>}
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="space-y-6">
-      <SectionTitle>Yard counter</SectionTitle>
-      <Card className="p-4" style={{ background: T.blueSoft }}>
-        <div className="text-sm" style={{ color: T.blue }}>
-          <b>Will-call pickups and yard returns</b> are counter appointments — someone has to be at the yard to hand off or receive the trailer and do the inspection. Assign each to <b>You</b> or a staff member. Anyone other than you earns the ${fee} counter fee, tracked below.
-        </div>
-      </Card>
-
-      {/* counter dispatch mode */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <div className="text-sm font-bold">Who covers the counter?</div>
-            <div className="text-xs" style={{ color: T.sub }}>{auto ? "New handoffs auto-assign (round-robin) to available staff." : "You cover handoffs by default; assign staff as needed."}</div>
-          </div>
-          <div className="flex items-center gap-2">
-            {events.some((e) => (!e.by || e.by === "owner") && !e.paid) && <button onClick={autoAssignAll} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.amber, color: T.steelDk }}>Auto-assign all</button>}
-            <div className="flex gap-1 p-1 rounded-lg" style={{ background: T.graySoft }}>
-              {[["self", "I cover it"], ["auto", "Auto to staff"]].map(([m, l]) => (
-                <button key={m} onClick={() => setMode(m)} className="px-3 py-1.5 rounded-md text-xs font-bold" style={state.business.counterMode === m ? { background: "#fff", color: T.ink } : { color: T.sub }}>{l}</button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* owed for counter work */}
-      <Card className="p-4" style={{ background: T.steelDk }}>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amber }}>You owe (counter work)</div>
-            <div className="text-4xl font-extrabold text-white tabular-nums">${owedTotal}</div>
-            <div className="text-xs mt-1" style={{ color: "#B7C0C6" }}>${fee} per handoff · anything you cover yourself is $0</div>
-          </div>
-          <div className="text-right text-xs max-w-[220px]" style={{ color: "#B7C0C6" }}>
-            <CreditCard size={18} style={{ color: T.amber }} className="inline mb-1" /><br />
-            Pay staff in Stripe, then mark handoffs paid to clear the balance — same 1099 rules as drivers.
-          </div>
-        </div>
-        {Object.keys(owedBy).length > 0 && (
-          <div className="mt-3 pt-3 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.12)" }}>
-            {Object.entries(owedBy).map(([id, amt]) => (
-              <div key={id} className="flex justify-between text-sm text-white"><span>{nameOf(id)}</span><span className="tabular-nums font-bold">${amt}</span></div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <Card className="p-4">
-        <div className="text-sm font-bold mb-2">Today at the counter · {todays.length}</div>
-        {todays.length === 0 ? <Empty>No will-call pickups or yard returns today.</Empty> : (
-          <div className="space-y-1.5">{todays.map((e) => <EventRow key={e.key} e={e} />)}</div>
-        )}
-      </Card>
-
-      <Card className="p-4">
-        <div className="text-sm font-bold mb-2">Upcoming counter appointments · {upcoming.length}</div>
-        {upcoming.length === 0 ? <Empty>Nothing scheduled ahead.</Empty> : (
-          <div className="space-y-1.5">{upcoming.slice(0, 20).map((e) => <EventRow key={e.key} e={e} />)}</div>
-        )}
-      </Card>
-
-      <p className="text-xs text-center" style={{ color: T.sub }}>Every will-call pickup and yard return is a staffed handoff with the inspection-and-photos step. Assign who covers it; the counter fee tracks like driver pay so you always know who's owed.</p>
-    </div>
-  );
-}
-
 function AddContractorModal({ onClose, onAdd }) {
   const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); const [vehicle, setVehicle] = useState("");
   return (
-    <Modal onClose={onClose} title="Add a driver">
+    <Modal onClose={onClose} title="Add employee">
       <div className="space-y-3">
         <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <div className="grid grid-cols-2 gap-2">
           <Field label="Phone"><input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
-          <Field label="Tow vehicle"><input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. F-250" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+          <Field label="Tow vehicle (if they drive)"><input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. F-250 · leave blank for yard-only" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         </div>
         <Field label="Email (for job alerts & their portal login)"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@yourcompany.com" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
       </div>
-      <p className="text-xs mt-3" style={{ color: T.sub }}>At launch, collect a signed contractor agreement, W-9, and COI before their first run (see the guide). You'll 1099 anyone paid $600+/yr.</p>
+      <p className="text-xs mt-3" style={{ color: T.sub }}>The same person can drive delivery/collection runs and staff yard handoffs — assign them to either from Team &amp; dispatch. At launch, collect a signed agreement, W-9, and COI before their first job (see the guide). You'll 1099 anyone paid $600+/yr.</p>
       <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, email, vehicle: vehicle || "—", active: true })}
-        className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add driver</button>
+        className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add employee</button>
     </Modal>
   );
 }

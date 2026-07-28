@@ -44,8 +44,20 @@ _(This note exists because the owner asked to be reminded next time — surface 
 
 ## What's built (Phase 1 — live prototype)
 
-**Owner dashboard tabs:** Dashboard · Insights · Calendar · Bookings · Drivers & dispatch ·
-Yard counter · Fleet · Settings.
+**Owner dashboard tabs:** Dashboard · Insights · Calendar · Bookings · Customers ·
+Team & dispatch · Fleet · Settings.
+
+- **Team & dispatch (one unified tab):** the old "Drivers & dispatch" and "Yard counter"
+  tabs are merged — it was always ONE shared pool (`state.contractors`); adding a person
+  makes them available for both road runs and yard handoffs. "Add driver" is now **"Add
+  employee."** The tab has: two assignment-mode toggles (delivery/collection = auto/manual
+  `dispatchMode`; will-call/yard = I-cover-it/auto-to-staff `counterMode`), a **combined
+  "You owe your team"** card (road runs at `contractorFee` + yard handoffs at `counterFee`,
+  with per-person breakdown), the road-runs "needs a driver" queue, the yard-handoff
+  today/upcoming lists (each assignable to You or staff), the workforce availability grid
+  (cell number now counts road + yard jobs), and per-employee cards listing **both** their
+  road runs and yard handoffs with the correct per-job fee + mark-paid. Component:
+  `TeamView` (replaced `DriversView`; `YardView` deleted). Nav id is `"team"`.
 
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
