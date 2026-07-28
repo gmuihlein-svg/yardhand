@@ -2694,7 +2694,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
         {/* step 1: dates */}
         {stepN === 1 && (
           <div className="space-y-4">
-            <StepHead icon={CalendarDays} title="When do you need it?" sub={`Pick your day, how long, and whether you'll grab it or we deliver. Booking is open for the next ${b.bookHorizonDays || 30} days.`} />
+            <StepHead icon={CalendarDays} title="When do you need it?" sub={`Pick your day, how long, and how you'll get it and return it. Booking is open for the next ${b.bookHorizonDays || 30} days.`} />
             <Field label="Start date">
               <input type="date" min={today()} max={addDays(today(), b.bookHorizonDays)} value={form.start} onChange={(e) => set({ start: e.target.value })}
                 className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
@@ -2715,9 +2715,9 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               <input type="range" min="1" max="60" value={form.days} onChange={(e) => set({ days: +e.target.value })} className="w-full mt-2" style={{ accentColor: T.amber, height: 8 }} />
               <div className="text-xs text-center mt-1" style={{ color: T.sub }}>Rent for {form.days} day{form.days > 1 ? "s" : ""} · return by {fmtLong(end)}</div>
             </Field>
-            <Field label="How do you want it?">
+            <Field label="How do you want to get it?">
               <div className="grid grid-cols-2 gap-2">
-                {[["willcall", "I'll pick up", `+$${b.dropFee} · at the yard`], ["delivery", "Deliver to me", `+$${b.deliveryFee}`]].map(([v, l, s]) => (
+                {[["willcall", "I'll pick up", `+$${b.dropFee} · at the yard`], ["delivery", "Deliver to me", `+$${b.deliveryFee} · we bring it`]].map(([v, l, s]) => (
                   <button key={v} onClick={() => set({ outMethod: v })} className="p-2.5 rounded-lg text-left"
                     style={form.outMethod === v ? { background: T.amberSoft, border: `2px solid ${T.amber}` } : { background: T.paper, border: `1px solid ${T.line}` }}>
                     <div className="text-sm font-bold">{l}</div><div className="text-xs" style={{ color: T.sub }}>{s}</div>
@@ -2751,6 +2751,17 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                   </div>
                 );
               })()}
+            </Field>
+            <Field label="How do you want to return it?">
+              <div className="grid grid-cols-2 gap-2">
+                {[["yard", "I'll drop it off", `+$${b.dropFee} · back to the yard`], ["collect", "You pick it up", `+$${b.deliveryFee} · we come get it`]].map(([v, l, s]) => (
+                  <button key={v} onClick={() => set({ returnMethod: v })} className="p-2.5 rounded-lg text-left"
+                    style={form.returnMethod === v ? { background: T.amberSoft, border: `2px solid ${T.amber}` } : { background: T.paper, border: `1px solid ${T.line}` }}>
+                    <div className="text-sm font-bold">{l}</div><div className="text-xs" style={{ color: T.sub }}>{s}</div>
+                  </button>
+                ))}
+              </div>
+              {form.returnMethod === "collect" && <div className="text-[11px] mt-1.5" style={{ color: T.sub }}>We'll schedule a driver to collect it on your return date ({fmtLong(end)}).</div>}
             </Field>
             {countAvail(form.size, form.start, end) === 0 && (
               <div className="p-3 rounded-lg text-sm flex items-center gap-2" style={{ background: T.redSoft, color: T.red }}>
@@ -2791,19 +2802,6 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               </label>
             )}
             <Toggle label="Add damage waiver" sub={`Caps your cost if something goes wrong · $${Math.round(base * b.waiverRate)}`} on={form.waiver} set={(v) => set({ waiver: v })} />
-
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: T.sub }}>Returning the trailer</div>
-              <div className="grid grid-cols-2 gap-2">
-                {[["yard", "I'll drop it off", `+$${b.dropFee} · back to the yard`], ["collect", "Come get it", `+$${b.deliveryFee}`]].map(([v, l, s]) => (
-                  <button key={v} onClick={() => set({ returnMethod: v })} className="p-2.5 rounded-lg text-left"
-                    style={form.returnMethod === v ? { background: T.amberSoft, border: `2px solid ${T.amber}` } : { background: T.paper, border: `1px solid ${T.line}` }}>
-                    <div className="text-sm font-bold">{l}</div><div className="text-xs" style={{ color: T.sub }}>{s}</div>
-                  </button>
-                ))}
-              </div>
-              {form.returnMethod === "collect" && <div className="text-[11px] mt-1.5" style={{ color: T.sub }}>We'll schedule a driver to collect it on your return date ({fmtLong(end)}).</div>}
-            </div>
             <Field label="Anything we should know? (optional)"><textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} placeholder="Job type, what you're hauling…" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
             {type && <PriceBreakdown heading="Your price so far" {...priceProps} />}
             <NavBtns onBack={() => setStepN(1)} onNext={() => setStepN(3)} nextOk={form.name && form.phone && (!(form.outMethod === "delivery" || form.returnMethod === "collect") || form.address)} />
