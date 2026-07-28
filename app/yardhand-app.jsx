@@ -1616,15 +1616,9 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
   const fee = state.business.contractorFee;
   const yardFee = state.business.counterFee;
   const events = yardEvents(state).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-  const owedRoad = runs.filter((r) => r.by && !r.paid).length * fee;
-  const owedYardTotal = events.filter((e) => e.by && e.by !== "owner" && !e.paid).length * yardFee;
-  const owedTotal = owedRoad + owedYardTotal;
   const auto = state.business.dispatchMode === "auto";
   const counterAuto = state.business.counterMode === "auto";
-  // combined "you owe" per person, across road runs (contractor fee) + yard handoffs (counter fee)
-  const owedBy = {};
-  runs.forEach((r) => { if (r.by && !r.paid) owedBy[r.by] = (owedBy[r.by] || 0) + fee; });
-  events.forEach((e) => { if (e.by && e.by !== "owner" && !e.paid) owedBy[e.by] = (owedBy[e.by] || 0) + yardFee; });
+  const personName = (id) => id === "owner" ? "You" : (state.contractors.find((c) => c.id === id)?.name.split(" ")[0] || "—");
 
   const reassign = (r, cid) => setBooking(r.bookingId, r.leg === "out" ? { outBy: cid } : { returnBy: cid });
   const markPaidJob = (r, jobFee) => { setBooking(r.bookingId, r.leg === "out" ? { outPaid: true } : { returnPaid: true }); flash(`Marked paid $${jobFee}.`, true); };
@@ -1673,17 +1667,28 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
     ...runs.map((r) => ({ ...r, kind: "road", jobFee: fee })),
     ...events.map((e) => ({ ...e, kind: "yard", jobFee: yardFee, label: e.leg === "out" ? "Pickup" : "Return" })),
   ];
-  const jobActive = (j) => j.status === "reserved" || j.status === "out"; // an upcoming/live rental, not a finished one
+  const jobActive = (j) => j.status === "reserved" || j.status === "out"; // a live/upcoming rental, not a finished one
   const jobNeedsDriver = (j) => j.kind === "road" && !j.by && jobActive(j); // yard handoffs default to You, so only road runs can be truly unassigned
+  const jobDone = (j) => !!j.date && j.date < today();                      // the leg's day has passed → the work already happened
   const needCount = allJobs.filter(jobNeedsDriver).length;
-  // show a job if it's still live work OR you still owe a specific person for it (even after it's done)
-  const openJobs = allJobs
-    .filter((j) => !j.paid && (jobActive(j) || (j.by && j.by !== "owner")))
+  // SECTION 1 (coverage): jobs still needing someone, plus everything coming up (today or later)
+  const coverJobs = allJobs
+    .filter((j) => jobNeedsDriver(j) || (jobActive(j) && !jobDone(j)))
     .sort((a, b) => {
       const ua = jobNeedsDriver(a) ? 0 : 1, ub = jobNeedsDriver(b) ? 0 : 1;
       if (ua !== ub) return ua - ub;               // jobs still needing a driver float to the top
       return (a.date || "").localeCompare(b.date || "");
     });
+  // SECTION 2 (pay): finished jobs assigned to a real person that you haven't paid yet
+  const payJobs = allJobs
+    .filter((j) => j.by && j.by !== "owner" && !j.paid && jobDone(j))
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  // "you owe" = the finished, still-unpaid work (future assigned jobs aren't owed until they happen)
+  const owedBy = {};
+  payJobs.forEach((j) => { owedBy[j.by] = (owedBy[j.by] || 0) + j.jobFee; });
+  const owedRoad = payJobs.filter((j) => j.kind === "road").reduce((s, j) => s + j.jobFee, 0);
+  const owedYardTotal = payJobs.filter((j) => j.kind === "yard").reduce((s, j) => s + j.jobFee, 0);
+  const owedTotal = owedRoad + owedYardTotal;
   const autoOne = (j) => { const cid = assignRun(state, j.date, j.time, null, Date.now()); if (!cid) { flash("No one's free then — set their hours or pick someone manually."); return; } reassign(j, cid); };
   const autoAssignEverything = () => {
     let s = structuredClone(state); let rot = 0; let n = 0;
@@ -1707,24 +1712,24 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
 
       <Card className="p-4" style={{ background: T.blueSoft }}>
         <div className="text-sm" style={{ color: T.blue }}>
-          This page is your crew and their work, in order: <b>1)</b> the jobs and who's covering each, <b>2)</b> your people and what you owe them, <b>3)</b> the hours they can work, <b>4)</b> auto-assign settings. A rental has two kinds of jobs — a <b>delivery run</b> someone drives out, and a <b>yard handoff</b> when the customer comes to your yard. The same people do both.
+          This page is your crew and their work, in order: <b>1)</b> who's covering each upcoming job, <b>2)</b> who you need to pay for finished jobs, <b>3)</b> your people, <b>4)</b> the hours they can work, <b>5)</b> auto-assign settings. A rental has two kinds of jobs — a <b>delivery run</b> someone drives out, and a <b>yard handoff</b> when the customer comes to your yard. The same people do both.
         </div>
       </Card>
 
-      {/* ─────────── 1) THE WORK — every job, shown once, and who covers it ─────────── */}
+      {/* ─────────── 1) COVERAGE — upcoming jobs & who's on each ─────────── */}
       <Card className="p-4">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <div className="text-sm font-bold">1 · Jobs — who's covering each</div>
+          <div className="text-sm font-bold">1 · Jobs coming up — who's covering each</div>
           {needCount > 0 && <button onClick={autoAssignEverything} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.amber, color: T.steelDk }}>Auto-assign all</button>}
         </div>
         <div className="text-xs mb-3 leading-snug" style={{ color: T.sub }}>
-          Every job that still needs assigning or paying. {needCount > 0
-            ? <><b style={{ color: T.amberDk }}>{needCount} still need{needCount === 1 ? "s" : ""} a driver</b> (highlighted) — pick a name or tap Auto.</>
-            : "Everyone's covered."} Choose who's on a job with the dropdown, then <b>Mark paid</b> once you've paid them.
+          Every job from today forward. {needCount > 0
+            ? <><b style={{ color: T.amberDk }}>{needCount} still need{needCount === 1 ? "s" : ""} a driver</b> (highlighted at top) — pick a name or tap Auto.</>
+            : "Everyone's covered."} Use the dropdown to change who's on a job. <span style={{ color: T.sub }}>Paying people happens in the next section, once a job is done.</span>
         </div>
-        {openJobs.length === 0 ? <Empty>No open jobs right now. New bookings land here automatically.</Empty> : (
+        {coverJobs.length === 0 ? <Empty>Nothing scheduled. New bookings land here automatically.</Empty> : (
           <div className="space-y-1.5">
-            {openJobs.map((j) => {
+            {coverJobs.map((j) => {
               const need = jobNeedsDriver(j);
               return (
                 <div key={j.key} className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: need ? T.amberSoft : T.paper, border: need ? `1px solid ${T.amber}` : "1px solid transparent" }}>
@@ -1742,7 +1747,6 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
                       {state.contractors.filter((x) => x.active || x.id === j.by).map((x) => <option key={x.id} value={x.id}>{x.name.split(" ")[0]}</option>)}
                     </select>
                     {need && <button onClick={() => autoOne(j)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Auto</button>}
-                    {j.by && j.by !== "owner" && <button onClick={() => markPaidJob(j, j.jobFee)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Mark paid ${j.jobFee}</button>}
                   </div>
                 </div>
               );
@@ -1751,14 +1755,38 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
         )}
       </Card>
 
-      {/* ─────────── 2) THE PEOPLE — roster + what you owe ─────────── */}
+      {/* ─────────── 2) PAY — finished jobs you still owe someone for ─────────── */}
+      <Card className="p-4">
+        <div className="text-sm font-bold mb-1">2 · To pay <span className="font-normal" style={{ color: T.sub }}>· ${owedTotal} owed</span></div>
+        <div className="text-xs mb-3 leading-snug" style={{ color: T.sub }}>
+          Finished jobs you haven't paid yet ({owedTotal > 0 ? <><b>${owedRoad}</b> delivery runs · <b>${owedYardTotal}</b> yard handoffs</> : "nothing right now"}). Anything you covered yourself is free. Pay the person in Stripe, then tap <b>Mark paid</b> here to clear it.
+        </div>
+        {payJobs.length === 0 ? <Empty>All caught up — nobody's owed right now.</Empty> : (
+          <div className="space-y-1.5">
+            {payJobs.map((j) => (
+              <div key={j.key} className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
+                <button onClick={() => openDetail(state.bookings.find((x) => x.id === j.bookingId))} className="flex items-center gap-2 min-w-0 text-left">
+                  <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0" style={{ color: "#fff", background: j.leg === "out" ? T.amberDk : T.blue }}>{j.label}</span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{personName(j.by)} · {j.name}</div>
+                    <div className="text-xs" style={{ color: T.sub }}>{fmt(j.date)} · {j.kind === "road" ? "delivery run" : "yard handoff"}</div>
+                  </div>
+                </button>
+                <button onClick={() => markPaidJob(j, j.jobFee)} className="text-[11px] font-bold px-2.5 py-1.5 rounded shrink-0" style={{ background: T.steel, color: "#fff" }}>Mark paid ${j.jobFee}</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* ─────────── 3) THE PEOPLE — roster ─────────── */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-1">
-          <div className="text-sm font-bold">2 · Your team</div>
+          <div className="text-sm font-bold">3 · Your team</div>
           <button onClick={() => setAdding(true)} className="text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={14} /> Add employee</button>
         </div>
         <div className="text-xs mb-3 leading-snug" style={{ color: T.sub }}>
-          Everyone who works for you. You owe <b>${owedTotal}</b> total right now (${owedRoad} delivery runs · ${owedYardTotal} yard handoffs — anything you cover yourself is free). Pay in Stripe, then mark jobs paid above.
+          Everyone who works for you, and what each is owed for finished work. Add or pause people here.
         </div>
         <div className="space-y-2">
           {state.contractors.map((c) => {
@@ -1791,7 +1819,7 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
       {/* ─────────── 3) THE HOURS — availability calendar ─────────── */}
       <Card className="p-3 overflow-x-auto">
         <div className="px-1 mb-3">
-          <div className="text-sm font-bold">3 · When each person works — next {horizon} days</div>
+          <div className="text-sm font-bold">4 · When each person works — next {horizon} days</div>
           <div className="text-xs mt-1 leading-snug" style={{ color: T.sub }}>
             Each row is a person; each column is a day. The color shows how much of that day they can work — <b style={{ color: T.green }}>green</b> = free most of the day, <b style={{ color: T.amberDk }}>amber</b> = only an hour or two, <b>blank</b> = not working. A number in a square means that many jobs are already booked on them that day. <b>Tap any square to set that person's hours.</b> Customers can only pick a delivery or pickup time when someone is marked free — so keep this current.
           </div>
@@ -1837,7 +1865,7 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
       {/* ─────────── 4) AUTOMATION — how new bookings get assigned ─────────── */}
       <Card className="p-4 space-y-3">
         <div>
-          <div className="text-sm font-bold">4 · Auto-assign settings</div>
+          <div className="text-sm font-bold">5 · Auto-assign settings</div>
           <div className="text-xs mt-1" style={{ color: T.sub }}>Set once. This decides who picks up each new booking automatically — you can always change any single job in the list above.</div>
         </div>
         <div className="flex items-center justify-between flex-wrap gap-2 pt-1">

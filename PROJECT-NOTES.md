@@ -53,25 +53,27 @@ Team & dispatch · Fleet · Settings.
   employee."** Component: `TeamView` (replaced `DriversView`; `YardView` deleted). Nav id
   is `"team"`. **Laid out as one obvious top-to-bottom flow, numbered 1–4** (designed for a
   non-technical owner who's never seen it):
-  1. **Jobs — who's covering each:** ONE flat list of every job, each shown exactly once —
-     delivery runs (DELIVER/COLLECT) and yard handoffs (PICKUP/RETURN) combined. Unassigned
-     road runs float to the top, highlighted amber, with an Auto button; each row has an
-     assignee dropdown (yard rows include "You") and a Mark-paid button. Built from
-     `allJobs` = `legRuns` + `yardEvents`. `openJobs` filter shows a job only if it's live
-     (`status` reserved/out) OR still owed to a specific person — this deliberately excludes
-     the returned sample-history bookings so the list stays short. "Auto-assign all"
-     (`autoAssignEverything`) covers both road + yard in one pass.
-  2. **Your team:** roster (people only, no jobs) — avatar, contact, `$owed`, open-job
-     count, sick-today / set-inactive. Header line shows the combined `$owedTotal`
-     (road `contractorFee` + yard `counterFee`).
-  3. **When each person works:** the availability grid (rows = people, cols = days, color =
+  1. **Jobs coming up — who's covering each:** `coverJobs` = every job from today forward
+     (delivery runs DELIVER/COLLECT + yard handoffs PICKUP/RETURN), each shown once.
+     Unassigned road runs float to the top, highlighted amber, with an Auto button; each row
+     has an assignee dropdown (yard rows include "You"). **No pay button here** — coverage
+     only. "Auto-assign all" (`autoAssignEverything`) covers both road + yard in one pass.
+  2. **To pay:** `payJobs` = finished jobs (`jobDone` = leg date < today) assigned to a real
+     person and still unpaid; each shows the person + customer and a Mark-paid button.
+     Header shows `$owedTotal` split into road/yard. Money is deliberately its own section,
+     separate from coverage (owner asked for this). Owe totals (`owedBy`/`owedRoad`/
+     `owedYardTotal`) are computed from `payJobs` — i.e. only finished work counts as owed;
+     future assigned jobs aren't "owed" yet.
+  3. **Your team:** roster (people only) — avatar, contact, `$owed` (finished work),
+     open-job count, sick-today / set-inactive, Add employee.
+  4. **When each person works:** the availability grid (rows = people, cols = days, color =
      how free), with a plain-language explainer + legend; tap a cell → `AvailabilityEditor`
-     (rewritten in plain language, lists that day's booked jobs).
-  4. **Auto-assign settings:** the two mode toggles (`dispatchMode` auto/manual;
+     (plain language, lists that day's booked jobs).
+  5. **Auto-assign settings:** the two mode toggles (`dispatchMode` auto/manual;
      `counterMode` self/auto), framed as set-once automation.
+  Shared data: `allJobs` = `legRuns` + `yardEvents` (legRuns now carries `status`).
   The old per-employee job cards, separate needs-dispatch queue, and yard today/upcoming
-  lists were removed — all folded into the single section-1 list to kill the duplication
-  ("names/jobs above and below") the owner flagged.
+  lists were removed to kill the duplication ("names/jobs above and below") the owner flagged.
 
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
