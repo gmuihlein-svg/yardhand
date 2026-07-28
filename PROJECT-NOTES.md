@@ -116,8 +116,12 @@ the code per customer.
 - **#9** Employee/workforce self-service portal.
 - **#10** Multi-tenant / white-label foundation (sell to other businesses).
 - **#11** Availability workflow: standing weekly schedule + exceptions.
-- **#12** Send customer their booking confirmation.
+- **#12** Send customer their booking confirmation (absorbed by #17).
 - **#13** Text-to-book auto-reply with booking link.
+- **#17** Configurable customer notifications — Settings "when customers get notified"
+  section: waiver copy on signing, booking confirmation, reminders at owner-set lead times
+  (e.g. 48h + 24h before + right after booking), channel choice (text / email / both).
+  Needs email + SMS providers and a scheduler (fits after Phase 2). Shares plumbing with #7.
 - **#14** Late-return fees: charge or waive (with payments).
 - **#15** AI "plain-English dashboard builder" for Insights (needs AI backend).
 
