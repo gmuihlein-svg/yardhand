@@ -1845,6 +1845,7 @@ function AddContractorModal({ onClose, onAdd }) {
 function SettingsView({ state, setState, flash }) {
   const b = state.business;
   const [addingType, setAddingType] = useState(false);
+  const [confirm, setConfirm] = useState(null); // {title, body, confirmLabel, onYes}
   const set = (patch) => setState((s) => ({ ...s, business: { ...s.business, ...patch } }));
   const setType = (size, patch) => setState((s) => ({ ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) }));
   const addType = (t) => { setState((s) => ({ ...s, types: [...s.types, t] })); setAddingType(false); flash(`Added ${t.name}.`, true); };
@@ -1952,7 +1953,10 @@ function SettingsView({ state, setState, flash }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-bold text-sm truncate">{t.name}</div>
-                  {state.types.length > 1 && <button onClick={() => removeType(t.size)} title="Remove type" className="p-1 rounded" style={{ color: T.sub }}><Trash2 size={14} /></button>}
+                  {state.types.length > 1 && <button onClick={() => {
+                    if (state.trailers.some((tr) => tr.size === t.size)) { flash("Remove its units first."); return; }
+                    setConfirm({ title: `Remove ${t.name}?`, body: "This removes this product from your catalog and the customer booking page. You can undo it right after.", confirmLabel: "Remove", danger: true, onYes: () => removeType(t.size) });
+                  }} title="Remove type" className="p-1 rounded" style={{ color: T.sub }}><Trash2 size={14} /></button>}
                 </div>
                 <div className="flex gap-2 mt-1.5">
                   <label className="text-[11px] font-bold px-2 py-1 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>
@@ -2020,13 +2024,19 @@ function SettingsView({ state, setState, flash }) {
       <Card className="p-4">
         <h3 className="font-bold text-sm uppercase tracking-wide mb-1">Reset demo data</h3>
         <p className="text-xs mb-3" style={{ color: T.sub }}>Wipe all trailers and bookings and reload the sample yard.</p>
-        <button onClick={() => { setState(structuredClone(SEED)); flash("Reset to sample data.", true); }}
+        <button onClick={() => setConfirm({
+          title: "Reset everything?",
+          body: "This wipes ALL trailers, equipment, drivers, and bookings and reloads the sample yard. Your logo, colors, pricing, and password reset to defaults too. You can undo it for a few seconds after.",
+          confirmLabel: "Reset everything", danger: true,
+          onYes: () => { setState(structuredClone(SEED)); flash("Reset to sample data.", true); },
+        })}
           className="px-3 py-2 rounded-lg text-sm font-bold" style={{ background: T.redSoft, color: T.red }}>Reset everything</button>
       </Card>
       <p className="text-xs text-center pt-2" style={{ color: T.sub }}>
         Prototype · data saves to this browser. Payments, texts, and customer logins get wired up when this goes live on the web.
       </p>
       {addingType && <AddTypeModal onClose={() => setAddingType(false)} onAdd={addType} existing={state.types} onPhoto={fileToScaledDataURL} />}
+      {confirm && <ConfirmModal {...confirm} onConfirm={() => { confirm.onYes(); setConfirm(null); }} onClose={() => setConfirm(null)} />}
     </div>
   );
 }
@@ -2667,6 +2677,19 @@ function Modal({ title, children, onClose }) {
       {children}
     </div>
   </div>);
+}
+
+/* Confirmation dialog for destructive actions */
+function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onClose }) {
+  return (
+    <Modal title={title} onClose={onClose}>
+      <p className="text-sm" style={{ color: T.sub }}>{body}</p>
+      <div className="flex gap-2 mt-5">
+        <button onClick={onClose} className="flex-1 py-2.5 rounded-lg font-bold" style={{ background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>Cancel</button>
+        <button onClick={onConfirm} className="flex-1 py-2.5 rounded-lg font-bold" style={{ background: danger ? T.red : T.steel, color: "#fff" }}>{confirmLabel || "Confirm"}</button>
+      </div>
+    </Modal>
+  );
 }
 
 /* Logistics line: shows how it leaves and how it comes back */
