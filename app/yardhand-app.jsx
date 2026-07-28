@@ -2403,6 +2403,27 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, flash, setMod
           <Row l="Deposit hold" r={`$${b.deposit} (refundable)`} />
         </div>
 
+        {/* Certificate of Insurance — self-upload for business rentals */}
+        {b.type === "commercial" && (
+          <div className="mt-4 rounded-xl overflow-hidden" style={{ border: `1px solid ${b.coiFile ? T.green : T.amber}` }}>
+            <div className="px-3 py-2.5 flex items-center justify-between gap-2" style={{ background: b.coiFile ? T.greenSoft : T.amberSoft }}>
+              <div className="flex items-center gap-2 min-w-0">
+                <ShieldCheck size={16} className="shrink-0" style={{ color: b.coiFile ? T.green : T.amberDk }} />
+                <div className="min-w-0">
+                  <div className="text-sm font-bold" style={{ color: b.coiFile ? T.green : T.amberDk }}>Certificate of Insurance {b.coiFile ? "received" : "needed"}</div>
+                  {b.coiName ? <div className="text-[11px] truncate" style={{ color: T.sub }}>{b.coiName}</div> : <div className="text-[11px]" style={{ color: T.amberDk }}>Upload it here (PDF or photo) before pickup.</div>}
+                </div>
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                {b.coiFile && <button onClick={() => openStoredFile(b.coiFile)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>View</button>}
+                <label className="text-[11px] font-bold px-2.5 py-1.5 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>{b.coiFile ? "Replace" : "Upload COI"}
+                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await fileToDataURL(f); if (url) { setBooking(b.id, { coiFile: url, coiName: f.name, coi: true }); flash("Certificate of Insurance uploaded — thank you!"); } }} />
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* self-service actions */}
         <div className="grid grid-cols-3 gap-2 mt-4">
           <button onClick={() => setPanel("extend")} className="py-2.5 rounded-lg text-sm font-bold flex flex-col items-center gap-1" style={{ background: panel === "extend" ? T.amber : T.paper, color: panel === "extend" ? T.steelDk : T.steel, border: `1px solid ${panel === "extend" ? T.amber : T.line}` }}>
