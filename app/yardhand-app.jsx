@@ -1133,9 +1133,9 @@ function FleetView({ state, typeBySize, trailerStatus, currentBooking, update, f
         </Card>
       ))}
       {addingType && <AddTypeModal existing={state.types} onPhoto={fileToScaledDataURL} onClose={() => setAddingType(false)}
-        onAdd={(t) => { update((n) => n.types.push(t)); setAddingType(false); flash(`Added ${t.name}.`); }} />}
+        onAdd={(t) => { update((n) => n.types.push(t)); setAddingType(false); flash(`Added ${t.name}.`, true); }} />}
       {unitSize && <AddTrailerModal state={state} initialSize={unitSize} onClose={() => setUnitSize(null)}
-        onAdd={(tr) => { update((n) => n.trailers.push(tr)); setUnitSize(null); flash(`Added ${tr.assetId}.`); }} />}
+        onAdd={(tr) => { update((n) => n.trailers.push(tr)); setUnitSize(null); flash(`Added ${tr.assetId}.`, true); }} />}
     </div>
   );
 }
@@ -1457,15 +1457,18 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
     flash(`${name} out today · ${moved} job${moved !== 1 ? "s" : ""} reassigned${orphan ? ` · ${orphan} need a hand (no one free)` : ""}.`, true);
   };
   /* longer absence: toggle inactive and, when going inactive, free their upcoming unpaid work to requeue */
-  const toggleActive = (c) => update((n) => {
-    const d = n.contractors.find((x) => x.id === c.id);
-    d.active = !c.active;
-    if (!d.active) n.bookings.forEach((b) => {
-      if (b.status === "returned" || b.status === "cancelled") return;
-      if (b.outBy === c.id && !b.outPaid) b.outBy = null;
-      if (b.returnBy === c.id && !b.returnPaid) b.returnBy = null;
+  const toggleActive = (c) => {
+    update((n) => {
+      const d = n.contractors.find((x) => x.id === c.id);
+      d.active = !c.active;
+      if (!d.active) n.bookings.forEach((b) => {
+        if (b.status === "returned" || b.status === "cancelled") return;
+        if (b.outBy === c.id && !b.outPaid) b.outBy = null;
+        if (b.returnBy === c.id && !b.returnPaid) b.returnBy = null;
+      });
     });
-  });
+    flash(c.active ? `${c.name.split(" ")[0]} set inactive · their runs freed up.` : `${c.name.split(" ")[0]} set active.`, true);
+  };
   const autoAssignAll = () => {
     let s = structuredClone(state);
     let rot = 0;
@@ -1653,7 +1656,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
       <p className="text-xs text-center" style={{ color: T.sub }}>Round-robin pulls only from drivers available that day/time and spreads jobs evenly. Switch to Manual to assign every run yourself. Collection runs are scheduled to the return date — long rentals just book a driver for a slot ~a month out.</p>
 
       {adding && <AddContractorModal onClose={() => setAdding(false)}
-        onAdd={(c) => { update((n) => n.contractors.push(c)); setAdding(false); flash(`Added ${c.name}.`); }} />}
+        onAdd={(c) => { update((n) => n.contractors.push(c)); setAdding(false); flash(`Added ${c.name}.`, true); }} />}
       {editAvail && <AvailabilityEditor {...editAvail} state={state} update={update} onClose={() => setEditAvail(null)} />}
     </div>
   );
@@ -1844,7 +1847,7 @@ function SettingsView({ state, setState, flash }) {
   const [addingType, setAddingType] = useState(false);
   const set = (patch) => setState((s) => ({ ...s, business: { ...s.business, ...patch } }));
   const setType = (size, patch) => setState((s) => ({ ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) }));
-  const addType = (t) => { setState((s) => ({ ...s, types: [...s.types, t] })); setAddingType(false); flash(`Added ${t.name}.`); };
+  const addType = (t) => { setState((s) => ({ ...s, types: [...s.types, t] })); setAddingType(false); flash(`Added ${t.name}.`, true); };
   const removeType = (size) => { if (state.trailers.some((tr) => tr.size === size)) { flash("Remove its units first."); return; } setState((s) => ({ ...s, types: s.types.filter((t) => t.size !== size) })); flash("Equipment type removed.", true); };
   const onPhoto = async (size, file) => { if (!file) return; const url = await fileToScaledDataURL(file); if (url) { setType(size, { image: url }); flash("Photo updated."); } else flash("Couldn't read that image."); };
   const onLogo = async (file) => { if (!file) return; const url = await fileToScaledDataURL(file, 400, "image/png"); if (url) { set({ logo: url }); flash("Logo updated."); } else flash("Couldn't read that image."); };
@@ -1876,7 +1879,7 @@ function SettingsView({ state, setState, flash }) {
               {b.logo ? "Replace logo" : "Upload logo"}
               <input type="file" accept="image/*" className="hidden" onChange={(e) => onLogo(e.target.files?.[0])} />
             </label>
-            {b.logo && <button onClick={() => set({ logo: "" })} className="text-xs font-bold px-2.5 py-1.5 rounded-lg" style={{ background: T.redSoft, color: T.red }}>Remove</button>}
+            {b.logo && <button onClick={() => { set({ logo: "" }); flash("Logo removed.", true); }} className="text-xs font-bold px-2.5 py-1.5 rounded-lg" style={{ background: T.redSoft, color: T.red }}>Remove</button>}
           </div>
           <p className="text-[11px] mt-1" style={{ color: T.sub }}>A transparent PNG looks best. Auto-shrunk to fit; saved to this browser (moves to cloud storage when you go live).</p>
         </Field>
@@ -1902,7 +1905,7 @@ function SettingsView({ state, setState, flash }) {
             <span className="px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: T.steel }}>Top bar</span>
           </div>
         </div>
-        <button onClick={() => set({ theme: { ...DEFAULT_THEME } })} className="text-xs font-bold" style={{ color: T.steel }}>Reset to default colors</button>
+        <button onClick={() => { set({ theme: { ...DEFAULT_THEME } }); flash("Colors reset to default.", true); }} className="text-xs font-bold" style={{ color: T.steel }}>Reset to default colors</button>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -1956,7 +1959,7 @@ function SettingsView({ state, setState, flash }) {
                     {t.image ? "Replace photo" : "Upload photo"}
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => onPhoto(t.size, e.target.files?.[0])} />
                   </label>
-                  {t.image && <button onClick={() => setType(t.size, { image: "" })} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.redSoft, color: T.red }}>Remove</button>}
+                  {t.image && <button onClick={() => { setType(t.size, { image: "" }); flash("Photo removed.", true); }} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.redSoft, color: T.red }}>Remove</button>}
                 </div>
               </div>
             </div>
