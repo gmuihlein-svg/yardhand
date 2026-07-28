@@ -50,14 +50,28 @@ Team & dispatch · Fleet · Settings.
 - **Team & dispatch (one unified tab):** the old "Drivers & dispatch" and "Yard counter"
   tabs are merged — it was always ONE shared pool (`state.contractors`); adding a person
   makes them available for both road runs and yard handoffs. "Add driver" is now **"Add
-  employee."** The tab has: two assignment-mode toggles (delivery/collection = auto/manual
-  `dispatchMode`; will-call/yard = I-cover-it/auto-to-staff `counterMode`), a **combined
-  "You owe your team"** card (road runs at `contractorFee` + yard handoffs at `counterFee`,
-  with per-person breakdown), the road-runs "needs a driver" queue, the yard-handoff
-  today/upcoming lists (each assignable to You or staff), the workforce availability grid
-  (cell number now counts road + yard jobs), and per-employee cards listing **both** their
-  road runs and yard handoffs with the correct per-job fee + mark-paid. Component:
-  `TeamView` (replaced `DriversView`; `YardView` deleted). Nav id is `"team"`.
+  employee."** Component: `TeamView` (replaced `DriversView`; `YardView` deleted). Nav id
+  is `"team"`. **Laid out as one obvious top-to-bottom flow, numbered 1–4** (designed for a
+  non-technical owner who's never seen it):
+  1. **Jobs — who's covering each:** ONE flat list of every job, each shown exactly once —
+     delivery runs (DELIVER/COLLECT) and yard handoffs (PICKUP/RETURN) combined. Unassigned
+     road runs float to the top, highlighted amber, with an Auto button; each row has an
+     assignee dropdown (yard rows include "You") and a Mark-paid button. Built from
+     `allJobs` = `legRuns` + `yardEvents`. `openJobs` filter shows a job only if it's live
+     (`status` reserved/out) OR still owed to a specific person — this deliberately excludes
+     the returned sample-history bookings so the list stays short. "Auto-assign all"
+     (`autoAssignEverything`) covers both road + yard in one pass.
+  2. **Your team:** roster (people only, no jobs) — avatar, contact, `$owed`, open-job
+     count, sick-today / set-inactive. Header line shows the combined `$owedTotal`
+     (road `contractorFee` + yard `counterFee`).
+  3. **When each person works:** the availability grid (rows = people, cols = days, color =
+     how free), with a plain-language explainer + legend; tap a cell → `AvailabilityEditor`
+     (rewritten in plain language, lists that day's booked jobs).
+  4. **Auto-assign settings:** the two mode toggles (`dispatchMode` auto/manual;
+     `counterMode` self/auto), framed as set-once automation.
+  The old per-employee job cards, separate needs-dispatch queue, and yard today/upcoming
+  lists were removed — all folded into the single section-1 list to kill the duplication
+  ("names/jobs above and below") the owner flagged.
 
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).

@@ -88,8 +88,8 @@ function legRuns(state) {
   const runs = [];
   (state.bookings || []).forEach((b) => {
     if (b.status === "cancelled") return;
-    if (b.outMethod === "delivery") runs.push({ key: b.id + "-out", bookingId: b.id, leg: "out", label: "Deliver", date: b.start, time: b.pickupTime, by: b.outBy, paid: !!b.outPaid, name: b.name });
-    if (b.returnMethod === "collect") runs.push({ key: b.id + "-return", bookingId: b.id, leg: "return", label: "Collect", date: b.end, time: b.returnTime, by: b.returnBy, paid: !!b.returnPaid, name: b.name });
+    if (b.outMethod === "delivery") runs.push({ key: b.id + "-out", bookingId: b.id, leg: "out", label: "Deliver", date: b.start, time: b.pickupTime, by: b.outBy, paid: !!b.outPaid, name: b.name, status: b.status });
+    if (b.returnMethod === "collect") runs.push({ key: b.id + "-return", bookingId: b.id, leg: "return", label: "Collect", date: b.end, time: b.returnTime, by: b.returnBy, paid: !!b.returnPaid, name: b.name, status: b.status });
   });
   return runs;
 }
@@ -1619,11 +1619,8 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
   const owedRoad = runs.filter((r) => r.by && !r.paid).length * fee;
   const owedYardTotal = events.filter((e) => e.by && e.by !== "owner" && !e.paid).length * yardFee;
   const owedTotal = owedRoad + owedYardTotal;
-  const unassigned = runs.filter((r) => !r.by).sort((a, b) => a.date.localeCompare(b.date));
   const auto = state.business.dispatchMode === "auto";
   const counterAuto = state.business.counterMode === "auto";
-  const staff = state.contractors.filter((c) => c.active);
-  const nameOf = (id) => id === "owner" ? "You" : (state.contractors.find((c) => c.id === id)?.name.split(" ")[0] || "—");
   // combined "you owe" per person, across road runs (contractor fee) + yard handoffs (counter fee)
   const owedBy = {};
   runs.forEach((r) => { if (r.by && !r.paid) owedBy[r.by] = (owedBy[r.by] || 0) + fee; });
@@ -1631,61 +1628,9 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
 
   const reassign = (r, cid) => setBooking(r.bookingId, r.leg === "out" ? { outBy: cid } : { returnBy: cid });
   const markPaidJob = (r, jobFee) => { setBooking(r.bookingId, r.leg === "out" ? { outPaid: true } : { returnPaid: true }); flash(`Marked paid $${jobFee}.`, true); };
-  const markPaid = (r) => markPaidJob(r, fee);
   const setMode = (m) => update((n) => { n.business.dispatchMode = m; });
   const setCounterMode = (m) => update((n) => { n.business.counterMode = m; });
 
-  // yard handoffs (will-call pickups / yard returns) — same crew, counter fee, can be covered by You
-  const setStaff = (e, id) => setBooking(e.bookingId, e.leg === "out" ? { outBy: id } : { returnBy: id });
-  const assignAutoYard = (e, rot = Date.now()) => {
-    const cid = assignRun(state, e.date, e.time, null, rot);
-    if (!cid) { flash("No one available then — you'll cover it, or adjust availability."); return; }
-    setStaff(e, cid);
-  };
-  const autoAssignAllYard = () => {
-    let s = structuredClone(state); let rot = 0; let n = 0;
-    yardEvents(s).filter((e) => !e.by || e.by === "owner").forEach((e) => {
-      const cid = assignRun(s, e.date, e.time, null, rot++);
-      if (!cid) return;
-      const bk = s.bookings.find((x) => x.id === e.bookingId);
-      if (e.leg === "out") bk.outBy = cid; else bk.returnBy = cid;
-      n++;
-    });
-    update((nn) => { nn.bookings = s.bookings; });
-    flash(n ? `Auto-assigned ${n} handoff${n > 1 ? "s" : ""} to available staff.` : "No coverable handoffs to assign.", !!n);
-  };
-  const todays = events.filter((e) => e.date === today());
-  const upcoming = events.filter((e) => e.date > today() && (e.status === "reserved" || e.status === "out"));
-  const EventRow = ({ e }) => {
-    const avail = availableDrivers(state, e.date, e.time, null);
-    return (
-      <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
-        <button onClick={() => openDetail(state.bookings.find((x) => x.id === e.bookingId))} className="flex items-center gap-2 min-w-0 text-left">
-          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ color: "#fff", background: e.leg === "out" ? T.amberDk : T.blue }}>{e.leg === "out" ? "Pickup" : "Return"}</span>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold truncate">{e.name}</div>
-            <div className="text-xs" style={{ color: T.sub }}>{fmt(e.date)}{e.time ? ` · ${e.time}` : ""}</div>
-          </div>
-        </button>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {e.paid ? <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ color: T.green, background: T.greenSoft }}>Paid</span> : <>
-            <select value={e.by || "owner"} onChange={(ev) => setStaff(e, ev.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${T.line}`, color: T.sub }}>
-              <option value="owner">You</option>
-              {staff.map((c) => <option key={c.id} value={c.id} disabled={!avail.some((a) => a.id === c.id)}>{c.name.split(" ")[0]}{avail.some((a) => a.id === c.id) ? "" : " (off)"}</option>)}
-            </select>
-            {(!e.by || e.by === "owner") && avail.length > 0 && <button onClick={() => assignAutoYard(e)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Auto</button>}
-            {e.by && e.by !== "owner" && <button onClick={() => markPaidJob(e, yardFee)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Paid ${yardFee}</button>}
-          </>}
-        </div>
-      </div>
-    );
-  };
-
-  const assignOne = (r, rot = 0) => {
-    const cid = assignRun(state, r.date, r.time, null, rot);
-    if (!cid) { flash("No available driver for that day/time — adjust availability or pick manually."); return; }
-    reassign(r, cid);
-  };
   /* out sick for ONE day: clear today's availability and auto-reassign today's runs + counter handoffs
      to the next available person (works for both driver runs and counter handoffs). Rest of their schedule is untouched. */
   const sickDay = (id, name) => {
@@ -1720,21 +1665,36 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
     });
     flash(c.active ? `${c.name.split(" ")[0]} set inactive · their runs freed up.` : `${c.name.split(" ")[0]} set active.`, true);
   };
-  const autoAssignAll = () => {
-    let s = structuredClone(state);
-    let rot = 0;
-    legRuns(s).filter((r) => !r.by).forEach((r) => {
-      const cid = assignRun(s, r.date, r.time, null, rot++);
-      if (!cid) return;
-      const bk = s.bookings.find((x) => x.id === r.bookingId);
-      if (r.leg === "out") bk.outBy = cid; else bk.returnBy = cid;
-    });
-    update((n) => { n.bookings = s.bookings; });
-    flash("Auto-assigned every coverable run to available drivers.", true);
-  };
-
   const horizon = state.business.bookHorizonDays || 30;
   const days = Array.from({ length: horizon }, (_, i) => addDays(today(), i));
+
+  // ── ONE flat list of every job (delivery runs + yard handoffs) so each job appears exactly once ──
+  const allJobs = [
+    ...runs.map((r) => ({ ...r, kind: "road", jobFee: fee })),
+    ...events.map((e) => ({ ...e, kind: "yard", jobFee: yardFee, label: e.leg === "out" ? "Pickup" : "Return" })),
+  ];
+  const jobActive = (j) => j.status === "reserved" || j.status === "out"; // an upcoming/live rental, not a finished one
+  const jobNeedsDriver = (j) => j.kind === "road" && !j.by && jobActive(j); // yard handoffs default to You, so only road runs can be truly unassigned
+  const needCount = allJobs.filter(jobNeedsDriver).length;
+  // show a job if it's still live work OR you still owe a specific person for it (even after it's done)
+  const openJobs = allJobs
+    .filter((j) => !j.paid && (jobActive(j) || (j.by && j.by !== "owner")))
+    .sort((a, b) => {
+      const ua = jobNeedsDriver(a) ? 0 : 1, ub = jobNeedsDriver(b) ? 0 : 1;
+      if (ua !== ub) return ua - ub;               // jobs still needing a driver float to the top
+      return (a.date || "").localeCompare(b.date || "");
+    });
+  const autoOne = (j) => { const cid = assignRun(state, j.date, j.time, null, Date.now()); if (!cid) { flash("No one's free then — set their hours or pick someone manually."); return; } reassign(j, cid); };
+  const autoAssignEverything = () => {
+    let s = structuredClone(state); let rot = 0; let n = 0;
+    [...legRuns(s).filter((r) => !r.by), ...yardEvents(s).filter((e) => !e.by || e.by === "owner")].forEach((j) => {
+      const cid = assignRun(s, j.date, j.time, null, rot++); if (!cid) return;
+      const bk = s.bookings.find((x) => x.id === j.bookingId); if (!bk) return;
+      if (j.leg === "out") bk.outBy = cid; else bk.returnBy = cid; n++;
+    });
+    update((nn) => { nn.bookings = s.bookings; });
+    flash(n ? `Auto-assigned ${n} job${n > 1 ? "s" : ""} to available people.` : "No jobs could be auto-assigned right now.", !!n);
+  };
 
   return (
     <div className="space-y-6">
@@ -1747,116 +1707,95 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
 
       <Card className="p-4" style={{ background: T.blueSoft }}>
         <div className="text-sm" style={{ color: T.blue }}>
-          One crew covers everything. <b>Delivery &amp; collection runs</b> are road jobs someone drives to the customer; <b>will-call pickups &amp; yard returns</b> are counter handoffs someone staffs at the yard. Add each person once — you (or auto-dispatch) decide who covers which job.
+          This page is your crew and their work, in order: <b>1)</b> the jobs and who's covering each, <b>2)</b> your people and what you owe them, <b>3)</b> the hours they can work, <b>4)</b> auto-assign settings. A rental has two kinds of jobs — a <b>delivery run</b> someone drives out, and a <b>yard handoff</b> when the customer comes to your yard. The same people do both.
         </div>
       </Card>
 
-      {/* assignment modes — road runs + yard handoffs */}
-      <Card className="p-4 space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <div className="text-sm font-bold">Delivery &amp; collection runs</div>
-            <div className="text-xs" style={{ color: T.sub }}>{auto ? "Round-robin auto-assigns each run to an available employee as bookings come in." : "New runs wait in the queue below for you to assign."}</div>
-          </div>
-          <div className="flex gap-1 p-1 rounded-lg" style={{ background: T.graySoft }}>
-            {[["auto", "Auto (round-robin)"], ["manual", "Manual"]].map(([m, l]) => (
-              <button key={m} onClick={() => setMode(m)} className="px-3 py-1.5 rounded-md text-xs font-bold"
-                style={state.business.dispatchMode === m ? { background: "#fff", color: T.ink } : { color: T.sub }}>{l}</button>
-            ))}
-          </div>
+      {/* ─────────── 1) THE WORK — every job, shown once, and who covers it ─────────── */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="text-sm font-bold">1 · Jobs — who's covering each</div>
+          {needCount > 0 && <button onClick={autoAssignEverything} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.amber, color: T.steelDk }}>Auto-assign all</button>}
         </div>
-        <div className="flex items-center justify-between flex-wrap gap-2 pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
-          <div>
-            <div className="text-sm font-bold">Will-call &amp; yard handoffs</div>
-            <div className="text-xs" style={{ color: T.sub }}>{counterAuto ? "New handoffs auto-assign (round-robin) to available employees." : "You cover handoffs by default; assign an employee as needed."}</div>
-          </div>
-          <div className="flex gap-1 p-1 rounded-lg" style={{ background: T.graySoft }}>
-            {[["self", "I cover it"], ["auto", "Auto to staff"]].map(([m, l]) => (
-              <button key={m} onClick={() => setCounterMode(m)} className="px-3 py-1.5 rounded-md text-xs font-bold"
-                style={state.business.counterMode === m ? { background: "#fff", color: T.ink } : { color: T.sub }}>{l}</button>
-            ))}
-          </div>
+        <div className="text-xs mb-3 leading-snug" style={{ color: T.sub }}>
+          Every job that still needs assigning or paying. {needCount > 0
+            ? <><b style={{ color: T.amberDk }}>{needCount} still need{needCount === 1 ? "s" : ""} a driver</b> (highlighted) — pick a name or tap Auto.</>
+            : "Everyone's covered."} Choose who's on a job with the dropdown, then <b>Mark paid</b> once you've paid them.
         </div>
-      </Card>
-
-      {/* owed summary — road runs + yard handoffs combined */}
-      <Card className="p-4" style={{ background: T.steelDk }}>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amber }}>You owe your team</div>
-            <div className="text-4xl font-extrabold text-white tabular-nums">${owedTotal}</div>
-            <div className="text-xs mt-1" style={{ color: "#B7C0C6" }}>${owedRoad} road runs · ${owedYardTotal} yard handoffs · anything you cover yourself is $0</div>
-          </div>
-          <div className="text-right text-xs max-w-[220px]" style={{ color: "#B7C0C6" }}>
-            <CreditCard size={18} style={{ color: T.amber }} className="inline mb-1" /><br />
-            Pay in Stripe, then mark each job paid to clear the balance.
-          </div>
-        </div>
-        {Object.keys(owedBy).length > 0 && (
-          <div className="mt-3 pt-3 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.12)" }}>
-            {Object.entries(owedBy).map(([id, amt]) => (
-              <div key={id} className="flex justify-between text-sm text-white"><span>{nameOf(id)}</span><span className="tabular-nums font-bold">${amt}</span></div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* NEEDS DISPATCH queue */}
-      {unassigned.length > 0 && (
-        <Card className="p-4" style={{ border: `1px solid ${T.amber}` }}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2"><AlertTriangle size={16} style={{ color: T.amberDk }} />
-              <span className="text-sm font-bold">Runs needing a driver · {unassigned.length}</span></div>
-            <button onClick={autoAssignAll} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.amber, color: T.steelDk }}>Auto-assign all</button>
-          </div>
+        {openJobs.length === 0 ? <Empty>No open jobs right now. New bookings land here automatically.</Empty> : (
           <div className="space-y-1.5">
-            {unassigned.map((r) => {
-              const avail = availableDrivers(state, r.date, r.time, null);
+            {openJobs.map((j) => {
+              const need = jobNeedsDriver(j);
               return (
-                <div key={r.key} className="flex items-center justify-between gap-2 p-2 rounded-lg" style={{ background: T.paper }}>
-                  <button onClick={() => openDetail(state.bookings.find((x) => x.id === r.bookingId))} className="flex items-center gap-2 min-w-0 text-left">
-                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ color: "#fff", background: r.leg === "out" ? T.amberDk : T.blue }}>{r.label}</span>
-                    <div className="min-w-0"><div className="text-sm font-semibold truncate">{r.name}</div>
-                      <div className="text-xs" style={{ color: T.sub }}>{fmt(r.date)} · {r.time}</div></div>
-                  </button>
-                  {avail.length === 0 ? (
-                    <span className="text-[11px] font-bold px-2 py-1 rounded shrink-0" style={{ color: T.red, background: T.redSoft }}>No one free</span>
-                  ) : (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <select defaultValue="" onChange={(e) => e.target.value && reassign(r, e.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${T.line}`, color: T.sub }}>
-                        <option value="">Assign…</option>
-                        {avail.map((x) => <option key={x.id} value={x.id}>{x.name.split(" ")[0]}</option>)}
-                      </select>
-                      <button onClick={() => assignOne(r, Date.now())} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Auto</button>
+                <div key={j.key} className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: need ? T.amberSoft : T.paper, border: need ? `1px solid ${T.amber}` : "1px solid transparent" }}>
+                  <button onClick={() => openDetail(state.bookings.find((x) => x.id === j.bookingId))} className="flex items-center gap-2 min-w-0 text-left">
+                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0" style={{ color: "#fff", background: j.leg === "out" ? T.amberDk : T.blue }}>{j.label}</span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold truncate">{j.name}</div>
+                      <div className="text-xs" style={{ color: T.sub }}>{fmt(j.date)}{j.time ? ` · ${j.time}` : ""} · {j.kind === "road" ? "delivery run" : "yard handoff"}</div>
                     </div>
-                  )}
+                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <select value={j.by || (j.kind === "yard" ? "owner" : "")} onChange={(e) => reassign(j, e.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${need ? T.amber : T.line}`, color: T.sub }}>
+                      {j.kind === "road" && !j.by && <option value="">Assign…</option>}
+                      {j.kind === "yard" && <option value="owner">You</option>}
+                      {state.contractors.filter((x) => x.active || x.id === j.by).map((x) => <option key={x.id} value={x.id}>{x.name.split(" ")[0]}</option>)}
+                    </select>
+                    {need && <button onClick={() => autoOne(j)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Auto</button>}
+                    {j.by && j.by !== "owner" && <button onClick={() => markPaidJob(j, j.jobFee)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Mark paid ${j.jobFee}</button>}
+                  </div>
                 </div>
               );
             })}
           </div>
-        </Card>
-      )}
-
-      {/* YARD HANDOFFS — will-call pickups & yard returns (counter appointments) */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-bold">Yard handoffs today · {todays.length}</div>
-          {events.some((e) => (!e.by || e.by === "owner") && !e.paid) && <button onClick={autoAssignAllYard} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.amber, color: T.steelDk }}>Auto-assign all</button>}
-        </div>
-        {todays.length === 0 ? <Empty>No will-call pickups or yard returns today.</Empty> : (
-          <div className="space-y-1.5">{todays.map((e) => <EventRow key={e.key} e={e} />)}</div>
         )}
       </Card>
-      {upcoming.length > 0 && (
-        <Card className="p-4">
-          <div className="text-sm font-bold mb-2">Upcoming yard handoffs · {upcoming.length}</div>
-          <div className="space-y-1.5">{upcoming.slice(0, 20).map((e) => <EventRow key={e.key} e={e} />)}</div>
-        </Card>
-      )}
 
-      {/* AVAILABILITY GRID (full booking horizon) */}
+      {/* ─────────── 2) THE PEOPLE — roster + what you owe ─────────── */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-sm font-bold">2 · Your team</div>
+          <button onClick={() => setAdding(true)} className="text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={14} /> Add employee</button>
+        </div>
+        <div className="text-xs mb-3 leading-snug" style={{ color: T.sub }}>
+          Everyone who works for you. You owe <b>${owedTotal}</b> total right now (${owedRoad} delivery runs · ${owedYardTotal} yard handoffs — anything you cover yourself is free). Pay in Stripe, then mark jobs paid above.
+        </div>
+        <div className="space-y-2">
+          {state.contractors.map((c) => {
+            const owed = owedBy[c.id] || 0;
+            const open = allJobs.filter((j) => j.by === c.id && !j.paid).length;
+            return (
+              <div key={c.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold shrink-0" style={{ background: c.active ? T.steel : T.graySoft, color: c.active ? "#fff" : T.sub }}>{c.name.split(" ").map((w) => w[0]).join("")}</div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm truncate">{c.name} {!c.active && <span className="text-xs font-normal" style={{ color: T.sub }}>· inactive</span>}</div>
+                    <div className="text-xs truncate" style={{ color: T.sub }}>{c.vehicle} · {c.phone}</div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-extrabold tabular-nums" style={{ color: owed ? T.ink : T.sub }}>{owed ? `$${owed} owed` : "$0"}</div>
+                  <div className="text-[11px]" style={{ color: T.sub }}>{open} open job{open === 1 ? "" : "s"}</div>
+                  <div className="flex gap-2 justify-end mt-0.5">
+                    {c.active && <button onClick={() => sickDay(c.id, c.name.split(" ")[0])} className="text-[11px] font-bold" style={{ color: T.red }}>sick today</button>}
+                    <button onClick={() => toggleActive(c)} className="text-[11px] font-bold" style={{ color: T.sub }}>{c.active ? "set inactive" : "set active"}</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[11px] mt-2" style={{ color: T.sub }}><b>sick today</b> frees just today's jobs and hands them to someone else; <b>set inactive</b> takes a person off the schedule for a while and frees their upcoming jobs.</p>
+      </Card>
+
+      {/* ─────────── 3) THE HOURS — availability calendar ─────────── */}
       <Card className="p-3 overflow-x-auto">
-        <div className="text-sm font-bold mb-2 px-1">Workforce schedule · next {horizon} days <span className="font-normal text-xs" style={{ color: T.sub }}>(tap a cell to edit availability)</span></div>
+        <div className="px-1 mb-3">
+          <div className="text-sm font-bold">3 · When each person works — next {horizon} days</div>
+          <div className="text-xs mt-1 leading-snug" style={{ color: T.sub }}>
+            Each row is a person; each column is a day. The color shows how much of that day they can work — <b style={{ color: T.green }}>green</b> = free most of the day, <b style={{ color: T.amberDk }}>amber</b> = only an hour or two, <b>blank</b> = not working. A number in a square means that many jobs are already booked on them that day. <b>Tap any square to set that person's hours.</b> Customers can only pick a delivery or pickup time when someone is marked free — so keep this current.
+          </div>
+        </div>
         <div style={{ minWidth: 60 + horizon * 30 }}>
           <div className="grid" style={{ gridTemplateColumns: `110px repeat(${horizon}, 1fr)` }}>
             <div />
@@ -1887,70 +1826,45 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
           ))}
         </div>
         <div className="flex flex-wrap gap-3 text-[11px] mt-2 px-1" style={{ color: T.sub }}>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: T.green }} /> full day</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: T.amber }} /> limited</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: "#F3EFE8" }} /> off</span>
-          <span>number = runs assigned</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: T.green }} /> free most of the day</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: "#8FBF6F" }} /> part of the day</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: T.amber }} /> just an hour or two</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: "#F3EFE8" }} /> not working</span>
+          <span><b>1</b> = jobs booked that day</span>
         </div>
       </Card>
 
-      {/* per-employee jobs & pay — road runs + yard handoffs together */}
-      {state.contractors.map((c) => {
-        const cr = [
-          ...runs.filter((r) => r.by === c.id).map((r) => ({ ...r, jobFee: fee })),
-          ...events.filter((e) => e.by === c.id).map((e) => ({ ...e, jobFee: yardFee })),
-        ].sort((a, b) => a.date.localeCompare(b.date));
-        const owed = cr.filter((r) => !r.paid).reduce((s, r) => s + r.jobFee, 0);
-        return (
-          <Card key={c.id} className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold" style={{ background: c.active ? T.steel : T.graySoft, color: c.active ? "#fff" : T.sub }}>
-                  {c.name.split(" ").map((w) => w[0]).join("")}
-                </div>
-                <div>
-                  <div className="font-bold text-sm">{c.name} {!c.active && <span className="text-xs font-normal" style={{ color: T.sub }}>· inactive</span>}</div>
-                  <div className="text-xs" style={{ color: T.sub }}>{c.vehicle} · {c.phone}</div>
-                  {c.email && <div className="text-xs truncate" style={{ color: T.sub }}>{c.email}</div>}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm font-extrabold tabular-nums" style={{ color: owed ? T.ink : T.sub }}>${owed} owed</div>
-                <div className="flex gap-2 justify-end">
-                  {c.active && <button onClick={() => sickDay(c.id, c.name.split(" ")[0])} className="text-[11px] font-bold" style={{ color: T.red }}>sick today</button>}
-                  <button onClick={() => toggleActive(c)} className="text-[11px] font-bold" style={{ color: T.sub }}>{c.active ? "set inactive" : "set active"}</button>
-                </div>
-              </div>
-            </div>
-            {cr.length === 0 ? <div className="text-xs py-2" style={{ color: T.sub }}>No jobs assigned.</div> : (
-              <div className="space-y-1.5">
-                {cr.map((r) => (
-                  <div key={r.key} className="flex items-center justify-between gap-2 p-2 rounded-lg" style={{ background: T.paper }}>
-                    <button onClick={() => openDetail(state.bookings.find((b) => b.id === r.bookingId))} className="flex items-center gap-2 min-w-0 text-left">
-                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ color: "#fff", background: r.leg === "out" ? T.amberDk : T.blue }}>{r.label}</span>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{r.name}</div>
-                        <div className="text-xs" style={{ color: T.sub }}>{fmt(r.date)}{r.time ? ` · ${r.time}` : ""}</div>
-                      </div>
-                    </button>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {r.paid ? <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ color: T.green, background: T.greenSoft }}>Paid</span>
-                        : <>
-                          <select value={r.by} onChange={(e) => reassign(r, e.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${T.line}`, color: T.sub }}>
-                            {r.jobFee === yardFee && <option value="owner">You</option>}
-                            {state.contractors.filter((x) => x.active || x.id === r.by).map((x) => <option key={x.id} value={x.id}>{x.name.split(" ")[0]}</option>)}
-                          </select>
-                          <button onClick={() => markPaidJob(r, r.jobFee)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Mark paid ${r.jobFee}</button>
-                        </>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        );
-      })}
-      <p className="text-xs text-center" style={{ color: T.sub }}>Round-robin pulls only from employees available that day/time and spreads jobs evenly. Switch to Manual to assign every job yourself. Yard handoffs default to you and cost $0 unless you assign staff. Collection runs are scheduled to the return date — long rentals just book someone for a slot ~a month out.</p>
+      {/* ─────────── 4) AUTOMATION — how new bookings get assigned ─────────── */}
+      <Card className="p-4 space-y-3">
+        <div>
+          <div className="text-sm font-bold">4 · Auto-assign settings</div>
+          <div className="text-xs mt-1" style={{ color: T.sub }}>Set once. This decides who picks up each new booking automatically — you can always change any single job in the list above.</div>
+        </div>
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+          <div>
+            <div className="text-sm font-bold">Delivery &amp; collection runs</div>
+            <div className="text-xs" style={{ color: T.sub }}>{auto ? "Auto: shared out evenly to whoever's free that day." : "Manual: new runs wait in the list above for you to assign."}</div>
+          </div>
+          <div className="flex gap-1 p-1 rounded-lg" style={{ background: T.graySoft }}>
+            {[["auto", "Auto"], ["manual", "Manual"]].map(([m, l]) => (
+              <button key={m} onClick={() => setMode(m)} className="px-3 py-1.5 rounded-md text-xs font-bold"
+                style={state.business.dispatchMode === m ? { background: "#fff", color: T.ink } : { color: T.sub }}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
+          <div>
+            <div className="text-sm font-bold">Will-call &amp; yard handoffs</div>
+            <div className="text-xs" style={{ color: T.sub }}>{counterAuto ? "Auto: shared out to whoever's free at the yard." : "You cover these yourself unless you assign someone in the list above."}</div>
+          </div>
+          <div className="flex gap-1 p-1 rounded-lg" style={{ background: T.graySoft }}>
+            {[["self", "I cover it"], ["auto", "Auto to staff"]].map(([m, l]) => (
+              <button key={m} onClick={() => setCounterMode(m)} className="px-3 py-1.5 rounded-md text-xs font-bold"
+                style={state.business.counterMode === m ? { background: "#fff", color: T.ink } : { color: T.sub }}>{l}</button>
+            ))}
+          </div>
+        </div>
+      </Card>
 
       {adding && <AddContractorModal onClose={() => setAdding(false)}
         onAdd={(c) => { update((n) => n.contractors.push(c)); setAdding(false); flash(`Added ${c.name}.`, true); }} />}
@@ -1969,21 +1883,22 @@ function AvailabilityEditor({ driverId, date, state, update, onClose }) {
     d.avail[date] = cur.includes(w) ? cur.filter((x) => x !== w) : [...cur, w].sort((a, b) => WINDOWS.indexOf(a) - WINDOWS.indexOf(b));
     if (d.avail[date].length === 0) delete d.avail[date];
   });
-  const runs = legRuns(state).filter((r) => r.by === driverId && r.date === date);
+  const jobs = [...legRuns(state), ...yardEvents(state)].filter((r) => r.by === driverId && r.date === date).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
   return (
-    <Modal onClose={onClose} title={`${c.name} · ${fmtLong(date)}`}>
-      <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: T.sub }}>Available windows</div>
+    <Modal onClose={onClose} title={`${c.name.split(" ")[0]} · ${fmtLong(date)}`}>
+      <p className="text-sm mb-3" style={{ color: T.ink }}>Tap each hour {c.name.split(" ")[0]} can work this day. Tapped times turn <b style={{ color: T.green }}>green</b>. Customers can only book a delivery or pickup at a time someone is marked free — so this is what opens up slots on the booking page.</p>
+      <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: T.sub }}>Working hours this day</div>
       <div className="flex flex-wrap gap-2">
         {WINDOWS.map((w) => (
           <button key={w} onClick={() => toggle(w)} className="px-3 py-1.5 rounded-lg text-sm font-bold"
             style={wins.includes(w) ? { background: T.green, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>{w}</button>
         ))}
       </div>
-      <p className="text-xs mt-3" style={{ color: T.sub }}>Green = available. Only available windows can be booked for delivery/collect, and round-robin only assigns runs a driver is available for.</p>
-      {runs.length > 0 && (
-        <div className="mt-3">
-          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: T.sub }}>Assigned this day</div>
-          {runs.map((r) => <div key={r.key} className="text-sm py-0.5">{r.label} · {r.name} · {r.time}</div>)}
+      {wins.length === 0 && <p className="text-xs mt-2" style={{ color: T.sub }}>Nothing selected = not working this day.</p>}
+      {jobs.length > 0 && (
+        <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: T.sub }}>Already booked on {c.name.split(" ")[0]} this day</div>
+          {jobs.map((r) => <div key={r.key} className="text-sm py-0.5">{r.label} · {r.name}{r.time ? ` · ${r.time}` : ""}</div>)}
         </div>
       )}
     </Modal>
