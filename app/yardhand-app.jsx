@@ -1198,6 +1198,14 @@ async function openStoredFile(dataUrl) {
   try { const blob = await (await fetch(dataUrl)).blob(); window.open(URL.createObjectURL(blob), "_blank"); }
   catch (e) { try { window.open(dataUrl, "_blank"); } catch (e2) {} }
 }
+/* download a stored data-URL document to the device */
+function downloadStoredFile(dataUrl, filename) {
+  try {
+    const a = document.createElement("a");
+    a.href = dataUrl; a.download = filename || "download";
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch (e) { openStoredFile(dataUrl); }
+}
 
 /* channel label for customer notifications */
 const channelLabel = (ch) => ch === "text" ? "text" : ch === "email" ? "email" : "text & email";
@@ -2544,7 +2552,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
   const [form, setForm] = useState({
     size: null, start: addDays(today(), 1), days: 3, pickupTime: b.pickupHours[0], returnTime: b.pickupHours[0],
     name: "", phone: "", email: "", address: "", ctype: "homeowner", waiver: true,
-    outMethod: "willcall", returnMethod: "yard", notes: "", coi: false, signName: "", agree: false,
+    outMethod: "willcall", returnMethod: "yard", notes: "", coi: false, coiFile: "", coiName: "", signName: "", agree: false,
   });
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const end = addDays(form.start, form.days - 1);
@@ -2590,7 +2598,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
       pickupTime: form.pickupTime, returnTime: form.returnMethod === "collect" ? collectWindow : form.pickupTime,
       status: "reserved", waiver: form.waiver, outMethod: form.outMethod, returnMethod: form.returnMethod,
       outBy, outPaid: false, returnBy, returnPaid: false,
-      price: base + legFees, deposit: b.deposit, paid: true, coi: form.coi, notes: form.notes, dropFee: b.dropFee,
+      price: base + legFees, deposit: b.deposit, paid: true, coi: form.coi, coiFile: form.coiFile, coiName: form.coiName, notes: form.notes, dropFee: b.dropFee,
       signName: form.signName, signedAt: new Date().toISOString(), agreementText: b.agreementText,
     });
     setStepN(4);
@@ -2791,10 +2799,21 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                 className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${(form.outMethod === "delivery" || form.returnMethod === "collect") && !form.address ? T.red : T.line}` }} />
             </Field>
             {form.ctype === "commercial" && (
-              <label className="flex items-center gap-2 text-sm p-2.5 rounded-lg cursor-pointer" style={{ background: T.blueSoft }}>
-                <input type="checkbox" checked={form.coi} onChange={(e) => set({ coi: e.target.checked })} style={{ accentColor: T.blue }} />
-                <ShieldCheck size={15} style={{ color: T.blue }} /> I'll upload a Certificate of Insurance (required for business rentals)
-              </label>
+              <div className="p-3 rounded-lg" style={{ background: T.blueSoft }}>
+                <div className="flex items-center gap-2 text-sm font-bold" style={{ color: T.blue }}>
+                  <ShieldCheck size={15} /> Certificate of Insurance
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: T.blue }}>Required for business rentals — upload it now (PDF or photo), or we'll follow up before pickup.</div>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <label className="text-xs font-bold px-2.5 py-1.5 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>
+                    {form.coiFile ? "Replace COI" : "Upload COI"}
+                    <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await fileToDataURL(f); if (url) set({ coiFile: url, coiName: f.name, coi: true }); }} />
+                  </label>
+                  {form.coiName
+                    ? <span className="text-xs font-semibold flex items-center gap-1" style={{ color: T.green }}><Check size={13} /> {form.coiName}</span>
+                    : <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: T.blue }}><input type="checkbox" checked={form.coi} onChange={(e) => set({ coi: e.target.checked })} style={{ accentColor: T.blue }} /> I'll send it separately</label>}
+                </div>
+              </div>
             )}
             <Toggle label="Add damage waiver" sub={`Caps your cost if something goes wrong · $${Math.round(base * b.waiverRate)}`} on={form.waiver} set={(v) => set({ waiver: v })} />
             <Field label="Anything we should know? (optional)"><textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} placeholder="Job type, what you're hauling…" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
@@ -3049,6 +3068,7 @@ function BookingDetail({ b, state, typeBySize, onClose, setBooking, flash, onExt
             </div>
             <div className="flex gap-1.5 shrink-0">
               {b.coiFile && <button onClick={() => openStoredFile(b.coiFile)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>View</button>}
+              {b.coiFile && <button onClick={() => downloadStoredFile(b.coiFile, b.coiName || `COI-${b.name}`)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>Download</button>}
               <label className="text-[11px] font-bold px-2 py-1 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>{b.coiFile ? "Replace" : "Upload COI"}
                 <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await fileToDataURL(f); if (url) { setBooking(b.id, { coiFile: url, coiName: f.name, coi: true }); flash("COI uploaded.", true); } else flash("Couldn't read that file."); }} />
               </label>
