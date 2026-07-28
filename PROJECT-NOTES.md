@@ -73,8 +73,22 @@ Yard counter · Fleet · Settings.
   email, or confirmation number (single box). Click a rental to open its full detail.
   Insights also gains a Customers section (count, repeat rate, avg booking, commercial %,
   top customers by revenue). `computeCustomers(state)` does the aggregation.
-- **COI storage:** the booking detail lets the owner upload/view/remove a real Certificate
-  of Insurance file (image or PDF, stored as a data URL on `booking.coiFile`/`coiName`).
+- **COI (Certificate of Insurance):** per-equipment **policy** (`type.coiPolicy`:
+  `commercial` = business customers only / `all` = every customer / `none` = never)
+  crossed with customer type via `coiRequired(type, ctype)` — so a residential rental of
+  certain gear can still require a COI. Requirement shows at booking (Step 2, with
+  instructions to name the insured as additionally insured), on the confirmation screen,
+  in the owner booking detail, and as a reminder in `notifyTimeline`. **Insured name:**
+  Settings has a separate **Legal / insured name** field (`business.legalName`) for
+  businesses that carry insurance under an LLC different from their DBA/brand;
+  `insuredName(biz)` = `legalName || name`. **Upload paths:** customer during booking,
+  customer later via "Manage my booking," owner in the booking detail (View / Download /
+  Replace / Remove). File stored as data URL on `booking.coiFile`/`coiName`.
+  **Repeat customers:** `latestValidCoi(state, phone, email)` finds a still-valid COI on
+  file (matched by phone/email, filtered by `coiExpiry`); the booking flow shows a green
+  "already on file" state instead of forcing re-upload and carries `coiFile`/`coiName`/
+  `coiExpiry` forward. Owner sets/edits **`booking.coiExpiry`** (date) in the booking
+  detail; once it lapses the app asks the customer for a fresh COI again.
 - **Booking notice (lead time):** Settings lets the owner require X hours of notice before
   the crew can be booked — separate values for delivery/collection (`leadDeliveryHours`,
   default 12) and will-call/yard (`leadCounterHours`, default 2). The booking flow hides

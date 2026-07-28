@@ -1217,6 +1217,20 @@ function coiRequired(type, ctype) {
   if (p === "all") return true;
   return ctype === "commercial";
 }
+/* the name that should appear as additionally insured on a COI (legal/LLC name if set, else brand) */
+const insuredName = (biz) => (biz && (biz.legalName || biz.name)) || "";
+/* the most recent still-valid COI a customer already has on file (matched by phone/email), for reuse */
+function latestValidCoi(state, phone, email) {
+  const dg = (s) => (s || "").replace(/\D/g, "");
+  const ph = dg(phone), em = (email || "").trim().toLowerCase();
+  if (!ph && !em) return null;
+  const t0 = today();
+  const matches = (state.bookings || []).filter((b) => b.coiFile && b.status !== "cancelled" &&
+    ((em && (b.email || "").trim().toLowerCase() === em) || (ph && dg(b.phone) && dg(b.phone) === ph)) &&
+    (!b.coiExpiry || b.coiExpiry >= t0));
+  matches.sort((a, b) => (b.start || "").localeCompare(a.start || ""));
+  return matches[0] ? { coiFile: matches[0].coiFile, coiName: matches[0].coiName, coiExpiry: matches[0].coiExpiry || "" } : null;
+}
 
 /* channel label for customer notifications */
 const channelLabel = (ch) => ch === "text" ? "text" : ch === "email" ? "email" : "text & email";
@@ -2041,7 +2055,8 @@ function SettingsView({ state, setState, flash }) {
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Building2 size={16} style={{ color: T.amberDk }} /></span>
           <h3 className="font-bold text-sm uppercase tracking-wide">Business</h3>
         </div>
-        <Field label="Business name"><input value={b.name} onChange={(e) => set({ name: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label="Business name (shown to customers · your DBA/brand)"><input value={b.name} onChange={(e) => set({ name: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label="Legal / insured name for COIs (if different — e.g. your LLC)"><input value={b.legalName || ""} onChange={(e) => set({ legalName: e.target.value })} placeholder="Leave blank to use your business name" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Yard location"><input value={b.yard} onChange={(e) => set({ yard: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Business phone (shown to customers · used for the “Text to book” button)"><input value={b.phone} onChange={(e) => set({ phone: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
       </Card>
@@ -2439,7 +2454,7 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, flash, setMod
               <div className="flex gap-1.5 shrink-0">
                 {b.coiFile && <button onClick={() => openStoredFile(b.coiFile)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>View</button>}
                 <label className="text-[11px] font-bold px-2.5 py-1.5 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>{b.coiFile ? "Replace" : "Upload COI"}
-                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await fileToDataURL(f); if (url) { setBooking(b.id, { coiFile: url, coiName: f.name, coi: true }); flash("Certificate of Insurance uploaded — thank you!"); } }} />
+                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await fileToDataURL(f); if (url) { setBooking(b.id, { coiFile: url, coiName: f.name, coi: true, coiExpiry: "" }); flash("Certificate of Insurance uploaded — thank you!"); } }} />
                 </label>
               </div>
             </div>
@@ -2615,6 +2630,8 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
   const total = sub + tax;
   const pe = priceExplain(type, form.days);
   const priceProps = { type, days: form.days, base, waiver: form.waiver, waiverAmt, outMethod: form.outMethod, returnMethod: form.returnMethod, outFee, returnFee, tax, total, deposit: b.deposit, pe };
+  // repeat customers: reuse a still-valid COI they already have on file (matched by phone/email)
+  const coiOnFile = coiRequired(type, form.ctype) && !form.coiFile ? latestValidCoi(state, form.phone, form.email) : null;
 
   const steps = ["Trailer", "Dates", "Details", "Review"];
 
@@ -2641,7 +2658,12 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
       pickupTime: form.pickupTime, returnTime: form.returnMethod === "collect" ? collectWindow : form.pickupTime,
       status: "reserved", waiver: form.waiver, outMethod: form.outMethod, returnMethod: form.returnMethod,
       outBy, outPaid: false, returnBy, returnPaid: false,
-      price: base + legFees, deposit: b.deposit, paid: true, coi: form.coi, coiFile: form.coiFile, coiName: form.coiName, notes: form.notes, dropFee: b.dropFee,
+      price: base + legFees, deposit: b.deposit, paid: true,
+      coi: form.coiFile ? form.coi : (coiOnFile ? true : form.coi),
+      coiFile: form.coiFile || (coiOnFile ? coiOnFile.coiFile : ""),
+      coiName: form.coiFile ? form.coiName : (coiOnFile ? coiOnFile.coiName : ""),
+      coiExpiry: form.coiFile ? "" : (coiOnFile ? coiOnFile.coiExpiry : ""),
+      notes: form.notes, dropFee: b.dropFee,
       signName: form.signName, signedAt: new Date().toISOString(), agreementText: b.agreementText,
     });
     setStepN(4);
@@ -2655,10 +2677,16 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
         </div>
         <h2 className="text-2xl font-extrabold">You're booked!</h2>
         <p className="mt-2" style={{ color: T.sub }}>A {type.name} is reserved for {fmtLong(form.start)} at {form.pickupTime}{form.outMethod === "delivery" ? ", delivered to you" : " for pickup"}. We sent your confirmation{b.notifyWaiver !== false ? " and a copy of your signed agreement" : ""} by {channelLabel(b.notifyChannel)}{(b.notifyReminders && b.notifyReminders.length) ? `, and we'll remind you ${b.notifyReminders.slice().sort((x, y) => y - x).map(leadLabel).join(" and ")} before pickup` : ""}.</p>
-        {coiRequired(type, form.ctype) && !form.coiFile && (
+        {coiRequired(type, form.ctype) && (form.coiFile || coiOnFile) && (
+          <div className="mt-4 rounded-xl p-3 text-sm text-left flex items-start gap-2" style={{ background: T.greenSoft, color: T.green }}>
+            <ShieldCheck size={16} className="shrink-0 mt-0.5" />
+            <span><b>Certificate of Insurance:</b> {form.coiFile ? "received — thank you. You're all set." : <>we reused the COI already on your file{coiOnFile && coiOnFile.coiExpiry ? <> (valid through <b>{fmtLong(coiOnFile.coiExpiry)}</b>)</> : ""}. You're all set.</>}</span>
+          </div>
+        )}
+        {coiRequired(type, form.ctype) && !form.coiFile && !coiOnFile && (
           <div className="mt-4 rounded-xl p-3 text-sm text-left flex items-start gap-2" style={{ background: T.blueSoft, color: T.blue }}>
             <ShieldCheck size={16} className="shrink-0 mt-0.5" />
-            <span><b>Action needed:</b> this rental requires a Certificate of Insurance. Ask your insurance agent for a COI naming <b>{b.name}</b> as additionally insured, then upload it under <b>“Manage my booking”</b> before pickup. We'll remind you.</span>
+            <span><b>Action needed:</b> this rental requires a Certificate of Insurance. Ask your insurance agent for a COI naming <b>{insuredName(b)}</b> as additionally insured, then upload it under <b>“Manage my booking”</b> before pickup. We'll remind you.</span>
           </div>
         )}
         <div className="mt-5 rounded-xl p-4" style={{ background: T.amberSoft, border: `1px solid ${T.amber}` }}>
@@ -2847,12 +2875,29 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               <input value={form.address} onChange={(e) => set({ address: e.target.value })} placeholder="Street, city, ZIP"
                 className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${(form.outMethod === "delivery" || form.returnMethod === "collect") && !form.address ? T.red : T.line}` }} />
             </Field>
-            {coiRequired(type, form.ctype) && (
+            {coiRequired(type, form.ctype) && coiOnFile && !form.coiFile && (
+              <div className="p-3 rounded-lg" style={{ background: T.greenSoft }}>
+                <div className="flex items-center gap-2 text-sm font-bold" style={{ color: T.green }}>
+                  <ShieldCheck size={15} /> Certificate of Insurance — already on file
+                </div>
+                <div className="text-xs mt-1" style={{ color: T.green }}>
+                  Welcome back! We still have your Certificate of Insurance{coiOnFile.coiExpiry ? <> on file (valid through <b>{fmtLong(coiOnFile.coiExpiry)}</b>)</> : " on file"}, so you don't need to upload it again. We'll reuse it for this booking.
+                </div>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <label className="text-xs font-bold px-2.5 py-1.5 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>
+                    Upload a new COI
+                    <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await fileToDataURL(f); if (url) set({ coiFile: url, coiName: f.name, coi: true }); }} />
+                  </label>
+                  <span className="text-xs" style={{ color: T.sub }}>Only if it's changed since last time.</span>
+                </div>
+              </div>
+            )}
+            {coiRequired(type, form.ctype) && !(coiOnFile && !form.coiFile) && (
               <div className="p-3 rounded-lg" style={{ background: T.blueSoft }}>
                 <div className="flex items-center gap-2 text-sm font-bold" style={{ color: T.blue }}>
                   <ShieldCheck size={15} /> Certificate of Insurance — required
                 </div>
-                <div className="text-xs mt-1" style={{ color: T.blue }}>This {type ? type.name : "rental"} requires a COI. Ask your insurance agent for a Certificate of Insurance naming <b>{b.name}</b> as additionally insured — most send it the same day. Upload the PDF or a photo now, or add it later under “Manage my booking.”</div>
+                <div className="text-xs mt-1" style={{ color: T.blue }}>This {type ? type.name : "rental"} requires a COI. Ask your insurance agent for a Certificate of Insurance naming <b>{insuredName(b)}</b> as additionally insured — most send it the same day. Upload the PDF or a photo now, or add it later under “Manage my booking.”</div>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <label className="text-xs font-bold px-2.5 py-1.5 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>
                     {form.coiFile ? "Replace COI" : "Upload COI"}
@@ -3119,11 +3164,23 @@ function BookingDetail({ b, state, typeBySize, onClose, setBooking, flash, onExt
               {b.coiFile && <button onClick={() => openStoredFile(b.coiFile)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>View</button>}
               {b.coiFile && <button onClick={() => downloadStoredFile(b.coiFile, b.coiName || `COI-${b.name}`)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>Download</button>}
               <label className="text-[11px] font-bold px-2 py-1 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>{b.coiFile ? "Replace" : "Upload COI"}
-                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await fileToDataURL(f); if (url) { setBooking(b.id, { coiFile: url, coiName: f.name, coi: true }); flash("COI uploaded.", true); } else flash("Couldn't read that file."); }} />
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await fileToDataURL(f); if (url) { setBooking(b.id, { coiFile: url, coiName: f.name, coi: true, coiExpiry: "" }); flash("COI uploaded.", true); } else flash("Couldn't read that file."); }} />
               </label>
-              {b.coiFile && <button onClick={() => { setBooking(b.id, { coiFile: "", coiName: "" }); flash("COI removed.", true); }} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.redSoft, color: T.red }}>Remove</button>}
+              {b.coiFile && <button onClick={() => { setBooking(b.id, { coiFile: "", coiName: "", coiExpiry: "" }); flash("COI removed.", true); }} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.redSoft, color: T.red }}>Remove</button>}
             </div>
           </div>
+          {b.coiFile && (
+            <div className="px-3 py-2 flex items-center gap-2 flex-wrap" style={{ borderTop: `1px solid ${T.line}` }}>
+              <span className="text-[11px] font-bold" style={{ color: T.sub }}>Expires</span>
+              <input type="date" value={b.coiExpiry || ""} onChange={(e) => setBooking(b.id, { coiExpiry: e.target.value })}
+                className="text-[11px] p-1.5 rounded" style={{ border: `1px solid ${T.line}` }} />
+              {b.coiExpiry
+                ? (b.coiExpiry < today()
+                    ? <span className="text-[11px] font-bold" style={{ color: T.red }}>⚠ Expired — repeat customers will be asked for a fresh COI.</span>
+                    : <span className="text-[11px]" style={{ color: T.sub }}>Reused automatically for this customer's next booking until it lapses.</span>)
+                : <span className="text-[11px]" style={{ color: T.sub }}>Set the expiry so repeat bookings can reuse it (and re-ask once it lapses).</span>}
+            </div>
+          )}
         </div>
       )}
 
