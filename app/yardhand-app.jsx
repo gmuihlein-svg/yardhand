@@ -334,7 +334,9 @@ export default function App() {
   }, []);
   useEffect(() => { if (state && !loading) saveState(state); }, [state, loading]);
 
-  const flash = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
+  // flash a toast; pass undoable=true to offer a one-tap Undo that restores the pre-action state.
+  // (When called right after a mutation in the same handler, `state` here is still the pre-action snapshot.)
+  const flash = (m, undoable = false) => { setToast({ m, undo: undoable ? state : null }); setTimeout(() => setToast(null), undoable ? 6000 : 2600); };
 
   if (loading || !state) {
     return (
@@ -416,11 +418,17 @@ export default function App() {
 
       {detail && <BookingDetail b={state.bookings.find((x) => x.id === detail.id) || detail} {...{ state, typeBySize, setBooking, flash }} onExtend={setExtend} onClose={() => setDetail(null)} />}
       {extend && <ExtendModal b={extend} state={state} typeBySize={typeBySize} onClose={() => setExtend(null)}
-        onConfirm={(newEnd, addl, newTrailerId) => { setBooking(extend.id, newTrailerId ? { end: newEnd, price: extend.price + addl, trailerId: newTrailerId } : { end: newEnd, price: extend.price + addl }); setExtend(null); flash(newTrailerId ? `Extended & moved to a free unit · +$${addl}.` : `Extended to ${fmt(newEnd)} · +$${addl} charged to card on file.`); }} />}
+        onConfirm={(newEnd, addl, newTrailerId) => { setBooking(extend.id, newTrailerId ? { end: newEnd, price: extend.price + addl, trailerId: newTrailerId } : { end: newEnd, price: extend.price + addl }); setExtend(null); flash(newTrailerId ? `Extended & moved to a free unit · +$${addl}.` : `Extended to ${fmt(newEnd)} · +$${addl} charged to card on file.`, true); }} />}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2"
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3"
           style={{ background: T.steelDk, color: "#fff" }}>
-          <Check size={16} style={{ color: T.amber }} /> <span className="text-sm font-medium">{toast}</span>
+          <Check size={16} style={{ color: T.amber }} /> <span className="text-sm font-medium">{toast.m}</span>
+          {toast.undo && (
+            <button onClick={() => { setState(toast.undo); setToast(null); }}
+              className="text-sm font-bold px-2.5 py-1 rounded flex items-center gap-1 shrink-0" style={{ background: T.amber, color: T.steelDk }}>
+              <RotateCcw size={13} /> Undo
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -739,7 +747,7 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
                       <div style={{ color: T.sub }}>{fmt(a.start)}–{fmt(a.end)} vs {fmt(c.start)}–{fmt(c.end)}</div>
                     </div>
                     {alt ? (
-                      <button onClick={() => { setBooking(c.id, { trailerId: alt.id }); flash(`Moved ${c.name} to ${alt.assetId}.`); }}
+                      <button onClick={() => { setBooking(c.id, { trailerId: alt.id }); flash(`Moved ${c.name} to ${alt.assetId}.`, true); }}
                         className="text-xs font-bold px-2.5 py-1.5 rounded-md whitespace-nowrap" style={{ background: T.steel, color: "#fff" }}>Move {c.name} → {alt.assetId}</button>
                     ) : (
                       <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ color: T.red, background: T.redSoft }}>No free unit</span>
@@ -1000,10 +1008,10 @@ function BookingsView({ state, typeBySize, setBooking, flash, openDetail, openEx
                     <div className="text-lg font-extrabold tabular-nums">${b.price}</div>
                     {(b.status === "out" || b.status === "reserved") && (
                       <div className="flex gap-1.5 mt-2 justify-end flex-wrap">
-                        {b.status === "reserved" && <MiniBtn onClick={() => { setBooking(b.id, { status: "out" }); flash(`${outVerb(b.outMethod)}.`); }} icon={Truck}>{b.outMethod === "delivery" ? "Delivered" : "Picked up"}</MiniBtn>}
-                        {b.status === "out" && <MiniBtn onClick={() => { setBooking(b.id, { status: "returned" }); flash("Returned — deposit released."); }} icon={RotateCcw}>{b.returnMethod === "collect" ? "Collected" : "Returned"}</MiniBtn>}
+                        {b.status === "reserved" && <MiniBtn onClick={() => { setBooking(b.id, { status: "out" }); flash(`${outVerb(b.outMethod)}.`, true); }} icon={Truck}>{b.outMethod === "delivery" ? "Delivered" : "Picked up"}</MiniBtn>}
+                        {b.status === "out" && <MiniBtn onClick={() => { setBooking(b.id, { status: "returned" }); flash("Returned — deposit released.", true); }} icon={RotateCcw}>{b.returnMethod === "collect" ? "Collected" : "Returned"}</MiniBtn>}
                         <MiniBtn onClick={() => openExtend(b)} icon={CalendarClock}>Extend</MiniBtn>
-                        <MiniBtn onClick={() => { const rf = cancelRefund(b, state.business); setBooking(b.id, { status: "cancelled" }); flash(`Cancelled · $${rf.amt} refunded.`); }} icon={X} danger>Cancel</MiniBtn>
+                        <MiniBtn onClick={() => { const rf = cancelRefund(b, state.business); setBooking(b.id, { status: "cancelled" }); flash(`Cancelled · $${rf.amt} refunded.`, true); }} icon={X} danger>Cancel</MiniBtn>
                       </div>
                     )}
                   </div>
@@ -1113,7 +1121,7 @@ function FleetView({ state, typeBySize, trailerStatus, currentBooking, update, f
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge status={st} />
-                    <button onClick={() => { update((n) => { n.trailers.find((x) => x.id === tr.id).maint = !tr.maint; }); flash(tr.maint ? "Back in service." : "Marked down for maintenance."); }}
+                    <button onClick={() => { update((n) => { n.trailers.find((x) => x.id === tr.id).maint = !tr.maint; }); flash(tr.maint ? "Back in service." : "Marked down for maintenance.", true); }}
                       title="Toggle maintenance" className="p-1.5 rounded-md" style={{ background: tr.maint ? T.amber : "transparent", color: tr.maint ? T.steelDk : T.sub, border: `1px solid ${T.line}` }}>
                       <Wrench size={14} />
                     </button>
@@ -1419,7 +1427,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
   const auto = state.business.dispatchMode === "auto";
 
   const reassign = (r, cid) => setBooking(r.bookingId, r.leg === "out" ? { outBy: cid } : { returnBy: cid });
-  const markPaid = (r) => setBooking(r.bookingId, r.leg === "out" ? { outPaid: true } : { returnPaid: true });
+  const markPaid = (r) => { setBooking(r.bookingId, r.leg === "out" ? { outPaid: true } : { returnPaid: true }); flash(`Marked paid $${fee}.`, true); };
   const setMode = (m) => update((n) => { n.business.dispatchMode = m; });
 
   const assignOne = (r, rot = 0) => {
@@ -1446,7 +1454,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
       }
     });
     update((n) => { n.contractors = s.contractors; n.bookings = s.bookings; });
-    flash(`${name} out today · ${moved} job${moved !== 1 ? "s" : ""} reassigned${orphan ? ` · ${orphan} need a hand (no one free)` : ""}.`);
+    flash(`${name} out today · ${moved} job${moved !== 1 ? "s" : ""} reassigned${orphan ? ` · ${orphan} need a hand (no one free)` : ""}.`, true);
   };
   /* longer absence: toggle inactive and, when going inactive, free their upcoming unpaid work to requeue */
   const toggleActive = (c) => update((n) => {
@@ -1468,7 +1476,7 @@ function DriversView({ state, setBooking, update, flash, openDetail }) {
       if (r.leg === "out") bk.outBy = cid; else bk.returnBy = cid;
     });
     update((n) => { n.bookings = s.bookings; });
-    flash("Auto-assigned every coverable run to available drivers.");
+    flash("Auto-assigned every coverable run to available drivers.", true);
   };
 
   const horizon = state.business.bookHorizonDays || 30;
@@ -1695,7 +1703,7 @@ function YardView({ state, setBooking, update, flash, openDetail }) {
   const owedTotal = Object.values(owedBy).reduce((a, b) => a + b, 0);
 
   const setStaff = (e, id) => setBooking(e.bookingId, e.leg === "out" ? { outBy: id } : { returnBy: id });
-  const markPaid = (e) => setBooking(e.bookingId, e.leg === "out" ? { outPaid: true } : { returnPaid: true });
+  const markPaid = (e) => { setBooking(e.bookingId, e.leg === "out" ? { outPaid: true } : { returnPaid: true }); flash(`Marked paid $${fee}.`, true); };
   const setMode = (m) => update((n) => { n.business.counterMode = m; });
   const assignAuto = (e, rot = Date.now()) => {
     const cid = assignRun(state, e.date, e.time, null, rot);
@@ -1712,7 +1720,7 @@ function YardView({ state, setBooking, update, flash, openDetail }) {
       n++;
     });
     update((nn) => { nn.bookings = s.bookings; });
-    flash(n ? `Auto-assigned ${n} handoff${n > 1 ? "s" : ""} to available staff.` : "No coverable handoffs to assign.");
+    flash(n ? `Auto-assigned ${n} handoff${n > 1 ? "s" : ""} to available staff.` : "No coverable handoffs to assign.", !!n);
   };
 
   const todays = events.filter((e) => e.date === today());
@@ -1837,7 +1845,7 @@ function SettingsView({ state, setState, flash }) {
   const set = (patch) => setState((s) => ({ ...s, business: { ...s.business, ...patch } }));
   const setType = (size, patch) => setState((s) => ({ ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) }));
   const addType = (t) => { setState((s) => ({ ...s, types: [...s.types, t] })); setAddingType(false); flash(`Added ${t.name}.`); };
-  const removeType = (size) => { if (state.trailers.some((tr) => tr.size === size)) { flash("Remove its units first."); return; } setState((s) => ({ ...s, types: s.types.filter((t) => t.size !== size) })); flash("Equipment type removed."); };
+  const removeType = (size) => { if (state.trailers.some((tr) => tr.size === size)) { flash("Remove its units first."); return; } setState((s) => ({ ...s, types: s.types.filter((t) => t.size !== size) })); flash("Equipment type removed.", true); };
   const onPhoto = async (size, file) => { if (!file) return; const url = await fileToScaledDataURL(file); if (url) { setType(size, { image: url }); flash("Photo updated."); } else flash("Couldn't read that image."); };
   const onLogo = async (file) => { if (!file) return; const url = await fileToScaledDataURL(file, 400, "image/png"); if (url) { set({ logo: url }); flash("Logo updated."); } else flash("Couldn't read that image."); };
   return (
@@ -2009,7 +2017,7 @@ function SettingsView({ state, setState, flash }) {
       <Card className="p-4">
         <h3 className="font-bold text-sm uppercase tracking-wide mb-1">Reset demo data</h3>
         <p className="text-xs mb-3" style={{ color: T.sub }}>Wipe all trailers and bookings and reload the sample yard.</p>
-        <button onClick={() => { setState(structuredClone(SEED)); flash("Reset to sample data."); }}
+        <button onClick={() => { setState(structuredClone(SEED)); flash("Reset to sample data.", true); }}
           className="px-3 py-2 rounded-lg text-sm font-bold" style={{ background: T.redSoft, color: T.red }}>Reset everything</button>
       </Card>
       <p className="text-xs text-center pt-2" style={{ color: T.sub }}>
@@ -2196,7 +2204,7 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, flash, setMod
                 <div className="text-xs mt-1" style={{ color: T.sub }}>{rf.label}. Your ${b.deposit} deposit hold is released.</div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => { setBooking(b.id, { status: "cancelled" }); flash(`Cancelled · $${rf.amt} refunded.`); setPicked(null); setPanel(null); }} className="flex-1 py-2.5 rounded-lg text-sm font-bold" style={{ background: T.red, color: "#fff" }}>Cancel & refund ${rf.amt}</button>
+                <button onClick={() => { setBooking(b.id, { status: "cancelled" }); flash(`Cancelled · $${rf.amt} refunded.`, true); setPicked(null); setPanel(null); }} className="flex-1 py-2.5 rounded-lg text-sm font-bold" style={{ background: T.red, color: "#fff" }}>Cancel & refund ${rf.amt}</button>
                 <button onClick={() => setPanel(null)} className="flex-1 py-2.5 rounded-lg text-sm font-bold" style={{ background: "#fff", color: T.sub, border: `1px solid ${T.line}` }}>Keep it</button>
               </div>
             </div>
@@ -2235,7 +2243,7 @@ function CustExtend({ b, state, type, setBooking, flash, done }) {
             <Row l="Extra charge" r={`$${addl}`} bold />
           </div>
           {swapUnit && <div className="text-[11px] mb-2" style={{ color: T.sub }}>You'll be moved to another {b.size} of the same type — no change to you.</div>}
-          <button onClick={() => { setBooking(b.id, swapUnit ? { end: newEnd, price: b.price + addl, trailerId: swapUnit.id } : { end: newEnd, price: b.price + addl }); flash(`Extended to ${fmt(newEnd)} · $${addl} charged.`); done(); }}
+          <button onClick={() => { setBooking(b.id, swapUnit ? { end: newEnd, price: b.price + addl, trailerId: swapUnit.id } : { end: newEnd, price: b.price + addl }); flash(`Extended to ${fmt(newEnd)} · $${addl} charged.`, true); done(); }}
             className="w-full py-2.5 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: T.steel, color: "#fff" }}>
             <CreditCard size={16} /> Pay ${addl} & extend
           </button>
@@ -2810,13 +2818,13 @@ function BookingDetail({ b, state, typeBySize, onClose, setBooking, flash, onExt
       {(b.status === "reserved" || b.status === "out") && (
         <div className="flex gap-2 flex-wrap">
           {b.status === "reserved" && (
-            <button onClick={() => { setBooking(b.id, { status: "out" }); flash(`${outVerb(b.outMethod)} — trailer is out.`); onClose(); }}
+            <button onClick={() => { setBooking(b.id, { status: "out" }); flash(`${outVerb(b.outMethod)} — trailer is out.`, true); onClose(); }}
               className="flex-1 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5" style={{ background: T.steel, color: "#fff" }}>
               <Truck size={15} /> {outVerb(b.outMethod)}
             </button>
           )}
           {b.status === "out" && (
-            <button onClick={() => { setBooking(b.id, { status: "returned" }); flash(`${returnVerb(b.returnMethod)} — deposit released.`); onClose(); }}
+            <button onClick={() => { setBooking(b.id, { status: "returned" }); flash(`${returnVerb(b.returnMethod)} — deposit released.`, true); onClose(); }}
               className="flex-1 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5" style={{ background: T.steel, color: "#fff" }}>
               <RotateCcw size={15} /> {returnVerb(b.returnMethod)}
             </button>

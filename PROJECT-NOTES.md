@@ -56,6 +56,11 @@ Yard counter · Fleet · Settings.
 - **Equipment model:** each **type/product** has name, capacity, tiered pricing, **photo,
   description**. **Add equipment** = new product/rental; **Add unit** = another physical
   unit of an existing product. Units carry a **purchase price** (powers ROI).
+- **Undo:** consequential actions (mark paid, mark returned/out, cancel, extend, reassign,
+  sick-day reassign, auto-assign-all, remove equipment type, maintenance toggle, and even
+  "Reset demo data") show a one-tap **Undo** in the toast (~6s) that restores the full
+  pre-action state. `flash(msg, true)` captures the pre-action `state` snapshot; the toast's
+  Undo does `setState(snapshot)`. Undoes the most recent action only.
 - **Booking notice (lead time):** Settings lets the owner require X hours of notice before
   the crew can be booked — separate values for delivery/collection (`leadDeliveryHours`,
   default 12) and will-call/yard (`leadCounterHours`, default 2). The booking flow hides
