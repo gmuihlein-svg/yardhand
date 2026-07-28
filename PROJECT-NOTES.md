@@ -61,6 +61,13 @@ Yard counter · Fleet · Settings.
   "Reset demo data") show a one-tap **Undo** in the toast (~6s) that restores the full
   pre-action state. `flash(msg, true)` captures the pre-action `state` snapshot; the toast's
   Undo does `setState(snapshot)`. Undoes the most recent action only.
+- **Customers tab:** a customer database derived from bookings (grouped by name) — each
+  customer's full rental history, signed-waiver count, and COIs. Searchable by name, phone,
+  email, or confirmation number (single box). Click a rental to open its full detail.
+  Insights also gains a Customers section (count, repeat rate, avg booking, commercial %,
+  top customers by revenue). `computeCustomers(state)` does the aggregation.
+- **COI storage:** the booking detail lets the owner upload/view/remove a real Certificate
+  of Insurance file (image or PDF, stored as a data URL on `booking.coiFile`/`coiName`).
 - **Booking notice (lead time):** Settings lets the owner require X hours of notice before
   the crew can be booked — separate values for delivery/collection (`leadDeliveryHours`,
   default 12) and will-call/yard (`leadCounterHours`, default 2). The booking flow hides
@@ -127,4 +134,5 @@ the code per customer.
 - `contractors[]` — workforce: id, name, phone, **email**, vehicle, active, avail{}.
 - `bookings[]` — id, code, trailerId, size, customer info, start/end, times, status
   (reserved/out/returned/overdue via date/cancelled), waiver, outMethod/returnMethod,
-  outBy/returnBy + paid flags, price, deposit, coi, signName/signedAt, agreementText.
+  outBy/returnBy + paid flags, price, deposit, coi, coiFile, coiName, signName/signedAt,
+  agreementText, inspectOutAt/inspectInAt.

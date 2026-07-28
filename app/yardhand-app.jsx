@@ -7,7 +7,7 @@ import {
   Phone, Mail, MapPin, Wrench, RotateCcw, ShieldCheck, CreditCard, Search,
   ChevronRight, CircleDot, PackageCheck, CalendarClock, Building2, User, Home,
   BarChart3, TrendingUp, TrendingDown, Percent, Image as ImageIcon, Sparkles, Trash2,
-  LogOut, Lock
+  LogOut, Lock, Users, FileText
 } from "lucide-react";
 
 /* ---------------- design tokens (inline styles; no arbitrary Tailwind) --------------- */
@@ -405,6 +405,7 @@ export default function App() {
               {tab === "insights" && <InsightsView {...{ state }} />}
               {tab === "calendar" && <CalendarBoard {...{ state, trailerStatus, openDetail: setDetail }} />}
               {tab === "bookings" && <BookingsView {...{ state, typeBySize, setBooking, flash, openDetail: setDetail, openExtend: setExtend }} />}
+              {tab === "customers" && <CustomersView {...{ state, openDetail: setDetail }} />}
               {tab === "drivers" && <DriversView {...{ state, setBooking, update, flash, openDetail: setDetail }} />}
               {tab === "yard" && <YardView {...{ state, setBooking, update, flash, openDetail: setDetail }} />}
               {tab === "fleet" && <FleetView {...{ state, typeBySize, trailerStatus, currentBooking, update, flash }} />}
@@ -660,6 +661,7 @@ function OwnerNav({ tab, setTab }) {
     ["insights", "Insights", BarChart3],
     ["calendar", "Calendar", CalendarDays],
     ["bookings", "Bookings", ClipboardList],
+    ["customers", "Customers", Users],
     ["drivers", "Drivers & dispatch", User],
     ["yard", "Yard counter", Building2],
     ["fleet", "Fleet", Boxes],
@@ -1192,6 +1194,41 @@ function fileToScaledDataURL(file, maxW = 900, mime = "image/jpeg", quality = 0.
   });
 }
 
+/* read a file (image or PDF) as a raw data URL — for COIs */
+function fileToDataURL(file) {
+  return new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(file); });
+}
+/* open a stored data-URL document in a new tab */
+async function openStoredFile(dataUrl) {
+  try { const blob = await (await fetch(dataUrl)).blob(); window.open(URL.createObjectURL(blob), "_blank"); }
+  catch (e) { try { window.open(dataUrl, "_blank"); } catch (e2) {} }
+}
+
+/* roll every booking up into a per-customer record (keyed by name) with full history */
+function computeCustomers(state) {
+  const map = new Map();
+  (state.bookings || []).forEach((b) => {
+    const key = (b.name || "—").trim().toLowerCase();
+    if (!map.has(key)) map.set(key, { key, name: b.name || "—", type: b.type, phone: "", email: "", address: "", bookings: [], spent: 0, rentals: 0, coiCount: 0, waiverCount: 0 });
+    const c = map.get(key);
+    c.bookings.push(b);
+    if (b.phone) c.phone = b.phone;
+    if (b.email) c.email = b.email;
+    if (b.address) c.address = b.address;
+    if (b.type) c.type = b.type;
+    if (b.status !== "cancelled") { c.spent += (b.price || 0); c.rentals += 1; }
+    if (b.coi || b.coiFile) c.coiCount += 1;
+    if (b.signName) c.waiverCount += 1;
+  });
+  const list = [...map.values()].map((c) => {
+    c.bookings.sort((a, b) => (b.start || "").localeCompare(a.start || ""));
+    c.lastRental = c.bookings[0] ? c.bookings[0].start : "";
+    return c;
+  });
+  list.sort((a, b) => b.spent - a.spent);
+  return list;
+}
+
 function computeInsights(state) {
   const trailers = state.trailers || [];
   const types = state.types || [];
@@ -1309,6 +1346,11 @@ function ChartCard({ title, period, children }) {
 
 function InsightsView({ state }) {
   const d = useMemo(() => computeInsights(state), [state]);
+  const cust = useMemo(() => computeCustomers(state), [state]);
+  const repeatRate = cust.length ? (cust.filter((c) => c.rentals > 1).length / cust.length) * 100 : 0;
+  const commercialRate = cust.length ? (cust.filter((c) => c.type === "commercial").length / cust.length) * 100 : 0;
+  const avgBooking = d.rentals ? d.totalRev / d.rentals : 0;
+  const topCust = cust.slice(0, 6).map((c) => ({ label: c.name.split(" ")[0], name: c.name, value: c.spent }));
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -1401,6 +1443,21 @@ function InsightsView({ state }) {
         </div>
       </Card>
 
+      {/* Customers */}
+      <div className="flex items-center gap-2 pt-2">
+        <Users size={18} style={{ color: T.steel }} />
+        <h2 className="text-lg font-extrabold tracking-tight">Customers</h2>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile label="Customers" value={cust.length} sub="unique renters" accent={T.steel} icon={Users} />
+        <StatTile label="Repeat rate" value={pct1(repeatRate)} sub="rented more than once" accent={T.green} icon={RotateCcw} />
+        <StatTile label="Avg booking" value={money(avgBooking)} sub="per rental" accent={T.amberDk} icon={DollarSign} />
+        <StatTile label="Commercial" value={pct1(commercialRate)} sub="vs. homeowner" accent={T.blue} icon={Building2} />
+      </div>
+      <ChartCard title="Top customers by revenue" period="All time">
+        {topCust.length ? <BarChart data={topCust} color={T.steel} money /> : <Empty>No customer revenue yet.</Empty>}
+      </ChartCard>
+
       {/* AI assistant teaser */}
       <Card className="p-4" style={{ border: `1px dashed ${T.amber}` }}>
         <div className="flex items-start gap-3">
@@ -1412,6 +1469,92 @@ function InsightsView({ state }) {
         </div>
       </Card>
       <p className="text-xs text-center pt-1" style={{ color: T.sub }}>Utilization is booked days ÷ available days over the last {d.winDays} days. ROI is lifetime revenue ÷ purchase price.</p>
+    </div>
+  );
+}
+
+/* ---------------- CUSTOMERS (database + history + search) --------------- */
+const STATUS_PILL = {
+  reserved: ["Reserved", T.amberDk, T.amberSoft], out: ["Out", T.blue, T.blueSoft],
+  overdue: ["Overdue", T.red, T.redSoft], returned: ["Completed", T.green, T.greenSoft],
+  cancelled: ["Cancelled", T.sub, T.graySoft],
+};
+function StatusPill({ b }) {
+  const k = b.status === "out" && b.end < today() ? "overdue" : b.status;
+  const [label, c, bg] = STATUS_PILL[k] || ["—", T.sub, T.graySoft];
+  return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: c, background: bg }}>{label}</span>;
+}
+function CustomersView({ state, openDetail }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(null);
+  const customers = useMemo(() => computeCustomers(state), [state]);
+  const ql = q.trim().toLowerCase();
+  const filtered = ql ? customers.filter((c) =>
+    c.name.toLowerCase().includes(ql) ||
+    (c.phone || "").toLowerCase().includes(ql) ||
+    (c.email || "").toLowerCase().includes(ql) ||
+    c.bookings.some((b) => (b.code || "").toLowerCase().includes(ql))
+  ) : customers;
+  return (
+    <div className="space-y-4">
+      <SectionTitle>Customers · {customers.length}</SectionTitle>
+      <p className="text-sm -mt-2" style={{ color: T.sub }}>Everyone who's rented, with their full history, signed waivers, and COIs. Search by name, phone, email, or confirmation number.</p>
+      <div className="relative">
+        <Search size={16} style={{ color: T.sub, position: "absolute", left: 12, top: 13 }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or confirmation # (e.g. Miller, or WY-1001)…"
+          className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+      </div>
+      {filtered.length === 0 && <Empty>No customers match “{q}”.</Empty>}
+      {filtered.map((c) => {
+        const expanded = open === c.key;
+        return (
+          <Card key={c.key} className="p-0 overflow-hidden">
+            <button onClick={() => setOpen(expanded ? null : c.key)} className="w-full text-left p-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white font-bold" style={{ background: c.type === "commercial" ? T.blue : T.steel }}>{c.name.slice(0, 1).toUpperCase()}</div>
+                <div className="min-w-0">
+                  <div className="font-bold truncate flex items-center gap-1.5">{c.name} {c.rentals > 1 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: T.greenSoft, color: T.green }}>Repeat</span>}</div>
+                  <div className="text-xs truncate" style={{ color: T.sub }}>{c.type === "commercial" ? "Business" : "Homeowner"} · {c.phone || c.email || "—"}</div>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="font-bold tabular-nums">{money(c.spent)}</div>
+                <div className="text-xs" style={{ color: T.sub }}>{c.rentals} rental{c.rentals !== 1 ? "s" : ""} · last {fmt(c.lastRental)}</div>
+              </div>
+            </button>
+            {expanded && (
+              <div className="px-4 pb-4 space-y-2" style={{ borderTop: `1px solid ${T.line}` }}>
+                <div className="flex items-center gap-3 text-xs pt-3 flex-wrap" style={{ color: T.sub }}>
+                  {c.phone && <a href={`tel:${c.phone}`} className="flex items-center gap-1"><Phone size={12} />{c.phone}</a>}
+                  {c.email && <span className="flex items-center gap-1"><Mail size={12} />{c.email}</span>}
+                  {c.address && <span className="flex items-center gap-1"><MapPin size={12} />{c.address}</span>}
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.greenSoft, color: T.green }}>{c.waiverCount} signed waiver{c.waiverCount !== 1 ? "s" : ""}</span>
+                  <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: c.coiCount ? T.blueSoft : T.graySoft, color: c.coiCount ? T.blue : T.sub }}>{c.coiCount} COI{c.coiCount !== 1 ? "s" : ""} on file</span>
+                </div>
+                <div className="text-[11px] font-bold uppercase tracking-wide pt-1" style={{ color: T.sub }}>Rental history</div>
+                {c.bookings.map((b) => (
+                  <button key={b.id} onClick={() => openDetail(b)} className="w-full text-left flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold truncate">{b.code} · {b.size} <span className="font-normal" style={{ color: T.sub }}>· {fmt(b.start)}–{fmt(b.end)}</span></div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <StatusPill b={b} />
+                        {b.signName && <span className="text-[10px] font-bold px-1 py-0.5 rounded" style={{ background: T.greenSoft, color: T.green }}>Waiver</span>}
+                        {(b.coiFile || b.coi) && <span className="text-[10px] font-bold px-1 py-0.5 rounded" style={{ background: T.blueSoft, color: T.blue }}>COI</span>}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-bold tabular-nums">{money(b.price)}</div>
+                      <div className="text-[11px]" style={{ color: T.sub }}>view →</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -2815,6 +2958,28 @@ function BookingDetail({ b, state, typeBySize, onClose, setBooking, flash, onExt
       ) : (
         <div className="rounded-lg mb-3 px-3 py-2 text-xs flex items-center gap-2" style={{ background: T.amberSoft, color: T.amberDk }}>
           <AlertTriangle size={14} /> No signed agreement on file for this booking.
+        </div>
+      )}
+
+      {/* CERTIFICATE OF INSURANCE */}
+      {(b.type === "commercial" || b.coiFile || b.coi) && (
+        <div className="rounded-lg mb-3 overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
+          <div className="px-3 py-2 flex items-center justify-between gap-2" style={{ background: b.coiFile ? T.greenSoft : T.amberSoft }}>
+            <div className="flex items-center gap-2 min-w-0">
+              <FileText size={15} style={{ color: b.coiFile ? T.green : T.amberDk }} />
+              <div className="min-w-0">
+                <div className="text-xs font-bold" style={{ color: b.coiFile ? T.green : T.amberDk }}>Certificate of Insurance {b.coiFile ? "on file" : (b.type === "commercial" ? "— not uploaded yet" : "(optional)")}</div>
+                {b.coiName && <div className="text-[11px] truncate" style={{ color: T.sub }}>{b.coiName}</div>}
+              </div>
+            </div>
+            <div className="flex gap-1.5 shrink-0">
+              {b.coiFile && <button onClick={() => openStoredFile(b.coiFile)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>View</button>}
+              <label className="text-[11px] font-bold px-2 py-1 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>{b.coiFile ? "Replace" : "Upload COI"}
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await fileToDataURL(f); if (url) { setBooking(b.id, { coiFile: url, coiName: f.name, coi: true }); flash("COI uploaded.", true); } else flash("Couldn't read that file."); }} />
+              </label>
+              {b.coiFile && <button onClick={() => { setBooking(b.id, { coiFile: "", coiName: "" }); flash("COI removed.", true); }} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.redSoft, color: T.red }}>Remove</button>}
+            </div>
+          </div>
         </div>
       )}
 
