@@ -515,7 +515,7 @@ function Landing({ state, typeBySize, go, owner }) {
               {i === 0 && <div className="inline-block self-start text-[11px] font-bold px-2 py-0.5 rounded-full mb-2" style={{ background: T.amberSoft, color: T.amberDk }}>Most popular</div>}
               <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3" style={{ background: T.paper }}><Truck size={24} style={{ color: T.steel }} /></div>
               <div className="font-extrabold text-lg">{t.name}</div>
-              <div className="text-xs mb-3" style={{ color: T.sub }}>{t.cuyd}</div>
+              <div className="text-xs mb-3" style={{ color: T.sub }}>{t.cuyd || " "}</div>
               <div className="flex items-baseline gap-1"><span className="text-3xl font-extrabold tabular-nums">${t.daily}</span><span className="text-sm" style={{ color: T.sub }}>/24 hrs</span></div>
               <div className="text-xs mt-1 mb-4" style={{ color: T.sub }}>${t.weekly}/week · ${t.monthly}/4 weeks</div>
               <button onClick={() => go("book")} className="mt-auto w-full py-2.5 rounded-lg font-bold flex items-center justify-center gap-1.5" style={{ background: i === 0 ? T.amber : T.steel, color: i === 0 ? T.steelDk : "#fff" }}>Book this size <ArrowRight size={15} /></button>
@@ -1093,7 +1093,7 @@ function FleetView({ state, typeBySize, trailerStatus, currentBooking, update, f
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="min-w-0">
               <h3 className="font-bold truncate">{grp.name}</h3>
-              <div className="text-xs" style={{ color: T.sub }}>{grp.cuyd} · ${grp.daily}/day · ${grp.weekly}/wk · ${grp.monthly}/4wk</div>
+              <div className="text-xs" style={{ color: T.sub }}>{grp.cuyd ? grp.cuyd + " · " : ""}${grp.daily}/day · ${grp.weekly}/wk · ${grp.monthly}/4wk</div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs font-bold px-2 py-1 rounded" style={{ background: T.paper, color: T.sub }}>{grp.units.length} unit{grp.units.length !== 1 ? "s" : ""}</span>
@@ -2077,9 +2077,9 @@ function SettingsView({ state, setState, flash }) {
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><Truck size={16} style={{ color: T.green }} /></span>
-          <h3 className="font-bold text-sm uppercase tracking-wide">Trailer pricing</h3>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Pricing</h3>
         </div>
-        <p className="text-xs" style={{ color: T.sub }}>Set the rate for each trailer size. A customer's total blends these automatically — longer rentals use the cheaper weekly, 2-week, and 4-week rates.</p>
+        <p className="text-xs" style={{ color: T.sub }}>Set the rate for each piece of equipment. A customer's total blends these automatically — longer rentals use the cheaper weekly, 2-week, and 4-week rates.</p>
         {state.types.map((t) => (
           <div key={t.size} className="rounded-lg p-3" style={{ background: T.paper }}>
             <div className="font-bold text-sm mb-2">{t.name}</div>
@@ -2124,6 +2124,8 @@ function SettingsView({ state, setState, flash }) {
                 </div>
               </div>
             </div>
+            <input value={t.cuyd || ""} onChange={(e) => setType(t.size, { cuyd: e.target.value })} placeholder="Capacity / size (optional) — e.g. 20 cu yd, 6,500 W, 26 ft"
+              className="w-full mt-2 p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
             <textarea value={t.desc || ""} onChange={(e) => setType(t.size, { desc: e.target.value })} rows={2} placeholder="Describe this equipment for customers…"
               className="w-full mt-2 p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
             <div className="text-[10px] font-bold uppercase tracking-wide mt-2 mb-1 flex items-center gap-1" style={{ color: T.blue }}><Info size={11} /> Requirements & specs (shown to customers)</div>
@@ -2268,7 +2270,7 @@ function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
         <Field label="Name (shown to customers)"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. 20-ft Roll-off Container" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <div className="grid grid-cols-2 gap-2">
           <Field label="Short code"><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. rolloff-20" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
-          <Field label="Capacity"><input value={cuyd} onChange={(e) => setCuyd(e.target.value)} placeholder="e.g. 20 cu yd" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+          <Field label="Capacity / size (optional)"><input value={cuyd} onChange={(e) => setCuyd(e.target.value)} placeholder="e.g. 20 cu yd · 6,500 W · 26 ft — or leave blank" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <Field label="Day ($)"><NumInput v={daily} on={setDaily} /></Field>
@@ -2281,7 +2283,7 @@ function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
         <Field label="Requirements & specs — details"><textarea value={tow} onChange={(e) => setTow(e.target.value)} rows={2} placeholder="Vehicle & hitch, operator license, transport, fuel/power, PPE… whatever renters must know." className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} /></Field>
         {dupe && <p className="text-[11px]" style={{ color: T.red }}>That short code is already used — pick another.</p>}
       </div>
-      <button disabled={!name || dupe} onClick={() => onAdd({ size: slug, name, cuyd: cuyd || "—", daily, weekly, biweekly, monthly, image, desc, reqLabel, tow })}
+      <button disabled={!name || dupe} onClick={() => onAdd({ size: slug, name, cuyd: cuyd.trim(), daily, weekly, biweekly, monthly, image, desc, reqLabel, tow })}
         className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add equipment type</button>
     </Modal>
   );
@@ -2658,7 +2660,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                         : <div className="w-16 h-16 rounded-lg flex items-center justify-center shrink-0" style={{ background: active ? T.amber : T.paper }}><Truck size={26} style={{ color: active ? T.steelDk : T.steel }} /></div>}
                       <div className="min-w-0">
                         <div className="font-bold">{t.name}</div>
-                        <div className="text-xs" style={{ color: T.sub }}>{t.cuyd} · from ${t.daily}/day</div>
+                        <div className="text-xs" style={{ color: T.sub }}>{t.cuyd ? t.cuyd + " · " : ""}from ${t.daily}/day</div>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
