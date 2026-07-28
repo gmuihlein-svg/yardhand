@@ -129,7 +129,8 @@ the code per customer.
   deliveryFee, dropFee, counterFee, taxRate, waiverRate), refund policy, agreementText,
   bookHorizonDays, dispatchMode, counterMode, leadDeliveryHours, leadCounterHours.
 - `types[]` — equipment products: size (key), name, cuyd, daily/weekly/biweekly/monthly,
-  image, desc.
+  image, desc, reqLabel + tow (generalized "requirements & specs" heading + text, shown on
+  booking cards + review; e.g. towing for trailers, operator/transport/power for other gear).
 - `trailers[]` — physical units: id, assetId, size, vin, maint, **cost** (purchase price).
 - `contractors[]` — workforce: id, name, phone, **email**, vehicle, active, avail{}.
 - `bookings[]` — id, code, trailerId, size, customer info, start/end, times, status

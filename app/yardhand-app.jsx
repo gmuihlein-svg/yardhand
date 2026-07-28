@@ -7,7 +7,7 @@ import {
   Phone, Mail, MapPin, Wrench, RotateCcw, ShieldCheck, CreditCard, Search,
   ChevronRight, CircleDot, PackageCheck, CalendarClock, Building2, User, Home,
   BarChart3, TrendingUp, TrendingDown, Percent, Image as ImageIcon, Sparkles, Trash2,
-  LogOut, Lock, Users, FileText
+  LogOut, Lock, Users, FileText, Info
 } from "lucide-react";
 
 /* ---------------- design tokens (inline styles; no arbitrary Tailwind) --------------- */
@@ -224,13 +224,13 @@ const SEED = {
   types: [
     { size: "7x14", name: "7×14 Dump (14K GVWR)", cuyd: "7.3 cu yd", daily: 155, weekly: 580, biweekly: 1120, monthly: 1880, image: "",
       desc: "Our biggest hauler. 14,000 lb GVWR, dual 7K axles, and 24\" sides that hold 7.3 cubic yards — the right pick for concrete tear-outs, roofing tear-offs, and heavy demo. Ramps and a full-height rear gate included.",
-      tow: "Needs a ¾-ton or larger truck (F-250 / Ram 2500 class). 2-5/16\" ball on a Class IV+ hitch rated for 14,000 lb, a 7-pin connector, and a working trailer-brake controller. Not for half-ton trucks when loaded." },
+      reqLabel: "You'll need to tow this", tow: "Needs a ¾-ton or larger truck (F-250 / Ram 2500 class). 2-5/16\" ball on a Class IV+ hitch rated for 14,000 lb, a 7-pin connector, and a working trailer-brake controller. Not for half-ton trucks when loaded." },
     { size: "7x12", name: "7×12 Dump (9,990 GVWR)", cuyd: "6 cu yd", daily: 130, weekly: 490, biweekly: 950, monthly: 1600, image: "",
       desc: "The everyday workhorse. Under 10K GVWR so it tows easy, yet still swallows 6 cubic yards of debris, brush, or dirt. The most popular size for renovations and cleanouts.",
-      tow: "Tows behind a capable ½-ton (heavy-duty) or ¾-ton truck. 2-5/16\" ball on a Class IV hitch rated ~10,000 lb, a 7-pin connector, and a trailer-brake controller." },
+      reqLabel: "You'll need to tow this", tow: "Tows behind a capable ½-ton (heavy-duty) or ¾-ton truck. 2-5/16\" ball on a Class IV hitch rated ~10,000 lb, a 7-pin connector, and a trailer-brake controller." },
     { size: "5x8",  name: "5×8 Dump (5K GVWR)", cuyd: "2.5 cu yd", daily: 95, weekly: 350, biweekly: 680, monthly: 1150, image: "",
       desc: "Compact and light. 2.5 cubic yards, tows behind a half-ton truck or SUV — ideal for small landscaping jobs, garage cleanouts, and tight driveways.",
-      tow: "Tows behind most ½-ton trucks and larger SUVs. 2\" ball on a Class III hitch rated ~5,000 lb, a 7-pin connector, and a trailer-brake controller." },
+      reqLabel: "You'll need to tow this", tow: "Tows behind most ½-ton trucks and larger SUVs. 2\" ball on a Class III hitch rated ~5,000 lb, a 7-pin connector, and a trailer-brake controller." },
   ],
   contractors: [
     { id: "c1", name: "Marcus Reed", phone: "704-555-0301", email: "marcus@extpro.com", vehicle: "F-250", active: true,
@@ -2115,8 +2115,10 @@ function SettingsView({ state, setState, flash }) {
             </div>
             <textarea value={t.desc || ""} onChange={(e) => setType(t.size, { desc: e.target.value })} rows={2} placeholder="Describe this equipment for customers…"
               className="w-full mt-2 p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
-            <div className="text-[10px] font-bold uppercase tracking-wide mt-2 mb-1 flex items-center gap-1" style={{ color: T.blue }}><Truck size={11} /> Towing requirements (shown to customers)</div>
-            <textarea value={t.tow || ""} onChange={(e) => setType(t.size, { tow: e.target.value })} rows={2} placeholder="e.g. ¾-ton truck, 2-5/16&quot; ball, Class IV hitch, 7-pin connector, trailer brakes…"
+            <div className="text-[10px] font-bold uppercase tracking-wide mt-2 mb-1 flex items-center gap-1" style={{ color: T.blue }}><Info size={11} /> Requirements & specs (shown to customers)</div>
+            <input value={t.reqLabel || ""} onChange={(e) => setType(t.size, { reqLabel: e.target.value })} placeholder="Heading — e.g. You'll need to tow this · Operator & transport · Power & fuel"
+              className="w-full p-2 rounded-lg text-xs mb-1.5" style={{ border: `1px solid ${T.line}` }} />
+            <textarea value={t.tow || ""} onChange={(e) => setType(t.size, { tow: e.target.value })} rows={2} placeholder="The requirements — vehicle & hitch, operator license, transport, fuel/power, PPE… whatever renters must know."
               className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
           </div>
         ))}
@@ -2199,6 +2201,7 @@ function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
   const [biweekly, setBiweekly] = useState(750);
   const [monthly, setMonthly] = useState(1300);
   const [desc, setDesc] = useState("");
+  const [reqLabel, setReqLabel] = useState("");
   const [tow, setTow] = useState("");
   const [image, setImage] = useState("");
   const slug = (code || name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || ("type-" + Date.now());
@@ -2228,10 +2231,11 @@ function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
           <Field label="4 wks ($)"><NumInput v={monthly} on={setMonthly} /></Field>
         </div>
         <Field label="Description"><textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} placeholder="Describe it for customers…" className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} /></Field>
-        <Field label="Towing requirements"><textarea value={tow} onChange={(e) => setTow(e.target.value)} rows={2} placeholder="Vehicle, hitch class, ball size, connector, brakes…" className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label="Requirements & specs — heading"><input value={reqLabel} onChange={(e) => setReqLabel(e.target.value)} placeholder="e.g. You'll need to tow this · Operator & transport · Power & fuel" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label="Requirements & specs — details"><textarea value={tow} onChange={(e) => setTow(e.target.value)} rows={2} placeholder="Vehicle & hitch, operator license, transport, fuel/power, PPE… whatever renters must know." className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} /></Field>
         {dupe && <p className="text-[11px]" style={{ color: T.red }}>That short code is already used — pick another.</p>}
       </div>
-      <button disabled={!name || dupe} onClick={() => onAdd({ size: slug, name, cuyd: cuyd || "—", daily, weekly, biweekly, monthly, image, desc, tow })}
+      <button disabled={!name || dupe} onClick={() => onAdd({ size: slug, name, cuyd: cuyd || "—", daily, weekly, biweekly, monthly, image, desc, reqLabel, tow })}
         className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add equipment type</button>
     </Modal>
   );
@@ -2619,8 +2623,8 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                   {t.desc && <p className="text-xs mt-2.5 leading-snug" style={{ color: T.sub }}>{t.desc}</p>}
                   {t.tow && (
                     <div className="mt-2.5 flex items-start gap-2 p-2.5 rounded-lg" style={{ background: T.blueSoft }}>
-                      <Truck size={14} style={{ color: T.blue, marginTop: 1 }} className="shrink-0" />
-                      <div className="text-[11px] leading-snug" style={{ color: T.blue }}><span className="font-bold">You'll need to tow this:</span> {t.tow}</div>
+                      <Info size={14} style={{ color: T.blue, marginTop: 1 }} className="shrink-0" />
+                      <div className="text-[11px] leading-snug" style={{ color: T.blue }}><span className="font-bold">{t.reqLabel || "Good to know before you rent"}:</span> {t.tow}</div>
                     </div>
                   )}
                 </button>
@@ -2628,7 +2632,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
             })}
             <div className="flex items-start gap-2 p-3 rounded-lg text-xs" style={{ background: T.amberSoft, color: T.amberDk }}>
               <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-              <span><b>Before you book:</b> make sure your vehicle and hitch are rated to tow the trailer you pick (see each trailer's towing requirements above), with working lights and trailer brakes. You'll confirm safe, legal towing in the rental agreement.</span>
+              <span><b>Before you book:</b> make sure you're set up to safely haul and use what you pick — check each item's requirements above. You'll confirm you can meet them in the rental agreement.</span>
             </div>
             <NavBtns onNext={() => setStepN(1)} nextOk={!!form.size} />
           </div>
@@ -2760,8 +2764,8 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
             <PriceBreakdown heading="Order summary" {...priceProps} />
             {type?.tow && (
               <div className="flex items-start gap-2 p-3 rounded-lg text-xs" style={{ background: T.blueSoft, color: T.blue }}>
-                <Truck size={14} className="shrink-0 mt-0.5" />
-                <span><b>Towing your {type.name}:</b> {type.tow} By signing below you confirm your vehicle and hitch are rated for this load.</span>
+                <Info size={14} className="shrink-0 mt-0.5" />
+                <span><b>{type.reqLabel || "Before you rent"} — {type.name}:</b> {type.tow} By signing below you confirm you can meet these requirements.</span>
               </div>
             )}
             {/* SIGN the agreement & waiver */}
