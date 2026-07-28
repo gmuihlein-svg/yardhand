@@ -31,7 +31,7 @@ _(This note exists because the owner asked to be reminded next time — surface 
 | App code | **GitHub** (`gmuihlein-svg/yardhand`) | ✅ versioned, every change committed |
 | Deployed site | **Vercel** (auto-deploys from GitHub) | ✅ rebuilds from GitHub; prior deploys roll back |
 | This/any chat | Claude Code session | ⚠️ not a store of record — the repo is |
-| **Customer data** (bookings, settings) | **each browser's localStorage** | ❌ **NOT durable — Phase 2 (database) fixes this** |
+| **Workspace data** (bookings, settings, everything) | **Supabase (cloud) ✅ LIVE** — one `workspaces` JSONB row (`id=default`), localStorage as offline cache/fallback | ✅ durable, backed up, shared across devices |
 
 - **Working branch:** `claude/nextjs-setup-local-render-8xb2u7`
 - **Owner login:** password gate; default password `admin`, changeable in
@@ -115,8 +115,12 @@ the code per customer.
 
 ## Phase roadmap (tracked tasks)
 
-- **Phase 2 — shared database** (the big unlock): moves data off the browser to a real,
-  backed-up server; enables multi-device, logins, and multi-tenancy. _Most important next step._
+- **Phase 2 — shared database** ✅ **DONE (core)**: workspace synced to Supabase (Postgres
+  JSONB row), durable + backed up + shared across devices. Env vars set in Vercel
+  (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY — publishable key). Supabase
+  project: yardhand (rrrqehrxmycblfvzmjms). Remaining polish: enable realtime (add
+  `workspaces` to the supabase_realtime publication) for instant cross-device updates;
+  later normalize into per-entity tables + real per-user auth/RLS (the multi-tenant foundation).
 - **#5 Owner login** ✅ done (prototype gate).
 - **#7** Notify workforce when assigned a job (email/SMS).
 - **#8** Real before/after inspection photo upload.
