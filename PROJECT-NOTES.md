@@ -56,6 +56,13 @@ Yard counter · Fleet · Settings.
 - **Equipment model:** each **type/product** has name, capacity, tiered pricing, **photo,
   description**. **Add equipment** = new product/rental; **Add unit** = another physical
   unit of an existing product. Units carry a **purchase price** (powers ROI).
+- **Customer notifications (config + simulation built):** Settings "When customers get
+  notified" card — channel (text/email/both), toggles for booking confirmation + waiver
+  copy, and an editable list of reminder lead-times (default 48h + 24h). Business fields:
+  notifyChannel, notifyConfirm, notifyWaiver, notifyReminders[]. `notifyTimeline(state, b)`
+  computes each booking's schedule (sent vs scheduled), shown in the booking detail; the
+  confirmation screen reflects the settings. SENDING IS SIMULATED — real email/SMS + a
+  scheduler are the remaining Phase 5 work (task #17).
 - **Undo:** consequential actions (mark paid, mark returned/out, cancel, extend, reassign,
   sick-day reassign, auto-assign-all, remove equipment type, maintenance toggle, and even
   "Reset demo data") show a one-tap **Undo** in the toast (~6s) that restores the full
@@ -118,10 +125,9 @@ the code per customer.
 - **#11** Availability workflow: standing weekly schedule + exceptions.
 - **#12** Send customer their booking confirmation (absorbed by #17).
 - **#13** Text-to-book auto-reply with booking link.
-- **#17** Configurable customer notifications — Settings "when customers get notified"
-  section: waiver copy on signing, booking confirmation, reminders at owner-set lead times
-  (e.g. 48h + 24h before + right after booking), channel choice (text / email / both).
-  Needs email + SMS providers and a scheduler (fits after Phase 2). Shares plumbing with #7.
+- **#17** Configurable customer notifications — Settings section, per-booking timeline, and
+  confirmation-screen wording are **BUILT (simulated)**. Remaining: wire real email + SMS
+  providers and a scheduler to actually send (fits after Phase 2). Shares plumbing with #7.
 - **#14** Late-return fees: charge or waive (with payments).
 - **#15** AI "plain-English dashboard builder" for Insights (needs AI backend).
 

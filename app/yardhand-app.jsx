@@ -219,6 +219,7 @@ const SEED = {
     refundFullHrs: 48, refundLatePct: 0.5,
     dispatchMode: "auto", counterMode: "self", bookHorizonDays: 30, rr: 0,
     leadDeliveryHours: 12, leadCounterHours: 2,
+    notifyChannel: "both", notifyConfirm: true, notifyWaiver: true, notifyReminders: [48, 24],
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
   types: [
@@ -1207,6 +1208,24 @@ async function openStoredFile(dataUrl) {
   catch (e) { try { window.open(dataUrl, "_blank"); } catch (e2) {} }
 }
 
+/* channel label for customer notifications */
+const channelLabel = (ch) => ch === "text" ? "text" : ch === "email" ? "email" : "text & email";
+/* build the notification schedule for a booking from the business's notify settings.
+   Delivery/sending is simulated until Phase 5 wires up an email/SMS provider + scheduler. */
+function notifyTimeline(state, b) {
+  const biz = state.business || {};
+  const now = Date.now();
+  const bookedAt = b.signedAt ? new Date(b.signedAt).getTime() : null;
+  const pickup = slotDateTime(b.start, b.pickupTime).getTime();
+  const items = [];
+  if (biz.notifyConfirm !== false) items.push({ label: "Booking confirmation", at: bookedAt, kind: "confirm" });
+  if (biz.notifyWaiver !== false && b.signName) items.push({ label: "Copy of signed agreement & waiver", at: bookedAt, kind: "waiver" });
+  (biz.notifyReminders || []).slice().sort((a, c) => c - a).forEach((h) => {
+    items.push({ label: `Reminder · ${leadLabel(h)} before pickup`, at: pickup - h * 3600000, kind: "reminder", hours: h });
+  });
+  return items.map((it) => ({ ...it, sent: it.at != null && it.at <= now }));
+}
+
 /* roll every booking up into a per-customer record (keyed by name) with full history */
 function computeCustomers(state) {
   const map = new Map();
@@ -1992,6 +2011,7 @@ function SettingsView({ state, setState, flash }) {
   const b = state.business;
   const [addingType, setAddingType] = useState(false);
   const [confirm, setConfirm] = useState(null); // {title, body, confirmLabel, onYes}
+  const [newRem, setNewRem] = useState(24); // hours for a new reminder
   const set = (patch) => setState((s) => ({ ...s, business: { ...s.business, ...patch } }));
   const setType = (size, patch) => setState((s) => ({ ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) }));
   const addType = (t) => { setState((s) => ({ ...s, types: [...s.types, t] })); setAddingType(false); flash(`Added ${t.name}.`, true); };
@@ -2150,6 +2170,39 @@ function SettingsView({ state, setState, flash }) {
           <Field label="Will-call / yard notice (hours)"><NumInput v={b.leadCounterHours ?? 2} on={(v) => set({ leadCounterHours: v })} /></Field>
         </div>
         <p className="text-[11px]" style={{ color: T.sub }}>Deliveries usually need more notice (load the trailer + drive) than a will-call, where the customer comes to your yard. Currently: deliveries need {leadLabel(b.leadDeliveryHours ?? 12)}, will-call/yard need {leadLabel(b.leadCounterHours ?? 2)}.</p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><Mail size={16} style={{ color: T.blue }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">When customers get notified</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Automatic messages to your customers. <b>Prototype note:</b> these are simulated for now — real texts and emails switch on in the messaging phase.</p>
+        <Field label="Send by">
+          <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+            {[["email", "Email"], ["text", "Text"], ["both", "Both"]].map(([v, l]) => (
+              <button key={v} onClick={() => set({ notifyChannel: v })} className="flex-1 py-1.5 rounded-md text-sm font-bold" style={(b.notifyChannel || "both") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+            ))}
+          </div>
+        </Field>
+        <Toggle label="Booking confirmation" sub="Sent right after they book — appointment details + confirmation number." on={b.notifyConfirm !== false} set={(v) => set({ notifyConfirm: v })} />
+        <Toggle label="Copy of signed waiver" sub="Send the customer their signed rental agreement the moment they sign." on={b.notifyWaiver !== false} set={(v) => set({ notifyWaiver: v })} />
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: T.sub }}>Reminders before pickup</div>
+          <div className="space-y-1.5">
+            {(b.notifyReminders || []).slice().sort((a, c) => c - a).map((h) => (
+              <div key={h} className="flex items-center justify-between p-2 rounded-lg" style={{ background: T.paper }}>
+                <span className="text-sm font-semibold">{leadLabel(h)} before</span>
+                <button onClick={() => set({ notifyReminders: (b.notifyReminders || []).filter((x) => x !== h) })} className="text-xs font-bold px-2 py-1 rounded" style={{ background: T.redSoft, color: T.red }}>Remove</button>
+              </div>
+            ))}
+            {(b.notifyReminders || []).length === 0 && <div className="text-xs" style={{ color: T.sub }}>No reminders set — add one below.</div>}
+          </div>
+          <div className="flex items-end gap-2 mt-2">
+            <div className="flex-1"><Field label="Add a reminder (hours before)"><NumInput v={newRem} on={setNewRem} /></Field></div>
+            <button onClick={() => { const h = Math.max(1, Math.round(newRem)); if (!(b.notifyReminders || []).includes(h)) set({ notifyReminders: [...(b.notifyReminders || []), h] }); }} className="px-3 py-2.5 rounded-lg text-sm font-bold" style={{ background: T.steel, color: "#fff" }}>Add</button>
+          </div>
+          <p className="text-[11px] mt-1.5" style={{ color: T.sub }}>Common: 48 and 24 hours before. All messages go out by {channelLabel(b.notifyChannel)}.</p>
+        </div>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -2555,7 +2608,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
           <Check size={32} style={{ color: T.green }} />
         </div>
         <h2 className="text-2xl font-extrabold">You're booked!</h2>
-        <p className="mt-2" style={{ color: T.sub }}>A {type.name} is reserved for {fmtLong(form.start)} at {form.pickupTime}{form.outMethod === "delivery" ? ", delivered to you" : " for pickup"}. We texted a confirmation with the towing checklist and the rental agreement to sign.</p>
+        <p className="mt-2" style={{ color: T.sub }}>A {type.name} is reserved for {fmtLong(form.start)} at {form.pickupTime}{form.outMethod === "delivery" ? ", delivered to you" : " for pickup"}. We sent your confirmation{b.notifyWaiver !== false ? " and a copy of your signed agreement" : ""} by {channelLabel(b.notifyChannel)}{(b.notifyReminders && b.notifyReminders.length) ? `, and we'll remind you ${b.notifyReminders.slice().sort((x, y) => y - x).map(leadLabel).join(" and ")} before pickup` : ""}.</p>
         <div className="mt-5 rounded-xl p-4" style={{ background: T.amberSoft, border: `1px solid ${T.amber}` }}>
           <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amberDk }}>Your confirmation code</div>
           <div className="text-3xl font-extrabold tabular-nums mt-1" style={{ color: T.ink }}>{lastCode}</div>
@@ -2925,6 +2978,7 @@ function BookingDetail({ b, state, typeBySize, onClose, setBooking, flash, onExt
   const type = typeBySize(b.size);
   const days = daysBetween(b.start, b.end);
   const status = b.status === "out" && b.end < today() ? "overdue" : b.status === "out" ? "out" : b.status;
+  const notify = notifyTimeline(state, b);
   return (
     <Modal onClose={onClose} title={b.name}>
       <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -3010,6 +3064,28 @@ function BookingDetail({ b, state, typeBySize, onClose, setBooking, flash, onExt
           </div>
         </div>
       )}
+
+      {/* CUSTOMER NOTIFICATIONS timeline */}
+      <div className="rounded-lg mb-3 overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
+        <div className="px-3 py-2 flex items-center gap-2" style={{ background: T.paper }}>
+          <Mail size={14} style={{ color: T.steel }} />
+          <span className="text-xs font-bold">Customer notifications</span>
+          <span className="text-[10px] ml-auto" style={{ color: T.sub }}>by {channelLabel(state.business.notifyChannel)}</span>
+        </div>
+        <div className="p-3 space-y-1.5">
+          {notify.length === 0 && <div className="text-xs" style={{ color: T.sub }}>Notifications are turned off in Settings.</div>}
+          {notify.map((n, i) => (
+            <div key={i} className="flex items-center justify-between gap-2">
+              <div className="text-xs min-w-0">
+                <div className="font-semibold truncate">{n.label}</div>
+                <div style={{ color: T.sub }}>{n.at ? new Date(n.at).toLocaleString() : "—"}</div>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-1 rounded shrink-0" style={n.sent ? { color: T.green, background: T.greenSoft } : { color: T.blue, background: T.blueSoft }}>{n.sent ? "Sent" : "Scheduled"}</span>
+            </div>
+          ))}
+          <div className="text-[11px] pt-1" style={{ color: T.sub }}>Simulated in this prototype. Real texts/emails send once the messaging phase is live.</div>
+        </div>
+      </div>
 
       {/* INSPECTION & PHOTOS log */}
       <div className="rounded-lg mb-3 overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
