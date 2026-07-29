@@ -197,16 +197,6 @@ Team & dispatch · Fleet · Settings.
 - **Owner login:** branded sign-in gate + sign-out; public site & booking stay open.
 - **Workforce onboarding:** name, phone, tow vehicle, **email** (for future job alerts +
   portal login). Availability is set separately in the schedule grid.
-- **Per-equipment contracts (each equipment owns its contract, not a shared default):** every
-  equipment type carries its own **`type.agreementText`** (Settings → Equipment photos &
-  descriptions → "Rental contract for this equipment") — that's what customers e-sign, snapshotted
-  onto the booking's `agreementText` at signing. A migration in the load effect copies the template
-  onto any type missing one, so no equipment is ever blank. **"Copy to all equipment"** button
-  (`copyContractToAll`, confirm-gated) pushes one equipment's contract onto every other. New
-  equipment is pre-filled from the template (`addType` seeds `agreementText` from
-  `business.agreementText`). `business.agreementText` is now framed in the UI as the **"Contract
-  template (for new equipment)"** — a starting point only, NOT an auto-applied default; editing it
-  does not change existing equipment. (Contract + liability waiver are one combined document.)
 - **Money:** tiered rental pricing, refundable deposit hold, delivery/collect + will-call/
   yard fees, optional damage waiver, sales tax, cancellation policy. All editable in Settings.
 - **Deliverables produced:** Operator's Guide (.docx), Partnership Pitch (.docx),
