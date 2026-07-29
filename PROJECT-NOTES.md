@@ -111,6 +111,12 @@ Team & dispatch · Fleet · Settings.
   `returnDoneBy`+`returnDoneAt`). The owner's booking detail shows a green **"Crew confirmations"**
   block (who + when), live via cloud sync. Owner alert `ownerAlertHandoff` pings the owner on
   these (simulated send). `crewName(state, id)` resolves the name.
+- **Text-to-book (config built, simulated):** Settings → "Text-to-book" card. `textToBookAutoReply`
+  (auto-reply with the booking link — the SYSTEM sends it, not the owner), `bookingLink` (owner's
+  booking-page URL, appended to the message), `textToBookMessage` (editable, live preview),
+  `textToBookNotifyChannel` (email/text/both — where inbound customer texts/questions reach the
+  owner, using the owner alert email/cell). After the auto-reply it's a normal two-way SMS
+  conversation. Real auto-reply + 2-way texting need a live SMS number (Twilio-style) — task #13.
 - **Owner alerts (config built, simulated):** Settings → Notifications → "Alerts to you (the
   owner)" — master `ownerNotify`, channel `ownerNotifyChannel` (email/text/both), `ownerAlertEmail`
   + `ownerAlertPhone` (where alerts go — separate from the customer-facing business number), and

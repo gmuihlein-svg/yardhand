@@ -252,6 +252,7 @@ const SEED = {
     notifyReview: true, reviewLink: "", reviewMessage: "Thanks for renting with us! If everything went smoothly, would you leave us a quick review? It only takes a minute and really helps our small business. 🙏",
     ownerNotify: true, ownerNotifyChannel: "both", ownerAlertEmail: "", ownerAlertPhone: "",
     ownerAlertNewBooking: true, ownerAlertCancel: true, ownerAlertTextToBook: true, ownerAlertScheduleChange: false, ownerAlertHandoff: true,
+    textToBookAutoReply: true, bookingLink: "", textToBookMessage: "Thanks for reaching out! You can book your trailer online in about a minute here:", textToBookNotifyChannel: "both",
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
   types: [
@@ -2620,6 +2621,31 @@ function SettingsView({ state, setState, flash }) {
             </div>
           )}
         </div>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><Phone size={16} style={{ color: T.blue }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Text-to-book</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>When a customer taps “Text to book” on your site and texts you, the app can <b>auto-reply with your booking link</b> — you don't send it. After that first reply it's a normal two-way text: their questions come to you and you answer.</p>
+        <Toggle label="Auto-reply with a booking link" sub="The system texts back your booking-form link the moment a customer texts in." on={b.textToBookAutoReply !== false} set={(v) => set({ textToBookAutoReply: v })} />
+        {b.textToBookAutoReply !== false && (
+          <div className="space-y-2">
+            <Field label="Booking-form link (your site's booking page)"><input value={b.bookingLink || ""} onChange={(e) => set({ bookingLink: e.target.value })} placeholder="https://your-site.com  (or your Vercel URL)" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+            <Field label="Auto-reply message"><textarea value={b.textToBookMessage || ""} onChange={(e) => set({ textToBookMessage: e.target.value })} rows={2} placeholder="Thanks for reaching out! Book online here:" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+            <div className="rounded-lg p-2.5 text-xs" style={{ background: T.paper, color: T.sub }}>
+              <span className="font-bold" style={{ color: T.ink }}>Preview:</span> {b.textToBookMessage || "Thanks for reaching out! Book online here:"} {b.bookingLink ? <span style={{ color: T.blue }}>{b.bookingLink}</span> : <span style={{ color: T.red }}>[add your booking link above]</span>}
+            </div>
+            <Field label="When a customer texts, notify me by">
+              <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+                {[["email", "Email"], ["text", "Text"], ["both", "Both"]].map(([v, l]) => (
+                  <button key={v} onClick={() => set({ textToBookNotifyChannel: v })} className="flex-1 py-1.5 rounded-md text-sm font-bold" style={(b.textToBookNotifyChannel || "both") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+                ))}
+              </div>
+            </Field>
+            <p className="text-[11px]" style={{ color: T.sub }}>Their incoming texts (and any questions) reach you by {channelLabel(b.textToBookNotifyChannel || "both")}, using the owner email/cell above. The customer chat itself stays on text. <b>Prototype note:</b> auto-reply + two-way texting need a real texting number — this switches on in the messaging phase.</p>
+          </div>
+        )}
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
