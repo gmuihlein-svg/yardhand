@@ -214,7 +214,7 @@ const SEED = {
     name: "Ext Professionals",
     yard: "Charlotte, NC",
     phone: "(704) 555-0100",
-    logo: "", theme: { accent: "#F2A900", dark: "#2B3A44" }, ownerPass: "admin",
+    logo: "", theme: { accent: "#F2A900", dark: "#2B3A44" }, ownerPass: "admin", teamPass: "team",
     pickupHours: WINDOWS,
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
@@ -307,13 +307,14 @@ function priceExplain(type, days) {
 export default function App() {
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState("owner"); // owner | customer | landing
+  const [mode, setMode] = useState("owner"); // owner | customer | landing | employee
   const [custStart, setCustStart] = useState("book"); // initial customer view
   const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
   const [detail, setDetail] = useState(null);   // booking detail modal
   const [extend, setExtend] = useState(null);   // extend modal
   const [authed, setAuthed] = useState(false);  // owner signed in this browser session
+  const [employeeId, setEmployeeId] = useState(null); // team member signed in this browser session
 
   useEffect(() => {
     (async () => {
@@ -322,6 +323,7 @@ export default function App() {
       setLoading(false);
     })();
     try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_owner") === "1") setAuthed(true); } catch (e) { /* ignore */ }
+    try { if (typeof window !== "undefined") { const eid = sessionStorage.getItem("yardhand_emp"); if (eid) setEmployeeId(eid); } } catch (e) { /* ignore */ }
     // realtime: pick up changes made on another device (ignore our own echoes)
     return subscribeWorkspace((incoming) => {
       setState((prev) => JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming);
@@ -385,15 +387,20 @@ export default function App() {
   return (
     <div className="min-h-screen" style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
       {mode === "landing" ? (
-        <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} />
+        <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} team={() => setMode("employee")} />
       ) : mode === "owner" && !authed ? (
         <OwnerLogin state={state} onBack={() => setMode("landing")}
           onAuthed={() => { setAuthed(true); try { sessionStorage.setItem("yardhand_owner", "1"); } catch (e) {} }} />
+      ) : mode === "employee" && !employeeId ? (
+        <EmployeeLogin state={state} onBack={() => setMode("landing")}
+          onAuthed={(id) => { setEmployeeId(id); try { sessionStorage.setItem("yardhand_emp", id); } catch (e) {} }} />
       ) : (
         <>
           <TopBar state={state} mode={mode} setMode={setMode}
-            signOut={() => { setAuthed(false); try { sessionStorage.removeItem("yardhand_owner"); } catch (e) {} setMode("landing"); }} />
-          {mode === "owner" ? (
+            signOut={() => { setAuthed(false); setEmployeeId(null); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); }} />
+          {mode === "employee" ? (
+            <EmployeePortal {...{ state, employeeId, setBooking, update, flash, signOut: () => { setEmployeeId(null); try { sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); } }} />
+          ) : mode === "owner" ? (
             <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24">
               <OwnerNav tab={tab} setTab={setTab} />
               {tab === "dashboard" && <Dashboard {...{ state, typeBySize, trailerStatus, currentBooking, setBooking, flash, openDetail: setDetail }} />}
@@ -431,7 +438,7 @@ export default function App() {
 }
 
 /* ---------------- LANDING (public marketing page) --------------- */
-function Landing({ state, typeBySize, go, owner }) {
+function Landing({ state, typeBySize, go, owner, team }) {
   const b = state.business;
   const steps = [
     { icon: Truck, t: "Pick your size", d: "Choose a 5×8, 7×12, or 7×14 dump trailer for your job." },
@@ -570,7 +577,10 @@ function Landing({ state, typeBySize, go, owner }) {
       <footer style={{ background: T.steelDk }}>
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-sm" style={{ color: "#B7C0C6" }}>{b.name} · {b.yard} · {b.phone}</div>
-          <button onClick={owner} className="text-xs" style={{ color: "#6C7178" }}>Owner login</button>
+          <div className="flex items-center gap-4">
+            {team && <button onClick={team} className="text-xs" style={{ color: "#6C7178" }}>Team sign-in</button>}
+            <button onClick={owner} className="text-xs" style={{ color: "#6C7178" }}>Owner login</button>
+          </div>
         </div>
       </footer>
     </div>
@@ -598,7 +608,7 @@ function TopBar({ state, mode, setMode, signOut }) {
             <button onClick={() => setMode("landing")} className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2" }}>
               <Home size={15} /> <span className="hidden sm:inline">Site</span>
             </button>
-            {[["owner", "Owner", LayoutDashboard], ["customer", "Book a trailer", Truck]].map(([m, label, Icon]) => (
+            {[["owner", "Owner", LayoutDashboard], ["employee", "Team", Users], ["customer", "Book a trailer", Truck]].map(([m, label, Icon]) => (
               <button key={m} onClick={() => setMode(m)}
                 className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5 transition"
                 style={mode === m ? { background: T.amber, color: T.steelDk } : { color: "#D8DEE2" }}>
@@ -606,7 +616,7 @@ function TopBar({ state, mode, setMode, signOut }) {
               </button>
             ))}
           </div>
-          {mode === "owner" && signOut && (
+          {(mode === "owner" || mode === "employee") && signOut && (
             <button onClick={signOut} title="Sign out" className="px-2.5 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2", border: "1px solid rgba(255,255,255,0.15)" }}>
               <LogOut size={15} /> <span className="hidden md:inline">Sign out</span>
             </button>
@@ -644,6 +654,221 @@ function OwnerLogin({ state, onAuthed, onBack }) {
         <button onClick={onBack} className="w-full mt-4 text-xs font-semibold" style={{ color: "#B7C0C6" }}>← Back to public site</button>
         <p className="text-[11px] text-center mt-3" style={{ color: "#6C7178" }}>Prototype sign-in. Real accounts, roles, and secure passwords get wired up when this goes live.</p>
       </div>
+    </div>
+  );
+}
+
+/* ---------------- EMPLOYEE (team member) sign-in + portal --------------- */
+function EmployeeLogin({ state, onAuthed, onBack }) {
+  const b = state.business;
+  const [id, setId] = useState("");
+  const [code, setCode] = useState("");
+  const [err, setErr] = useState(false);
+  const expected = b.teamPass || "team";
+  const digits = (s) => (s || "").replace(/\D/g, "");
+  const submit = () => {
+    const q = id.trim().toLowerCase();
+    if (!q || !code.trim() || code.trim() !== expected) { setErr(true); return; }
+    const me = (state.contractors || []).find((c) => c.active && ((c.email || "").toLowerCase() === q || (digits(c.phone) && digits(c.phone) === digits(q))));
+    if (!me) { setErr(true); return; }
+    onAuthed(me.id);
+  };
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: T.steelDk }}>
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center text-center mb-6">
+          <BrandMark logo={b.logo} size={56} />
+          <div className="mt-3 text-xl font-extrabold text-white">{b.name}</div>
+          <div className="text-sm" style={{ color: "#B7C0C6" }}>Team sign-in</div>
+        </div>
+        <div className="rounded-2xl p-5 space-y-3" style={{ background: T.panel }}>
+          <Field label="Your phone or email"><input value={id} autoFocus onChange={(e) => { setId(e.target.value); setErr(false); }} onKeyDown={(e) => { if (e.key === "Enter") submit(); }} placeholder="704-555-0301 or you@company.com" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${err ? T.red : T.line}` }} /></Field>
+          <Field label="Team code"><input value={code} onChange={(e) => { setCode(e.target.value); setErr(false); }} onKeyDown={(e) => { if (e.key === "Enter") submit(); }} placeholder="Ask your manager" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${err ? T.red : T.line}` }} /></Field>
+          {err && <div className="text-xs font-semibold" style={{ color: T.red }}>Check your phone/email and the team code, then try again.</div>}
+          <button onClick={submit} className="w-full py-2.5 rounded-lg font-extrabold" style={{ background: T.amber, color: T.steelDk }}>Sign in</button>
+          {expected === "team" && <div className="text-[11px] p-2 rounded-lg text-center" style={{ background: T.amberSoft, color: T.amberDk }}>Demo · team code is <b>team</b> (owner sets it in Settings). Try <b>704-555-0301</b>.</div>}
+        </div>
+        <button onClick={onBack} className="w-full mt-4 text-xs font-semibold" style={{ color: "#B7C0C6" }}>← Back to public site</button>
+        <p className="text-[11px] text-center mt-3" style={{ color: "#6C7178" }}>Prototype sign-in. Individual secure logins get wired up when this goes live.</p>
+      </div>
+    </div>
+  );
+}
+
+function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut }) {
+  const me = (state.contractors || []).find((c) => c.id === employeeId);
+  const [editAvail, setEditAvail] = useState(null);
+  const [tab, setTab] = useState("jobs"); // jobs | hours | pay
+  if (!me) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-16 text-center">
+        <div className="text-sm" style={{ color: T.sub }}>You've been signed out.</div>
+        <button onClick={signOut} className="mt-3 px-4 py-2 rounded-lg font-bold" style={{ background: T.amber, color: T.steelDk }}>Back to sign-in</button>
+      </div>
+    );
+  }
+  const biz = state.business;
+  const first = me.name.split(" ")[0];
+  const digits = (s) => (s || "").replace(/\D/g, "");
+  const mine = [
+    ...legRuns(state).filter((r) => r.by === employeeId).map((r) => ({ ...r, kind: "road", fee: biz.contractorFee })),
+    ...yardEvents(state).filter((e) => e.by === employeeId).map((e) => ({ ...e, kind: "yard", fee: biz.counterFee, label: e.leg === "out" ? "Pickup" : "Return" })),
+  ].map((j) => ({ ...j, bk: state.bookings.find((x) => x.id === j.bookingId) })).filter((j) => j.bk);
+  const active = mine.filter((j) => j.bk.status === "reserved" || j.bk.status === "out").sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")));
+  const todayJobs = active.filter((j) => j.date <= today());
+  const upcoming = active.filter((j) => j.date > today());
+  const doneJob = (j) => j.date && j.date < today();
+  const owedJobs = mine.filter((j) => !j.paid && doneJob(j));
+  const owedTotal = owedJobs.reduce((s, j) => s + j.fee, 0);
+  const paidJobs = mine.filter((j) => j.paid).sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 10);
+
+  const addPhotos = async (bk, leg, files) => {
+    if (!files || !files.length) return;
+    const urls = [];
+    for (const f of Array.from(files)) { const u = await fileToResizedDataURL(f); if (u) urls.push(u); }
+    if (!urls.length) return;
+    update((n) => {
+      const x = n.bookings.find((y) => y.id === bk.id);
+      const key = leg === "out" ? "inspectOutPhotos" : "inspectInPhotos";
+      x[key] = [...(x[key] || []), ...urls].slice(0, 8);
+      x[leg === "out" ? "inspectOutAt" : "inspectInAt"] = new Date().toISOString();
+    });
+    flash("Photos added to the job.");
+  };
+
+  const JobCard = ({ j }) => {
+    const bk = j.bk, isOut = j.leg === "out";
+    const what = isOut
+      ? (j.kind === "road" ? "Deliver to the customer" : "Hand off at the yard (customer pickup)")
+      : (j.kind === "road" ? "Collect from the customer" : "Receive at the yard (customer return)");
+    const actLabel = isOut ? (j.kind === "road" ? "Mark delivered" : "Mark handed over") : (j.kind === "road" ? "Mark collected" : "Mark received");
+    const canAct = isOut ? bk.status === "reserved" : bk.status === "out";
+    const waitOut = !isOut && bk.status === "reserved";
+    const overdue = bk.status === "out" && bk.end < today();
+    const photos = (isOut ? bk.inspectOutPhotos : bk.inspectInPhotos) || [];
+    const addr = bk.address;
+    return (
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0" style={{ color: "#fff", background: isOut ? T.amberDk : T.blue }}>{j.label}</span>
+            <div className="min-w-0">
+              <div className="font-bold truncate">{bk.name}</div>
+              <div className="text-xs" style={{ color: T.sub }}>{fmtLong(j.date)}{j.time ? ` · ${j.time}` : ""}</div>
+            </div>
+          </div>
+          {overdue ? <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ color: T.red, background: T.redSoft }}>OVERDUE</span>
+            : bk.status === "out" ? <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ color: T.blue, background: T.blueSoft }}>OUT</span>
+            : <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ color: T.amberDk, background: T.amberSoft }}>RESERVED</span>}
+        </div>
+        <div className="text-sm mt-2 font-semibold">{what}</div>
+        {addr && <div className="text-xs mt-0.5 flex items-center gap-1" style={{ color: T.sub }}><MapPin size={12} /> {addr}</div>}
+        <div className="flex gap-2 mt-3 flex-wrap">
+          {bk.phone && <a href={`tel:${digits(bk.phone)}`} className="text-xs font-bold px-2.5 py-1.5 rounded flex items-center gap-1" style={{ background: T.paper, color: T.steel, border: `1px solid ${T.line}` }}><Phone size={13} /> Call</a>}
+          {addr && <a href={`https://maps.google.com/?q=${encodeURIComponent(addr)}`} target="_blank" rel="noreferrer" className="text-xs font-bold px-2.5 py-1.5 rounded flex items-center gap-1" style={{ background: T.paper, color: T.steel, border: `1px solid ${T.line}` }}><MapPin size={13} /> Directions</a>}
+          <label className="text-xs font-bold px-2.5 py-1.5 rounded flex items-center gap-1 cursor-pointer" style={{ background: T.paper, color: T.steel, border: `1px solid ${T.line}` }}>
+            <ImageIcon size={13} /> {photos.length ? `Photos (${photos.length})` : "Add photos"}
+            <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => addPhotos(bk, j.leg, e.target.files)} />
+          </label>
+        </div>
+        {photos.length > 0 && (
+          <div className="flex gap-1.5 mt-2 flex-wrap">
+            {photos.map((p, i) => <img key={i} src={p} alt="" onClick={() => openStoredFile(p)} className="w-12 h-12 rounded object-cover cursor-pointer" style={{ border: `1px solid ${T.line}` }} />)}
+          </div>
+        )}
+        {canAct ? (
+          <button onClick={() => { setBooking(bk.id, { status: isOut ? "out" : "returned" }); flash(isOut ? "Marked out — nice work." : "Marked returned — thank you!", true); }}
+            className="w-full mt-3 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: T.steel, color: "#fff" }}>
+            {isOut ? <Truck size={16} /> : <RotateCcw size={16} />} {actLabel}
+          </button>
+        ) : waitOut ? (
+          <div className="mt-3 text-xs p-2 rounded-lg text-center" style={{ background: T.paper, color: T.sub }}>Waiting on pickup — you'll mark it returned once it's gone out.</div>
+        ) : (
+          <div className="mt-3 text-xs p-2 rounded-lg text-center flex items-center justify-center gap-1" style={{ background: T.greenSoft, color: T.green }}><Check size={13} /> Done</div>
+        )}
+      </Card>
+    );
+  };
+
+  const horizon = biz.bookHorizonDays || 30;
+  const days = Array.from({ length: horizon }, (_, i) => addDays(today(), i));
+
+  return (
+    <div className="max-w-lg mx-auto px-4 md:px-6 pb-24">
+      <div className="py-5">
+        <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: T.amberDk }}>Team</div>
+        <h1 className="text-2xl font-extrabold tracking-tight">Hi, {first} 👋</h1>
+        <p className="text-sm" style={{ color: T.sub }}>{todayJobs.length ? `You have ${todayJobs.length} job${todayJobs.length > 1 ? "s" : ""} to handle today.` : "No jobs for today — you're clear."}</p>
+      </div>
+
+      <div className="flex gap-1 p-1 rounded-lg mb-4" style={{ background: T.graySoft }}>
+        {[["jobs", "My jobs", Truck], ["hours", "My hours", CalendarClock], ["pay", "My pay", DollarSign]].map(([v, l, Icon]) => (
+          <button key={v} onClick={() => setTab(v)} className="flex-1 py-2 rounded-md text-sm font-bold flex items-center justify-center gap-1.5" style={tab === v ? { background: "#fff", color: T.ink, boxShadow: "0 1px 2px rgba(0,0,0,0.08)" } : { color: T.sub }}><Icon size={15} /> {l}</button>
+        ))}
+      </div>
+
+      {tab === "jobs" && (
+        <div className="space-y-5">
+          <div>
+            <div className="text-sm font-bold mb-2">Today &amp; overdue</div>
+            {todayJobs.length === 0 ? <Empty>Nothing to do today.</Empty> : <div className="space-y-3">{todayJobs.map((j) => <JobCard key={j.key} j={j} />)}</div>}
+          </div>
+          <div>
+            <div className="text-sm font-bold mb-2">Coming up</div>
+            {upcoming.length === 0 ? <Empty>No upcoming jobs assigned to you.</Empty> : <div className="space-y-3">{upcoming.map((j) => <JobCard key={j.key} j={j} />)}</div>}
+          </div>
+        </div>
+      )}
+
+      {tab === "hours" && (
+        <Card className="p-4">
+          <div className="text-sm font-bold">Set when you can work</div>
+          <div className="text-xs mt-1 mb-3" style={{ color: T.sub }}>Tap a day to choose your hours. You can only be booked for times you mark free. <b style={{ color: T.green }}>Green</b> = free, blank = off. This updates the schedule your manager sees instantly.</div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {days.map((d) => {
+              const wins = (me.avail && me.avail[d]) || [];
+              const cover = wins.length;
+              const dd = new Date(d + "T00:00:00");
+              return (
+                <button key={d} onClick={() => setEditAvail({ driverId: me.id, date: d })} className="rounded-lg p-1.5 text-center" style={{ background: cover === 0 ? T.paper : cover >= 4 ? T.green : cover >= 2 ? "#8FBF6F" : T.amber, border: `1px solid ${T.line}` }}>
+                  <div className="text-[9px] font-bold uppercase" style={{ color: cover ? "#fff" : T.sub }}>{dd.toLocaleDateString("en-US", { weekday: "short" })}</div>
+                  <div className="text-xs font-bold tabular-nums" style={{ color: cover ? "#fff" : T.ink }}>{dd.getDate()}</div>
+                  <div className="text-[8px]" style={{ color: cover ? "rgba(255,255,255,0.85)" : T.sub }}>{cover ? `${cover}h` : "—"}</div>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {tab === "pay" && (
+        <div className="space-y-4">
+          <Card className="p-4" style={{ background: T.steelDk }}>
+            <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amber }}>Owed to you</div>
+            <div className="text-4xl font-extrabold text-white tabular-nums">${owedTotal}</div>
+            <div className="text-xs mt-1" style={{ color: "#B7C0C6" }}>{owedJobs.length} finished job{owedJobs.length === 1 ? "" : "s"} not paid yet · your manager pays and marks these off</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-sm font-bold mb-2">Recently paid</div>
+            {paidJobs.length === 0 ? <Empty>No paid jobs yet.</Empty> : (
+              <div className="space-y-1.5">
+                {paidJobs.map((j) => (
+                  <div key={j.key} className="flex items-center justify-between text-sm p-2 rounded-lg" style={{ background: T.paper }}>
+                    <div className="min-w-0 truncate"><span className="font-semibold">{j.label}</span> · {j.bk.name} <span className="text-xs" style={{ color: T.sub }}>· {fmt(j.date)}</span></div>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded shrink-0" style={{ color: T.green, background: T.greenSoft }}>Paid ${j.fee}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      <div className="text-center mt-8">
+        <button onClick={signOut} className="text-xs font-bold flex items-center gap-1 mx-auto" style={{ color: T.sub }}><LogOut size={13} /> Sign out</button>
+      </div>
+
+      {editAvail && <AvailabilityEditor {...editAvail} state={state} update={update} onClose={() => setEditAvail(null)} />}
     </div>
   );
 }
@@ -1261,6 +1486,20 @@ function fileToScaledDataURL(file, maxW = 900, mime = "image/jpeg", quality = 0.
 /* read a file (image or PDF) as a raw data URL — for COIs */
 function fileToDataURL(file) {
   return new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(file); });
+}
+/* like fileToDataURL but downscales photos (canvas → JPEG) so many job photos don't bloat the cloud blob */
+async function fileToResizedDataURL(file, maxDim = 1280, quality = 0.72) {
+  const dataUrl = await fileToDataURL(file);
+  if (!dataUrl || !/^data:image\//.test(dataUrl)) return dataUrl; // non-image (e.g. PDF) → keep as-is
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    if (scale >= 1) return dataUrl;
+    const cw = Math.round(img.width * scale), ch = Math.round(img.height * scale);
+    const canvas = document.createElement("canvas"); canvas.width = cw; canvas.height = ch;
+    canvas.getContext("2d").drawImage(img, 0, 0, cw, ch);
+    return canvas.toDataURL("image/jpeg", quality);
+  } catch (e) { return dataUrl; }
 }
 /* open a stored data-URL document in a new tab */
 async function openStoredFile(dataUrl) {
@@ -2097,7 +2336,11 @@ function SettingsView({ state, setState, flash }) {
         </div>
         <p className="text-xs" style={{ color: T.sub }}>The password you use to sign in to this dashboard. Anyone with it can see your bookings and finances — keep it private.</p>
         <Field label="Dashboard password"><input type="text" value={b.ownerPass || ""} onChange={(e) => set({ ownerPass: e.target.value })} placeholder="Set a password" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
-        <p className="text-[11px]" style={{ color: T.sub }}>Prototype note: this is a simple gate stored in your browser. Real logins with individual staff accounts, roles, and encrypted passwords come with the database phase.</p>
+        <div className="pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
+          <Field label="Team code (your crew signs in with this + their phone/email)"><input type="text" value={b.teamPass || ""} onChange={(e) => set({ teamPass: e.target.value })} placeholder="e.g. a short word your crew will remember" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+          <p className="text-[11px] mt-1" style={{ color: T.sub }}>Employees open <b>Team sign-in</b> (on your public site / “Team” tab), enter their phone or email and this code, and get their own job list — no access to bookings or finances. Share this code only with your crew.</p>
+        </div>
+        <p className="text-[11px]" style={{ color: T.sub }}>Prototype note: these are simple gates stored in your browser. Real logins with individual staff accounts, roles, and encrypted passwords come with the database phase.</p>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -3198,19 +3441,41 @@ function BookingDetail({ b, state, typeBySize, onClose, setBooking, flash, onExt
           <CircleDot size={14} style={{ color: T.steel }} />
           <span className="text-xs font-bold">Inspection & photos</span>
         </div>
-        <div className="p-3 space-y-2">
-          {[["out", "Checkout (at pickup)", b.inspectOutAt], ["in", "Return (at drop-off)", b.inspectInAt]].map(([leg, label, at]) => (
-            <div key={leg} className="flex items-center justify-between gap-2">
-              <div className="text-xs">
-                <div className="font-semibold">{label}</div>
-                <div style={{ color: at ? T.green : T.sub }}>{at ? `Logged ${new Date(at).toLocaleString()}` : "Not logged yet"}</div>
+        <div className="p-3 space-y-3">
+          {[["out", "Checkout (at pickup)", b.inspectOutAt, b.inspectOutPhotos], ["in", "Return (at drop-off)", b.inspectInAt, b.inspectInPhotos]].map(([leg, label, at, photos]) => {
+            const pics = photos || [];
+            const addOwnerPhotos = async (files) => {
+              if (!files || !files.length) return;
+              const urls = [];
+              for (const f of Array.from(files)) { const u = await fileToResizedDataURL(f); if (u) urls.push(u); }
+              if (!urls.length) return;
+              setBooking(b.id, {
+                [leg === "out" ? "inspectOutPhotos" : "inspectInPhotos"]: [...pics, ...urls].slice(0, 8),
+                [leg === "out" ? "inspectOutAt" : "inspectInAt"]: new Date().toISOString(),
+              });
+              flash("Photos added.");
+            };
+            return (
+              <div key={leg}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs">
+                    <div className="font-semibold">{label}</div>
+                    <div style={{ color: at ? T.green : T.sub }}>{at ? `${pics.length ? pics.length + " photo" + (pics.length > 1 ? "s · " : " · ") : ""}${new Date(at).toLocaleString()}` : "Not logged yet"}</div>
+                  </div>
+                  <label className="text-[11px] font-bold px-2.5 py-1.5 rounded cursor-pointer shrink-0" style={{ background: T.steel, color: "#fff" }}>
+                    {pics.length ? "Add photos" : "Add photos"}
+                    <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => addOwnerPhotos(e.target.files)} />
+                  </label>
+                </div>
+                {pics.length > 0 && (
+                  <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {pics.map((p, i) => <img key={i} src={p} alt="" onClick={() => openStoredFile(p)} className="w-14 h-14 rounded object-cover cursor-pointer" style={{ border: `1px solid ${T.line}` }} />)}
+                  </div>
+                )}
               </div>
-              {at ? <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ color: T.green, background: T.greenSoft }}>Photos on file</span>
-                : <button onClick={() => setBooking(b.id, leg === "out" ? { inspectOutAt: new Date().toISOString() } : { inspectInAt: new Date().toISOString() })}
-                    className="text-[11px] font-bold px-2.5 py-1.5 rounded" style={{ background: T.steel, color: "#fff" }}>Log photos taken</button>}
-            </div>
-          ))}
-          <div className="text-[11px]" style={{ color: T.sub }}>Take timestamped photos from the same angles at pickup and return (tires, lights, cylinder, bed/sides, hitch, empty & clean). In the live app these upload and attach to the booking; here you log that they were taken.</div>
+            );
+          })}
+          <div className="text-[11px]" style={{ color: T.sub }}>Your crew can snap these right from their phone in the Team portal — same angles at pickup and return (tires, lights, cylinder, bed/sides, hitch, empty &amp; clean). They attach here automatically. Tap a photo to open it full-size.</div>
         </div>
       </div>
 

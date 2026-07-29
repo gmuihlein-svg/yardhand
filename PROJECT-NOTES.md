@@ -101,6 +101,26 @@ Team & dispatch · Fleet · Settings.
   booking's `end`) is marked with a ↻ icon and a dark right edge, so it's easy to see when
   each trailer is due back. Marking a trailer out/returned lives on the Dashboard "Pickups &
   returns today" rows, the Bookings list row buttons, and inside a booking's detail.
+- **Employee (team) portal** ✅ — a fourth app mode (`owner | customer | landing | employee`).
+  Crew reach it via **Team sign-in** on the public site or the **Team** tab in the top bar.
+  Sign-in = their **phone or email** (must match an active contractor) + a shared **team code**
+  (`business.teamPass`, default `team`, set in Settings → Owner access). Session kept in
+  `sessionStorage` (`yardhand_emp`). Components: `EmployeeLogin`, `EmployeePortal`. Three tabs:
+  - **My jobs** — their assigned legs (road runs + yard handoffs) split Today/overdue vs
+    Coming up. Each card: what to do, customer, address, **Call** (tel:), **Directions**
+    (maps), **Add photos** (camera), and the status action — an OUT leg marks the booking
+    `out`, a RETURN leg marks it `returned` (gated: can't return before it's out).
+  - **My hours** — a tap-to-set availability calendar (writes `contractor.avail`, same data
+    the owner's schedule grid reads) so crew set their own hours; opens `AvailabilityEditor`.
+  - **My pay** — read-only: total owed for finished-unpaid work + recently-paid list. Owner
+    still does the actual paying in Team & dispatch → To pay.
+- **Inspection photos** ✅ — real photo capture (task #8 done). Employees (and the owner in
+  the booking detail) attach checkout/return photos; stored as **downscaled** data URLs on
+  `booking.inspectOutPhotos[]` / `inspectInPhotos[]` (+ `inspectOutAt`/`inspectInAt`), capped
+  at 8 each, shrunk via `fileToResizedDataURL` (canvas → JPEG) so the cloud blob stays small.
+  Owner booking-detail inspection section shows the thumbnails (tap to open full-size).
+- **Customer self-extend** already exists — "Manage my booking" → **Extend** (`CustExtend`):
+  add days, see the extra charge, auto-swaps to a free same-size unit if theirs is booked next.
 - **Undo:** consequential actions (mark paid, mark returned/out, cancel, extend, reassign,
   sick-day reassign, auto-assign-all, remove equipment type, maintenance toggle, and even
   "Reset demo data") show a one-tap **Undo** in the toast (~6s) that restores the full
@@ -175,8 +195,10 @@ the code per customer.
   later normalize into per-entity tables + real per-user auth/RLS (the multi-tenant foundation).
 - **#5 Owner login** ✅ done (prototype gate).
 - **#7** Notify workforce when assigned a job (email/SMS).
-- **#8** Real before/after inspection photo upload.
-- **#9** Employee/workforce self-service portal.
+- **#8** Real before/after inspection photo upload. ✅ **DONE** (crew + owner attach photos to
+  the booking; downscaled data URLs).
+- **#9** Employee/workforce self-service portal. ✅ **DONE** (Team sign-in → My jobs / My hours /
+  My pay; mark out/returned, photos, call, directions, set own availability).
 - **#10** Multi-tenant / white-label foundation (sell to other businesses).
 - **#11** Availability workflow: standing weekly schedule + exceptions.
 - **#12** Send customer their booking confirmation (absorbed by #17).
