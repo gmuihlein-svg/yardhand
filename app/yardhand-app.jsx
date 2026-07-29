@@ -349,11 +349,13 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const s = await loadWorkspace();
+      const seeded = (await loadWorkspace()) || structuredClone(SEED);
       // backfill any newly-added business defaults (e.g. timezone, team code, buffers) so older
       // saved workspaces pick them up and Settings shows them explicitly — user values always win.
-      if (s && s.business) s.business = { ...structuredClone(SEED.business), ...s.business };
-      setState(s || structuredClone(SEED));
+      if (seeded.business) seeded.business = { ...structuredClone(SEED.business), ...seeded.business };
+      // give each equipment its OWN contract (copied from the template) if it doesn't have one yet
+      if (Array.isArray(seeded.types)) seeded.types.forEach((t) => { if (!t.agreementText) t.agreementText = (seeded.business && seeded.business.agreementText) || ""; });
+      setState(seeded);
       setLoading(false);
     })();
     try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_owner") === "1") setAuthed(true); } catch (e) { /* ignore */ }
@@ -2348,7 +2350,8 @@ function SettingsView({ state, setState, flash }) {
   const [newRem, setNewRem] = useState(24); // hours for a new reminder
   const set = (patch) => setState((s) => ({ ...s, business: { ...s.business, ...patch } }));
   const setType = (size, patch) => setState((s) => ({ ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) }));
-  const addType = (t) => { setState((s) => ({ ...s, types: [...s.types, t] })); setAddingType(false); flash(`Added ${t.name}.`, true); };
+  const addType = (t) => { const withContract = { ...t, agreementText: t.agreementText || b.agreementText || "" }; setState((s) => ({ ...s, types: [...s.types, withContract] })); setAddingType(false); flash(`Added ${t.name}.`, true); };
+  const copyContractToAll = (text) => { setState((s) => ({ ...s, types: s.types.map((t) => ({ ...t, agreementText: text })) })); flash("Contract copied to every piece of equipment.", true); };
   const removeType = (size) => { if (state.trailers.some((tr) => tr.size === size)) { flash("Remove its units first."); return; } setState((s) => ({ ...s, types: s.types.filter((t) => t.size !== size) })); flash("Equipment type removed.", true); };
   const onPhoto = async (size, file) => { if (!file) return; const url = await fileToScaledDataURL(file); if (url) { setType(size, { image: url }); flash("Photo updated."); } else flash("Couldn't read that image."); };
   const onLogo = async (file) => { if (!file) return; const url = await fileToScaledDataURL(file, 400, "image/png"); if (url) { set({ logo: url }); flash("Logo updated."); } else flash("Couldn't read that image."); };
@@ -2491,9 +2494,15 @@ function SettingsView({ state, setState, flash }) {
             <textarea value={t.tow || ""} onChange={(e) => setType(t.size, { tow: e.target.value })} rows={2} placeholder="The requirements — vehicle & hitch, operator license, transport, fuel/power, PPE… whatever renters must know."
               className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
             <div className="text-[10px] font-bold uppercase tracking-wide mt-2 mb-1 flex items-center gap-1" style={{ color: T.blue }}><FileText size={11} /> Rental contract for this equipment</div>
-            <textarea value={t.agreementText || ""} onChange={(e) => setType(t.size, { agreementText: e.target.value })} rows={3} placeholder="Leave blank to use your standard agreement. Or paste a contract specific to this equipment — customers renting it e-sign THIS instead."
-              className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${t.agreementText ? T.amber : T.line}` }} />
-            <p className="text-[10px] mt-1" style={{ color: T.sub }}>{t.agreementText ? "Custom contract active for this equipment — renters sign it instead of the standard one." : "Blank = renters sign your Standard rental agreement (further down this page)."}</p>
+            <textarea value={t.agreementText || ""} onChange={(e) => setType(t.size, { agreementText: e.target.value })} rows={4} placeholder="Paste the contract customers e-sign when they rent THIS equipment (rental terms + liability waiver)."
+              className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
+            <div className="flex items-center justify-between gap-2 mt-1">
+              <p className="text-[10px]" style={{ color: t.agreementText ? T.green : T.red }}>{t.agreementText ? "This is what renters of this equipment sign." : "⚠ No contract set — add one so renters have something to sign."}</p>
+              {t.agreementText && state.types.length > 1 && (
+                <button onClick={() => setConfirm({ title: "Copy to all equipment?", body: `This replaces the contract on all ${state.types.length} pieces of equipment with ${t.name}'s. Undo available right after.`, confirmLabel: "Copy to all", onYes: () => copyContractToAll(t.agreementText) })}
+                  className="text-[10px] font-bold px-2 py-1 rounded shrink-0 whitespace-nowrap" style={{ background: T.steel, color: "#fff" }}>Copy to all equipment</button>
+              )}
+            </div>
           </div>
         ))}
         <p className="text-[11px]" style={{ color: T.sub }}>Photos are saved to this browser and auto-shrunk to fit. When you go live, they'll move to cloud storage.</p>
@@ -2639,9 +2648,9 @@ function SettingsView({ state, setState, flash }) {
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><ShieldCheck size={16} style={{ color: T.amberDk }} /></span>
-          <h3 className="font-bold text-sm uppercase tracking-wide">Standard rental agreement & waiver</h3>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Contract template (for new equipment)</h3>
         </div>
-        <p className="text-xs" style={{ color: T.sub }}>Your <b>default</b> contract — it combines the rental terms (the contract) and the liability waiver in one document customers read and e-sign before paying. Their typed signature + timestamp is saved to the booking. <b>Need different terms for specific equipment?</b> Give that equipment its own contract higher up on this page, under <b>“Equipment photos &amp; descriptions” → the “Rental contract for this equipment” box</b>; anything left blank falls back to this one. Edit to fit your attorney-reviewed agreement.</p>
+        <p className="text-xs" style={{ color: T.sub }}>Customers sign the contract set on <b>each piece of equipment</b> (up under “Equipment photos &amp; descriptions” → “Rental contract for this equipment”) — that's where the real signing happens. This box is just a <b>starting template</b>: whatever's here gets copied onto any <b>new</b> equipment you add, so you're not starting from a blank page. Editing it here does <b>not</b> change existing equipment's contracts. Combines rental terms + liability waiver in one signed document.</p>
         <textarea value={b.agreementText} onChange={(e) => set({ agreementText: e.target.value })} rows={8}
           className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}`, fontFamily: "ui-monospace, monospace" }} />
         <p className="text-[11px]" style={{ color: T.sub }}>Prototype note: this captures a signature record. A production e-sign service (DocuSign, Dropbox Sign, SignWell) adds a tamper-evident audit trail and secure storage when you go live.</p>
