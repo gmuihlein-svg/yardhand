@@ -861,6 +861,11 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
         <p className="text-sm" style={{ color: T.sub }}>{todayJobs.length ? `You have ${todayJobs.length} job${todayJobs.length > 1 ? "s" : ""} to handle today.` : "No jobs for today — you're clear."}</p>
       </div>
 
+      <HelpNote title="How your portal works">
+        <p><b>My jobs</b> — your assigned deliveries, pickups, and returns. Tap <b>Call</b> or <b>Directions</b> to reach the customer, <b>Add photos</b> to snap checkout/return pics, and the big button to mark a job <b>delivered / handed over / collected / received</b> when it's done (your manager sees it instantly).</p>
+        <p><b>My hours</b> — tap any day to set the hours you can work as a range; you'll only be booked for times you mark free. <b>My pay</b> — what you're owed and what's been paid.</p>
+      </HelpNote>
+
       <div className="flex gap-1 p-1 rounded-lg mb-4" style={{ background: T.graySoft }}>
         {[["jobs", "My jobs", Truck], ["hours", "My hours", CalendarClock], ["pay", "My pay", DollarSign]].map(([v, l, Icon]) => (
           <button key={v} onClick={() => setTab(v)} className="flex-1 py-2 rounded-md text-sm font-bold flex items-center justify-center gap-1.5" style={tab === v ? { background: "#fff", color: T.ink, boxShadow: "0 1px 2px rgba(0,0,0,0.08)" } : { color: T.sub }}><Icon size={15} /> {l}</button>
@@ -1045,6 +1050,12 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
           <span className="w-2 h-2 rounded-full" style={{ background: T.green }} /> {stats.available} of {state.trailers.length} trailers free
         </div>
       </div>
+
+      <HelpNote title="How to use your dashboard">
+        <p>This is your home base — <b>open it first each day</b>. The <b>Start here</b> box below lists exactly what needs you today (overdue trailers, pickups/returns, jobs needing a driver, COIs, payments). Clear that list and you're on top of things.</p>
+        <p>The four <b>tiles</b> (Out on rent, Available, Due back today, Overdue) are tappable — they open the matching list. <b>Pickups &amp; returns today</b> has one-tap buttons to mark trailers out or back. Everything updates live across your devices and your crew's.</p>
+        <p>Use the tabs up top for the rest: Calendar, Bookings, Customers, Team &amp; dispatch, Fleet, Insights, and Settings — each has its own “How this page works” note.</p>
+      </HelpNote>
 
       {/* Start-here daily checklist — what needs the owner today */}
       <Card className="p-4">
@@ -1255,6 +1266,11 @@ function CalendarBoard({ state, trailerStatus, openDetail }) {
   return (
     <div className="space-y-6">
       <SectionTitle>Availability board · next {horizon} days</SectionTitle>
+      <HelpNote>
+        <p>Each <b>row is a trailer</b>, each <b>column is a day</b>. A colored bar means that trailer is spoken for — amber = reserved, blue = out on rent, red = overdue, gray = down for maintenance. Empty = free to book.</p>
+        <p><b>Today</b> is the highlighted column at the left. The little <b>↻</b> on the last day of a bar is when that trailer is <b>due back</b>.</p>
+        <p><b>Tap any colored bar</b> to open that booking. Showing the location picked in the top bar (if you run more than one).</p>
+      </HelpNote>
       <Card className="p-3 overflow-x-auto">
         <div style={{ minWidth: 60 + horizon * 34 }}>
           <div className="grid" style={{ gridTemplateColumns: `120px repeat(${horizon}, 1fr)` }}>
@@ -1329,6 +1345,11 @@ function BookingsView({ state, typeBySize, setBooking, flash, openDetail, openEx
   return (
     <div className="space-y-6">
       <SectionTitle>Bookings</SectionTitle>
+      <HelpNote>
+        <p>Every reservation, filterable by <b>Active / Overdue / Completed / Cancelled / All</b>. Tap a booking to open its full detail — signed agreement, COI, crew confirmations, notifications, and photos.</p>
+        <p>The quick buttons on each row move a rental through its life: <b>Picked up/Delivered</b> → <b>Returned/Collected</b>, plus <b>Extend</b> and <b>Cancel</b>. A cancel shows the refund first.</p>
+        <p>Search the box by name, phone, email, or confirmation code.</p>
+      </HelpNote>
       <div className="flex gap-1.5 flex-wrap">
         {filters.map(([id, l]) => (
           <button key={id} onClick={() => setFilter(id)} className="px-3 py-1.5 rounded-lg text-xs font-bold"
@@ -1454,6 +1475,11 @@ function FleetView({ state, locId, typeBySize, trailerStatus, currentBooking, up
           <Plus size={16} /> Add equipment
         </button>
       </div>
+      <HelpNote>
+        <p>Your physical inventory. Each product (e.g. 7×14 Dump) lists its <b>units</b> — the actual trailers customers book. Availability comes from how many units are free.</p>
+        <p><b>Add equipment</b> = a whole new product/rental type (sets its photo, description, pricing in Settings). <b>Add unit</b> = one more of a product you already offer. Give each unit its <b>purchase price</b> so Insights can show ROI, and toggle <b>maintenance</b> to pull a unit off the board.</p>
+        <p>Units belong to the location picked in the top bar.</p>
+      </HelpNote>
       {bySize.map((grp) => (
         <Card key={grp.size} className="p-4">
           <div className="flex items-center justify-between gap-2 mb-3">
@@ -1793,6 +1819,10 @@ function InsightsView({ state }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <SectionTitle>Insights</SectionTitle>
+        <HelpNote>
+          <p>Your numbers, calculated automatically from bookings: revenue by month and by equipment, fleet utilization, and <b>ROI per unit</b> (how much each trailer has earned vs. what it cost — set the purchase price in Fleet).</p>
+          <p>Use it to spot your best earners and which units to add or retire. Figures reflect the location picked in the top bar.</p>
+        </HelpNote>
         <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.amberSoft, color: T.amberDk }}>Sample data</span>
       </div>
       <p className="text-sm -mt-2" style={{ color: T.sub }}>How your fleet is performing — revenue, utilization, and return on each asset. Numbers come straight from your bookings.</p>
@@ -1936,6 +1966,10 @@ function CustomersView({ state, openDetail }) {
   return (
     <div className="space-y-4">
       <SectionTitle>Customers · {customers.length}</SectionTitle>
+      <HelpNote>
+        <p>Your customer list, built automatically from bookings. Each shows their <b>full rental history</b>, how many signed agreements and COIs are on file, and total spend.</p>
+        <p>Search by name, phone, email, or confirmation code. Tap any customer, then any of their rentals, to view/download the signed agreement or their Certificate of Insurance.</p>
+      </HelpNote>
       <p className="text-sm -mt-2" style={{ color: T.sub }}>Everyone who's rented, with their full history, signed waivers, and COIs. Search by name, phone, email, or confirmation number.</p>
       <div className="relative">
         <Search size={16} style={{ color: T.sub, position: "absolute", left: 12, top: 13 }} />
@@ -2100,6 +2134,11 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
           <Plus size={16} /> Add employee
         </button>
       </div>
+      <HelpNote>
+        <p>One crew, two kinds of work: <b>delivery/collection runs</b> (someone drives) and <b>will-call/yard handoffs</b> (someone staffs the yard). The same people can do both.</p>
+        <p>Read it top to bottom: <b>1)</b> upcoming jobs and who's covering each (assign with the dropdown; unassigned road runs are highlighted), <b>2)</b> who you owe for finished work (Mark paid), <b>3)</b> your people (add/pause, sick-day), <b>4)</b> each person's working hours — tap a day to set a range, <b>5)</b> auto-assign settings.</p>
+        <p>Employees can set their own hours and mark jobs done from their <b>Team sign-in</b> on your public site.</p>
+      </HelpNote>
 
       <Card className="p-4" style={{ background: T.blueSoft }}>
         <div className="text-sm" style={{ color: T.blue }}>
@@ -2399,6 +2438,10 @@ function SettingsView({ state, setState, flash }) {
   return (
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
+      <HelpNote>
+        <p>Everything that makes the app <b>yours</b>: business name & time zone, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, booking notice and buffers, who covers jobs, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
+        <p>Every change <b>saves automatically</b> to the cloud — no save button. Scroll through the cards top to bottom; each has its own short explanation.</p>
+      </HelpNote>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Building2 size={16} style={{ color: T.amberDk }} /></span>
@@ -3212,6 +3255,10 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
 
   return (
     <div className="max-w-2xl mx-auto px-4 md:px-6 pb-24">
+      <div className="pt-4"><HelpNote title="New here? How booking works">
+        <p>Four quick steps: <b>1)</b> pick your trailer, <b>2)</b> choose dates and whether we deliver or you pick up, <b>3)</b> your details (and upload a Certificate of Insurance if it's required), <b>4)</b> review, e-sign, and pay. Your price updates live as you go.</p>
+        <p>Already booked? Use <b>Manage my booking</b> up top to extend, change delivery, or cancel with your confirmation code.</p>
+      </HelpNote></div>
       {/* hero */}
       <div className="text-center py-8">
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight" style={{ letterSpacing: "-0.02em" }}>Rent a dump trailer</h1>
@@ -3475,6 +3522,20 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
 /* ---------------- small UI bits --------------- */
 function SectionTitle({ children }) { return <h2 className="text-2xl font-extrabold tracking-tight" style={{ letterSpacing: "-0.02em" }}>{children}</h2>; }
 function Empty({ children }) { return <div className="text-sm py-6 text-center" style={{ color: T.sub }}>{children}</div>; }
+/* Collapsible "how this works" training note — placed at the top of each screen. Starts closed
+   so it stays out of the way day-to-day, opens for anyone learning the platform. */
+function HelpNote({ title = "How this page works", children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-xl mb-4 overflow-hidden" style={{ background: T.blueSoft, border: `1px solid ${T.blue}` }}>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left">
+        <span className="flex items-center gap-2 text-sm font-bold" style={{ color: T.blue }}><Info size={15} /> {title}</span>
+        <ChevronRight size={16} style={{ color: T.blue, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+      </button>
+      {open && <div className="px-3 pb-3 text-xs leading-relaxed space-y-1.5" style={{ color: T.blue }}>{children}</div>}
+    </div>
+  );
+}
 function StepHead({ icon: Icon, title, sub }) {
   return (<div className="mb-2"><div className="flex items-center gap-2"><Icon size={18} style={{ color: T.amberDk }} /><h3 className="font-extrabold text-lg">{title}</h3></div><p className="text-sm mt-0.5" style={{ color: T.sub }}>{sub}</p></div>);
 }

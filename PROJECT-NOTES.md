@@ -75,6 +75,11 @@ Team & dispatch · Fleet · Settings.
   The old per-employee job cards, separate needs-dispatch queue, and yard today/upcoming
   lists were removed to kill the duplication ("names/jobs above and below") the owner flagged.
 
+- **In-platform help / training:** a reusable collapsible `HelpNote` component ("How this
+  page works", starts closed) sits at the top of every screen — Dashboard, Insights, Calendar,
+  Bookings, Customers, Team & dispatch, Fleet, Settings, the customer booking flow, and the
+  employee portal — with plain-language, screen-specific guidance for training a non-technical
+  owner/crew. Complements the per-card explanatory text already throughout.
 - **Multi-location / branches (foundation):** `state.locations[]` = `{id,name,area,phone}`;
   every trailer, booking, and contractor carries a `locationId` (migration on load stamps
   legacy rows + guarantees one default location). App holds a per-browser `activeLoc`
