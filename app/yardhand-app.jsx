@@ -346,6 +346,9 @@ export default function App() {
   useEffect(() => {
     (async () => {
       const s = await loadWorkspace();
+      // backfill any newly-added business defaults (e.g. timezone, team code, buffers) so older
+      // saved workspaces pick them up and Settings shows them explicitly — user values always win.
+      if (s && s.business) s.business = { ...structuredClone(SEED.business), ...s.business };
       setState(s || structuredClone(SEED));
       setLoading(false);
     })();
