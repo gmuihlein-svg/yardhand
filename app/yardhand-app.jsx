@@ -107,13 +107,22 @@ function yardEvents(state) {
   return ev;
 }
 
-/* which active drivers are available for a given date + window and not already booked then */
+/* which active drivers are available for a given date + window, not already booked, and
+   keeping the owner's between-jobs buffer clear (so back-to-back jobs have travel time) */
 function availableDrivers(state, date, window, excludeId) {
   const runs = legRuns(state);
+  const bufWin = Math.ceil(((state.business && state.business.bufferMins) || 0) / 60); // buffer expressed in whole hour-slots
+  const wi = WINDOWS.indexOf(window);
+  const tooClose = (rTime) => {
+    if (rTime === window) return true;                 // exact clash always blocks
+    if (bufWin <= 0 || wi < 0) return false;
+    const ri = WINDOWS.indexOf(rTime);
+    return ri >= 0 && Math.abs(ri - wi) <= bufWin;      // within the buffer of an existing job
+  };
   return (state.contractors || []).filter((c) =>
     c.active && c.id !== excludeId &&
     ((c.avail && c.avail[date]) || []).includes(window) &&
-    !runs.some((r) => r.by === c.id && r.date === date && r.time === window)
+    !runs.some((r) => r.by === c.id && r.date === date && tooClose(r.time))
   );
 }
 /* round-robin among AVAILABLE drivers, evened by current load */
@@ -220,6 +229,7 @@ const SEED = {
     refundFullHrs: 48, refundLatePct: 0.5,
     dispatchMode: "auto", counterMode: "self", bookHorizonDays: 30, rr: 0,
     leadDeliveryHours: 12, leadCounterHours: 2,
+    bufferMins: 30, firstJobDriveMins: 30,
     notifyChannel: "both", notifyConfirm: true, notifyWaiver: true, notifyReminders: [48, 24],
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
@@ -2212,25 +2222,51 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
 function AvailabilityEditor({ driverId, date, state, update, onClose }) {
   const c = state.contractors.find((x) => x.id === driverId);
   const wins = (c.avail && c.avail[date]) || [];
-  const toggle = (w) => update((n) => {
+  const idxs = wins.map((w) => WINDOWS.indexOf(w)).filter((i) => i >= 0).sort((a, b) => a - b);
+  const from = idxs.length ? idxs[0] : null;      // start-of-shift window index (null = off)
+  const to = idxs.length ? idxs[idxs.length - 1] : null;
+  const working = from != null;
+  const setRange = (f, t) => update((n) => {
     const d = n.contractors.find((x) => x.id === driverId);
     if (!d.avail) d.avail = {};
-    const cur = d.avail[date] || [];
-    d.avail[date] = cur.includes(w) ? cur.filter((x) => x !== w) : [...cur, w].sort((a, b) => WINDOWS.indexOf(a) - WINDOWS.indexOf(b));
-    if (d.avail[date].length === 0) delete d.avail[date];
+    if (f == null || t == null || t < f) { delete d.avail[date]; return; }
+    d.avail[date] = WINDOWS.slice(f, t + 1); // a continuous range of hours they can work
   });
+  const clearDay = () => update((n) => { const d = n.contractors.find((x) => x.id === driverId); if (d.avail) delete d.avail[date]; });
+  const noon = WINDOWS.indexOf("12:00 PM");
+  const presets = [["Morning", 0, noon], ["Afternoon", noon, WINDOWS.length - 1], ["All day", 0, WINDOWS.length - 1]];
   const jobs = [...legRuns(state), ...yardEvents(state)].filter((r) => r.by === driverId && r.date === date).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
   return (
     <Modal onClose={onClose} title={`${c.name.split(" ")[0]} · ${fmtLong(date)}`}>
-      <p className="text-sm mb-3" style={{ color: T.ink }}>Tap each hour {c.name.split(" ")[0]} can work this day. Tapped times turn <b style={{ color: T.green }}>green</b>. Customers can only book a delivery or pickup at a time someone is marked free — so this is what opens up slots on the booking page.</p>
-      <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: T.sub }}>Working hours this day</div>
-      <div className="flex flex-wrap gap-2">
-        {WINDOWS.map((w) => (
-          <button key={w} onClick={() => toggle(w)} className="px-3 py-1.5 rounded-lg text-sm font-bold"
-            style={wins.includes(w) ? { background: T.green, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>{w}</button>
-        ))}
+      <p className="text-sm mb-3" style={{ color: T.ink }}>Set the hours {c.name.split(" ")[0]} can work this day as a <b>range</b>. Customers then book a single start time inside these hours.</p>
+      <div className="flex gap-2 mb-3">
+        <button onClick={() => { if (!working) setRange(0, WINDOWS.length - 1); }} className="flex-1 py-2 rounded-lg text-sm font-bold" style={working ? { background: T.green, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>Working this day</button>
+        <button onClick={clearDay} className="flex-1 py-2 rounded-lg text-sm font-bold" style={!working ? { background: T.steel, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>Off</button>
       </div>
-      {wins.length === 0 && <p className="text-xs mt-2" style={{ color: T.sub }}>Nothing selected = not working this day.</p>}
+      {working && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wide" style={{ color: T.sub }}>Starts</label>
+              <select value={from} onChange={(e) => setRange(+e.target.value, Math.max(to, +e.target.value))} className="w-full p-2.5 rounded-lg text-sm mt-1" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+                {WINDOWS.map((w, i) => <option key={w} value={i}>{w}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wide" style={{ color: T.sub }}>Until</label>
+              <select value={to} onChange={(e) => setRange(Math.min(from, +e.target.value), +e.target.value)} className="w-full p-2.5 rounded-lg text-sm mt-1" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+                {WINDOWS.map((w, i) => <option key={w} value={i}>{w}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3 flex-wrap">
+            {presets.map(([label, f, t]) => (
+              <button key={label} onClick={() => setRange(f, t)} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.paper, color: T.steel, border: `1px solid ${T.line}` }}>{label}</button>
+            ))}
+          </div>
+          <div className="mt-3 text-sm p-2.5 rounded-lg text-center font-semibold" style={{ background: T.greenSoft, color: T.green }}>Free {WINDOWS[from]} – {WINDOWS[to]}</div>
+        </>
+      )}
       {jobs.length > 0 && (
         <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
           <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: T.sub }}>Already booked on {c.name.split(" ")[0]} this day</div>
@@ -2435,6 +2471,20 @@ function SettingsView({ state, setState, flash }) {
           <Field label="Will-call / yard notice (hours)"><NumInput v={b.leadCounterHours ?? 2} on={(v) => set({ leadCounterHours: v })} /></Field>
         </div>
         <p className="text-[11px]" style={{ color: T.sub }}>Deliveries usually need more notice (load the trailer + drive) than a will-call, where the customer comes to your yard. Currently: deliveries need {leadLabel(b.leadDeliveryHours ?? 12)}, will-call/yard need {leadLabel(b.leadCounterHours ?? 2)}.</p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><CalendarClock size={16} style={{ color: T.blue }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Scheduling buffers</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Padding built into the schedule so jobs aren't stacked with no room to breathe. In minutes.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Gap between a person's jobs (min)"><NumInput v={b.bufferMins ?? 0} on={(v) => set({ bufferMins: v })} /></Field>
+          <Field label="Drive time to the first job (min)"><NumInput v={b.firstJobDriveMins ?? 0} on={(v) => set({ firstJobDriveMins: v })} /></Field>
+        </div>
+        <p className="text-[11px]" style={{ color: T.sub }}>
+          <b>Gap between jobs</b> keeps a driver's back-to-back appointments apart so there's travel time — the app won't offer a slot too close to one they already have. <b>Drive time to the first job</b> holds the day's earliest delivery slots so the crew can leave the yard and reach the customer. Currently: {b.bufferMins ? `${b.bufferMins} min` : "no"} gap between jobs; first delivery no earlier than {WINDOWS[Math.min(Math.ceil((b.firstJobDriveMins || 0) / 60), WINDOWS.length - 1)]}. Set to 0 to turn either off.
+        </p>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -2845,7 +2895,14 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
   const end = addDays(form.start, form.days - 1);
   // minimum booking notice (lead time) before your crew can be booked for the out leg
   const outLeadHours = form.outMethod === "delivery" ? (b.leadDeliveryHours || 0) : (b.leadCounterHours || 0);
-  const outCovers = (h) => form.outMethod === "delivery" ? windowCovered(state, form.start, h) : (b.counterMode === "self" ? true : windowCovered(state, form.start, h));
+  const firstJobWindows = Math.ceil((b.firstJobDriveMins || 0) / 60); // reserve the day's earliest slots so the crew can drive out to the first delivery
+  const outCovers = (h) => {
+    if (form.outMethod === "delivery") {
+      if (WINDOWS.indexOf(h) < firstJobWindows) return false; // too early — no time to reach them
+      return windowCovered(state, form.start, h);
+    }
+    return b.counterMode === "self" ? true : windowCovered(state, form.start, h);
+  };
   const slotSoonEnough = (h) => slotDateTime(form.start, h).getTime() >= Date.now() + outLeadHours * 3600000;
   const type = form.size ? typeBySize(form.size) : null;
   const base = type ? priceFor(type, form.days) : 0;

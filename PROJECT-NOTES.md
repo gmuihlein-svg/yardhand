@@ -112,6 +112,17 @@ Team & dispatch · Fleet · Settings.
     `out`, a RETURN leg marks it `returned` (gated: can't return before it's out).
   - **My hours** — a tap-to-set availability calendar (writes `contractor.avail`, same data
     the owner's schedule grid reads) so crew set their own hours; opens `AvailabilityEditor`.
+    The **owner sets the same hours** for anyone from Team & dispatch → schedule grid → tap a
+    cell — it's the same editor.
+- **Availability = ranges.** `AvailabilityEditor` is a **range** picker: Working/Off toggle,
+  Starts/Until dropdowns, Morning/Afternoon/All-day presets → stores the continuous list of
+  hour windows in `contractor.avail[date]`. Used by both the owner grid and the employee
+  "My hours". Customers still pick a single start time (unchanged).
+- **Scheduling buffers (Settings):** `business.bufferMins` (gap between one person's jobs;
+  applied in `availableDrivers` — a person is blocked for windows within the buffer of an
+  existing job) and `business.firstJobDriveMins` (holds the day's earliest **delivery** slots
+  so the crew can drive out; applied in the customer booking `outCovers`). Both in minutes,
+  rounded to whole hour-slots; default 30 each; 0 disables.
   - **My pay** — read-only: total owed for finished-unpaid work + recently-paid list. Owner
     still does the actual paying in Team & dispatch → To pay.
 - **Inspection photos** ✅ — real photo capture (task #8 done). Employees (and the owner in
