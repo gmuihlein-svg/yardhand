@@ -48,8 +48,25 @@ function applyTheme(biz) {
 }
 
 /* ---------------- date helpers (ISO yyyy-mm-dd) --------------- */
+// The business's time zone drives what counts as "today" (set from Settings via setAppTz,
+// same mutate-a-module-global pattern as the theme). Default: US Eastern.
+let APP_TZ = "America/New_York";
+function setAppTz(tz) { if (tz) APP_TZ = tz; }
 const iso = (d) => d.toISOString().slice(0, 10);
-const today = () => iso(new Date());
+const today = () => {
+  try { return new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
+  catch (e) { return iso(new Date()); }
+};
+// friendly US time-zone options for Settings
+const TIMEZONES = [
+  ["America/New_York", "Eastern (New York)"],
+  ["America/Chicago", "Central (Chicago)"],
+  ["America/Denver", "Mountain (Denver)"],
+  ["America/Phoenix", "Arizona (no DST)"],
+  ["America/Los_Angeles", "Pacific (Los Angeles)"],
+  ["America/Anchorage", "Alaska (Anchorage)"],
+  ["Pacific/Honolulu", "Hawaii (Honolulu)"],
+];
 const addDays = (s, n) => { const d = new Date(s + "T00:00:00"); d.setDate(d.getDate() + n); return iso(d); };
 const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 const fmt = (s) => s ? new Date(s + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
@@ -223,7 +240,7 @@ const SEED = {
     name: "Ext Professionals",
     yard: "Charlotte, NC",
     phone: "(704) 555-0100",
-    logo: "", theme: { accent: "#F2A900", dark: "#2B3A44" }, ownerPass: "admin", teamPass: "team",
+    logo: "", theme: { accent: "#F2A900", dark: "#2B3A44" }, ownerPass: "admin", teamPass: "team", timezone: "America/New_York",
     pickupHours: WINDOWS,
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
@@ -357,6 +374,7 @@ export default function App() {
   }
 
   applyTheme(state.business); // recolor tokens from saved brand theme before children render
+  setAppTz(state.business.timezone); // "today" follows the business's time zone
 
   const typeBySize = (sz) => state.types.find((t) => t.size === sz);
 
@@ -2320,6 +2338,11 @@ function SettingsView({ state, setState, flash }) {
         <Field label="Legal / insured name for COIs (if different — e.g. your LLC)"><input value={b.legalName || ""} onChange={(e) => set({ legalName: e.target.value })} placeholder="Leave blank to use your business name" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Yard location"><input value={b.yard} onChange={(e) => set({ yard: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Business phone (shown to customers · used for the “Text to book” button)"><input value={b.phone} onChange={(e) => set({ phone: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label="Time zone (sets your “today”, due-dates & schedule)">
+          <select value={b.timezone || "America/New_York"} onChange={(e) => set({ timezone: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+            {TIMEZONES.map(([tz, label]) => <option key={tz} value={tz}>{label}</option>)}
+          </select>
+        </Field>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
