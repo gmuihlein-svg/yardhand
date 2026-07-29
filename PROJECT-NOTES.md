@@ -106,11 +106,16 @@ Team & dispatch · Fleet · Settings.
   **Includes COI flags:** bookings that require a Certificate of Insurance but have none
   (`coiNeeded`), COIs on file already expired (red), and COIs expiring within 2 weeks (amber) —
   so a repeat customer's certificate never lapses unnoticed.
+- **Crew handoff confirmations:** when a team member taps Mark delivered / handed over /
+  collected / received in the portal, the booking is stamped `outDoneBy`+`outDoneAt` (or
+  `returnDoneBy`+`returnDoneAt`). The owner's booking detail shows a green **"Crew confirmations"**
+  block (who + when), live via cloud sync. Owner alert `ownerAlertHandoff` pings the owner on
+  these (simulated send). `crewName(state, id)` resolves the name.
 - **Owner alerts (config built, simulated):** Settings → Notifications → "Alerts to you (the
   owner)" — master `ownerNotify`, channel `ownerNotifyChannel` (email/text/both), `ownerAlertEmail`
   + `ownerAlertPhone` (where alerts go — separate from the customer-facing business number), and
-  event toggles: `ownerAlertNewBooking`, `ownerAlertTextToBook`, `ownerAlertCancel`,
-  `ownerAlertScheduleChange`. Purpose: owner gets pinged when off the dashboard. Real send waits
+  event toggles: `ownerAlertNewBooking`, `ownerAlertHandoff` (crew confirms pickup/delivery/return),
+  `ownerAlertTextToBook`, `ownerAlertCancel`, `ownerAlertScheduleChange`. Purpose: owner gets pinged when off the dashboard. Real send waits
   on the messaging provider (task #19). NOTE: "Text to book" already reaches the owner as a normal
   SMS to the business number; this alert is the in-system heads-up.
 - **Review request (after return):** Settings → Notifications → Customers has an

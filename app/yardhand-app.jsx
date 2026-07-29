@@ -251,7 +251,7 @@ const SEED = {
     notifyTeamChannel: "text", notifyTeamAssign: true, notifyTeamReminder: true,
     notifyReview: true, reviewLink: "", reviewMessage: "Thanks for renting with us! If everything went smoothly, would you leave us a quick review? It only takes a minute and really helps our small business. 🙏",
     ownerNotify: true, ownerNotifyChannel: "both", ownerAlertEmail: "", ownerAlertPhone: "",
-    ownerAlertNewBooking: true, ownerAlertCancel: true, ownerAlertTextToBook: true, ownerAlertScheduleChange: false,
+    ownerAlertNewBooking: true, ownerAlertCancel: true, ownerAlertTextToBook: true, ownerAlertScheduleChange: false, ownerAlertHandoff: true,
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
   types: [
@@ -812,7 +812,7 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
           </div>
         )}
         {canAct ? (
-          <button onClick={() => { setBooking(bk.id, { status: isOut ? "out" : "returned" }); flash(isOut ? "Marked out — nice work." : "Marked returned — thank you!", true); }}
+          <button onClick={() => { const at = new Date().toISOString(); setBooking(bk.id, isOut ? { status: "out", outDoneBy: me.id, outDoneAt: at } : { status: "returned", returnDoneBy: me.id, returnDoneAt: at }); flash(isOut ? "Marked out — logged for your manager." : "Marked returned — logged for your manager.", true); }}
             className="w-full mt-3 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: T.steel, color: "#fff" }}>
             {isOut ? <Truck size={16} /> : <RotateCcw size={16} />} {actLabel}
           </button>
@@ -1589,6 +1589,8 @@ function latestValidCoi(state, phone, email) {
 
 /* channel label for customer notifications */
 const channelLabel = (ch) => ch === "text" ? "text" : ch === "email" ? "email" : "text & email";
+/* name of the crew member who confirmed a handoff (or "you" if none recorded) */
+const crewName = (state, id) => id ? ((state.contractors || []).find((c) => c.id === id)?.name || "a team member") : "you";
 /* build the notification schedule for a booking from the business's notify settings.
    Delivery/sending is simulated until Phase 5 wires up an email/SMS provider + scheduler. */
 function notifyTimeline(state, b) {
@@ -2610,6 +2612,7 @@ function SettingsView({ state, setState, flash }) {
                 <Field label="Your cell (for texts)"><input value={b.ownerAlertPhone || ""} onChange={(e) => set({ ownerAlertPhone: e.target.value })} placeholder="704-555-0000" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
               </div>
               <Toggle label="New booking placed" sub="Someone books a trailer online — you hear about it right away." on={b.ownerAlertNewBooking !== false} set={(v) => set({ ownerAlertNewBooking: v })} />
+              <Toggle label="Crew confirms a pickup / delivery / return" sub="A team member marks a trailer delivered, handed over, collected, or received in their portal." on={b.ownerAlertHandoff !== false} set={(v) => set({ ownerAlertHandoff: v })} />
               <Toggle label="Text-to-book received" sub="A customer taps “Text to book” — get a heads-up so you can reply." on={b.ownerAlertTextToBook !== false} set={(v) => set({ ownerAlertTextToBook: v })} />
               <Toggle label="Booking cancelled" sub="A customer cancels a reservation." on={b.ownerAlertCancel !== false} set={(v) => set({ ownerAlertCancel: v })} />
               <Toggle label="Employee changes their schedule" sub="A crew member updates their availability in the Team portal." on={!!b.ownerAlertScheduleChange} set={(v) => set({ ownerAlertScheduleChange: v })} />
@@ -3491,6 +3494,20 @@ function BookingDetail({ b, state, typeBySize, onClose, setBooking, flash, onExt
         <LogisticsRow icon={Truck} tag="Getting it out" method={b.outMethod} methodMap={OUT_METHODS} time={`${fmtLong(b.start)} · ${b.pickupTime}`} />
         <LogisticsRow icon={RotateCcw} tag="Getting it back" method={b.returnMethod} methodMap={RETURN_METHODS} time={`${fmtLong(b.end)} · ${b.returnTime || "—"}`} />
       </div>
+
+      {/* CREW CONFIRMATIONS — who marked it out / back, and when (from the Team portal) */}
+      {(b.outDoneAt || b.returnDoneAt) && (
+        <div className="rounded-lg mb-3 overflow-hidden" style={{ border: `1px solid ${T.green}` }}>
+          <div className="px-3 py-2 flex items-center gap-2" style={{ background: T.greenSoft }}>
+            <Check size={14} style={{ color: T.green }} />
+            <span className="text-xs font-bold" style={{ color: T.green }}>Crew confirmations</span>
+          </div>
+          <div className="p-3 space-y-1 text-xs">
+            {b.outDoneAt && <div><b>{b.outMethod === "delivery" ? "Delivered" : "Handed over"}</b> · {crewName(state, b.outDoneBy)} · {new Date(b.outDoneAt).toLocaleString()}</div>}
+            {b.returnDoneAt && <div><b>{b.returnMethod === "collect" ? "Collected" : "Received"}</b> · {crewName(state, b.returnDoneBy)} · {new Date(b.returnDoneAt).toLocaleString()}</div>}
+          </div>
+        </div>
+      )}
 
       {/* contact + tags */}
       <div className="text-xs flex items-center gap-3 flex-wrap mb-2" style={{ color: T.sub }}>
