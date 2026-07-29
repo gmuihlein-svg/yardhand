@@ -359,6 +359,8 @@ export default function App() {
       if (!Array.isArray(seeded.locations) || !seeded.locations.length) {
         seeded.locations = [{ id: "loc1", name: seeded.business.yard || "Main location", area: seeded.business.yard || "", phone: seeded.business.phone || "" }];
       }
+      // each location carries its own time zone (defaults to the business time zone)
+      seeded.locations.forEach((l) => { if (!l.timezone) l.timezone = seeded.business.timezone || "America/New_York"; });
       const defLoc = seeded.locations[0].id;
       ["trailers", "bookings", "contractors"].forEach((k) => { if (Array.isArray(seeded[k])) seeded[k].forEach((x) => { if (!x.locationId) x.locationId = defLoc; }); });
       setState(seeded);
@@ -390,11 +392,12 @@ export default function App() {
   }
 
   applyTheme(state.business); // recolor tokens from saved brand theme before children render
-  setAppTz(state.business.timezone); // "today" follows the business's time zone
 
   /* ── multi-location: everything below is scoped to the location this browser is viewing ── */
   const locations = (state.locations && state.locations.length) ? state.locations : [{ id: "loc1", name: state.business.yard || "Main location", area: state.business.yard || "" }];
   const locId = (activeLoc && locations.some((l) => l.id === activeLoc)) ? activeLoc : locations[0].id;
+  const activeLocation = locations.find((l) => l.id === locId) || locations[0];
+  setAppTz(activeLocation.timezone || state.business.timezone); // "today" follows THIS location's time zone
   const inLoc = (x) => (x.locationId || locations[0].id) === locId;
   const scoped = { ...state, trailers: (state.trailers || []).filter(inLoc), bookings: (state.bookings || []).filter(inLoc), contractors: (state.contractors || []).filter(inLoc) };
   const switchLoc = (id) => { setActiveLoc(id); try { sessionStorage.setItem("yardhand_loc", id); } catch (e) {} };
@@ -2469,10 +2472,15 @@ function SettingsView({ state, setState, flash }) {
         <div className="space-y-2">
           {locations.map((l) => (
             <div key={l.id} className="rounded-lg p-3 space-y-2" style={{ background: T.paper }}>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Field label="Name"><input value={l.name || ""} onChange={(e) => setLocation(l.id, { name: e.target.value })} placeholder="e.g. Charlotte" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
                 <Field label="Service area / yard"><input value={l.area || ""} onChange={(e) => setLocation(l.id, { area: e.target.value })} placeholder="e.g. Charlotte, NC" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
                 <Field label="Phone (optional)"><input value={l.phone || ""} onChange={(e) => setLocation(l.id, { phone: e.target.value })} placeholder="local number" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+                <Field label="Time zone (this branch's local time)">
+                  <select value={l.timezone || b.timezone || "America/New_York"} onChange={(e) => setLocation(l.id, { timezone: e.target.value })} className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+                    {TIMEZONES.map(([tz, label]) => <option key={tz} value={tz}>{label}</option>)}
+                  </select>
+                </Field>
               </div>
               {locations.length > 1 && <button onClick={() => removeLocation(l.id)} className="text-[11px] font-bold" style={{ color: T.red }}>Remove location</button>}
             </div>
