@@ -244,7 +244,7 @@ const SEED = {
     pickupHours: WINDOWS,
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
-    dispatchMode: "auto", counterMode: "self", bookHorizonDays: 30, rr: 0,
+    dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, rr: 0,
     leadDeliveryHours: 12, leadCounterHours: 2,
     bufferMins: 30, firstJobDriveMins: 30,
     notifyChannel: "both", notifyConfirm: true, notifyWaiver: true, notifyReminders: [48, 24],
@@ -2032,8 +2032,10 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
     ...runs.map((r) => ({ ...r, kind: "road", jobFee: fee })),
     ...events.map((e) => ({ ...e, kind: "yard", jobFee: yardFee, label: e.leg === "out" ? "Pickup" : "Return" })),
   ];
+  const ownerWorks = state.business.ownerWorks !== false; // when off, the owner ("You") is never scheduled — yard handoffs must go to staff
   const jobActive = (j) => j.status === "reserved" || j.status === "out"; // a live/upcoming rental, not a finished one
-  const jobNeedsDriver = (j) => j.kind === "road" && !j.by && jobActive(j); // yard handoffs default to You, so only road runs can be truly unassigned
+  // a job needs a person if: road run with no driver, OR (owner opted out) a yard handoff still on You/nobody
+  const jobNeedsDriver = (j) => jobActive(j) && ((j.kind === "road" && !j.by) || (j.kind === "yard" && !ownerWorks && (!j.by || j.by === "owner")));
   const jobDone = (j) => !!j.date && j.date < today();                      // the leg's day has passed → the work already happened
   const needCount = allJobs.filter(jobNeedsDriver).length;
   // SECTION 1 (coverage): jobs still needing someone, plus everything coming up (today or later)
@@ -2106,11 +2108,17 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
                     </div>
                   </button>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <select value={j.by || (j.kind === "yard" ? "owner" : "")} onChange={(e) => reassign(j, e.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${need ? T.amber : T.line}`, color: T.sub }}>
-                      {j.kind === "road" && !j.by && <option value="">Assign…</option>}
-                      {j.kind === "yard" && <option value="owner">You</option>}
-                      {state.contractors.filter((x) => x.active || x.id === j.by).map((x) => <option key={x.id} value={x.id}>{x.name.split(" ")[0]}</option>)}
-                    </select>
+                    {(() => {
+                      const showYou = j.kind === "yard" && ownerWorks;                 // "You" only offered if the owner works jobs
+                      const effVal = (j.by === "owner" && !ownerWorks) ? "" : (j.by || (showYou ? "owner" : ""));
+                      return (
+                        <select value={effVal} onChange={(e) => reassign(j, e.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${need ? T.amber : T.line}`, color: T.sub }}>
+                          {!effVal && <option value="">Assign…</option>}
+                          {showYou && <option value="owner">You</option>}
+                          {state.contractors.filter((x) => x.active || x.id === j.by).map((x) => <option key={x.id} value={x.id}>{x.name.split(" ")[0]}</option>)}
+                        </select>
+                      );
+                    })()}
                     {need && <button onClick={() => autoOne(j)} className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Auto</button>}
                   </div>
                 </div>
@@ -2534,6 +2542,18 @@ function SettingsView({ state, setState, flash }) {
         </div>
         <p className="text-[11px]" style={{ color: T.sub }}>
           <b>Gap between jobs</b> keeps a driver's back-to-back appointments apart so there's travel time — the app won't offer a slot too close to one they already have. <b>Drive time to the first job</b> holds the day's earliest delivery slots so the crew can leave the yard and reach the customer. Currently: {b.bufferMins ? `${b.bufferMins} min` : "no"} gap between jobs; first delivery no earlier than {WINDOWS[Math.min(Math.ceil((b.firstJobDriveMins || 0) / 60), WINDOWS.length - 1)]}. Set to 0 to turn either off.
+        </p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><User size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Do you (owner) work jobs?</h3>
+        </div>
+        <Toggle label="Schedule me to jobs" sub={"On: you show up as “You” and can take yard handoffs (and cover the counter). Off: you're never scheduled — every job must go to a crew member."} on={b.ownerWorks !== false} set={(v) => set({ ownerWorks: v })} />
+        <p className="text-[11px]" style={{ color: T.sub }}>
+          {b.ownerWorks !== false
+            ? "You can be assigned handoffs, and you're the default cover for the yard counter (Team & dispatch → auto-assign settings). Turn this off if you only manage and never handle equipment yourself."
+            : "You'll never be auto-assigned or offered on any job. Will-call pickups and yard returns will look for an available crew member — if none is free, that slot won't be bookable, so keep enough staff scheduled."}
         </p>
       </Card>
       <Card className="p-4 space-y-3">
@@ -3029,7 +3049,8 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
       if (WINDOWS.indexOf(h) < firstJobWindows) return false; // too early — no time to reach them
       return windowCovered(state, form.start, h);
     }
-    return b.counterMode === "self" ? true : windowCovered(state, form.start, h);
+    // owner covers the counter only if they work jobs; otherwise a staff member must be free
+    return (b.counterMode === "self" && b.ownerWorks !== false) ? true : windowCovered(state, form.start, h);
   };
   const slotSoonEnough = (h) => slotDateTime(form.start, h).getTime() >= Date.now() + outLeadHours * 3600000;
   const type = form.size ? typeBySize(form.size) : null;
@@ -3053,7 +3074,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
     const unit = findUnit(form.size, form.start, end);
     if (!unit) { flash("Sorry — that trailer just got booked. Try other dates."); return; }
     const auto = b.dispatchMode === "auto";
-    const counterAuto = b.counterMode === "auto";
+    const counterAuto = b.counterMode === "auto" || b.ownerWorks === false; // if the owner never works, yard handoffs must auto-assign to staff
     const collectWindow = WINDOWS.find((h) => windowCovered(state, end, h)) || WINDOWS[0];
     const rot = state.bookings.length;
     // OUT leg: delivery -> driver (auto); will-call -> counter staff (only if counterMode auto, else You)
