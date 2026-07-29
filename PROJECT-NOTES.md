@@ -94,6 +94,16 @@ Team & dispatch · Fleet · Settings.
   are **per-location**. Employee portal uses full state (crew see their own jobs regardless).
   Deferred: "Manage my booking" lookup is currently scoped to the picked branch (fine at one
   location); a global-by-code lookup + a fuller customer branch experience are the next step.
+  **Model = shared defaults + per-branch overrides (owner's choice).** Each `location` has its
+  own **`timezone`** (drives `today()`/schedule when that branch is active) and an optional
+  **`overrides`** object. `scoped.business = { ...state.business, ...(activeLocation.overrides||{}) }`
+  so any branch inherits company settings but can override specifics. Settings → Locations →
+  each branch has an **"Override settings for this branch"** panel (blank = inherit): sales tax,
+  deposit, delivery fee, will-call fee, and a **per-branch rental agreement/waiver** (e.g.
+  different-state terms). Verified: a 10% branch tax override shows $57 vs the $40 default on the
+  same booking. Different **equipment per branch** falls out of per-location inventory (units).
+  Follow-ups if wanted: per-branch equipment *pricing* overrides (pricing lives on shared
+  `types`), per-branch hours/buffers, and exposing more override fields.
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
 - **Insights analytics:** fleet ROI, weighted utilization, revenue KPIs; revenue-by-month,

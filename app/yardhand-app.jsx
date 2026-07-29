@@ -399,7 +399,9 @@ export default function App() {
   const activeLocation = locations.find((l) => l.id === locId) || locations[0];
   setAppTz(activeLocation.timezone || state.business.timezone); // "today" follows THIS location's time zone
   const inLoc = (x) => (x.locationId || locations[0].id) === locId;
-  const scoped = { ...state, trailers: (state.trailers || []).filter(inLoc), bookings: (state.bookings || []).filter(inLoc), contractors: (state.contractors || []).filter(inLoc) };
+  // each branch inherits the company settings, then applies its own overrides (tax, fees, agreement, …)
+  const scopedBusiness = { ...state.business, ...(activeLocation.overrides || {}) };
+  const scoped = { ...state, business: scopedBusiness, trailers: (state.trailers || []).filter(inLoc), bookings: (state.bookings || []).filter(inLoc), contractors: (state.contractors || []).filter(inLoc) };
   const switchLoc = (id) => { setActiveLoc(id); try { sessionStorage.setItem("yardhand_loc", id); } catch (e) {} };
 
   const typeBySize = (sz) => state.types.find((t) => t.size === sz);
@@ -2430,7 +2432,13 @@ function SettingsView({ state, setState, flash }) {
   // locations / branches
   const locations = state.locations || [];
   const setLocation = (id, patch) => setState((s) => ({ ...s, locations: (s.locations || []).map((l) => l.id === id ? { ...l, ...patch } : l) }));
-  const addLocation = () => { const id = "loc" + Date.now(); setState((s) => ({ ...s, locations: [...(s.locations || []), { id, name: "New location", area: "", phone: "" }] })); flash("Location added — switch to it from the top bar to add its trailers & crew.", true); };
+  const addLocation = () => { const id = "loc" + Date.now(); setState((s) => ({ ...s, locations: [...(s.locations || []), { id, name: "New location", area: "", phone: "", timezone: (s.business.timezone || "America/New_York") }] })); flash("Location added — switch to it from the top bar to add its trailers & crew.", true); };
+  const setLocationOverride = (id, key, val) => setState((s) => ({ ...s, locations: (s.locations || []).map((l) => {
+    if (l.id !== id) return l;
+    const ov = { ...(l.overrides || {}) };
+    if (val === "" || val == null || (typeof val === "number" && Number.isNaN(val))) delete ov[key]; else ov[key] = val;
+    return { ...l, overrides: ov };
+  }) }));
   const removeLocation = (id) => {
     const used = (state.trailers || []).some((t) => (t.locationId) === id) || (state.bookings || []).some((bk) => bk.locationId === id) || (state.contractors || []).some((c) => c.locationId === id);
     if (used) { flash("Move or remove that location's trailers, crew, and bookings first."); return; }
@@ -2482,11 +2490,36 @@ function SettingsView({ state, setState, flash }) {
                   </select>
                 </Field>
               </div>
-              {locations.length > 1 && <button onClick={() => removeLocation(l.id)} className="text-[11px] font-bold" style={{ color: T.red }}>Remove location</button>}
+              <details className="mt-1">
+                <summary className="text-[11px] font-bold cursor-pointer" style={{ color: T.blue }}>Override settings for this branch{l.overrides && Object.keys(l.overrides).length ? ` · ${Object.keys(l.overrides).length} set` : ""}</summary>
+                <div className="mt-2 space-y-2 pl-1" style={{ borderLeft: `2px solid ${T.line}` }}>
+                  <p className="text-[10px] pl-2" style={{ color: T.sub }}>Leave any field blank to use your company default. Fill one in to make it different at this branch only.</p>
+                  <div className="pl-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <Field label={`Sales tax % (co: ${Math.round((b.taxRate || 0) * 100)}%)`}>
+                      <input inputMode="decimal" value={l.overrides && l.overrides.taxRate != null ? Math.round(l.overrides.taxRate * 100) : ""} onChange={(e) => setLocationOverride(l.id, "taxRate", e.target.value === "" ? "" : (+e.target.value) / 100)} placeholder="inherit" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+                    </Field>
+                    <Field label={`Deposit $ (co: $${b.deposit})`}>
+                      <input inputMode="numeric" value={l.overrides && l.overrides.deposit != null ? l.overrides.deposit : ""} onChange={(e) => setLocationOverride(l.id, "deposit", e.target.value === "" ? "" : +e.target.value)} placeholder="inherit" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+                    </Field>
+                    <Field label={`Delivery $ (co: $${b.deliveryFee})`}>
+                      <input inputMode="numeric" value={l.overrides && l.overrides.deliveryFee != null ? l.overrides.deliveryFee : ""} onChange={(e) => setLocationOverride(l.id, "deliveryFee", e.target.value === "" ? "" : +e.target.value)} placeholder="inherit" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+                    </Field>
+                    <Field label={`Will-call $ (co: $${b.dropFee})`}>
+                      <input inputMode="numeric" value={l.overrides && l.overrides.dropFee != null ? l.overrides.dropFee : ""} onChange={(e) => setLocationOverride(l.id, "dropFee", e.target.value === "" ? "" : +e.target.value)} placeholder="inherit" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+                    </Field>
+                  </div>
+                  <div className="pl-2">
+                    <Field label="Rental agreement & waiver for this branch (blank = company default)">
+                      <textarea value={l.overrides && l.overrides.agreementText != null ? l.overrides.agreementText : ""} onChange={(e) => setLocationOverride(l.id, "agreementText", e.target.value)} rows={3} placeholder="Leave blank to use the company agreement. Paste this branch's version (e.g. different state terms) to override." className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
+                    </Field>
+                  </div>
+                </div>
+              </details>
+              {locations.length > 1 && <button onClick={() => removeLocation(l.id)} className="text-[11px] font-bold mt-1" style={{ color: T.red }}>Remove location</button>}
             </div>
           ))}
         </div>
-        <p className="text-[11px]" style={{ color: T.sub }}>Your equipment catalog, pricing, branding, and agreement are shared across all locations. Trailers (units), crew, and bookings are per-location. To move to a new branch's setup: add it here, then switch to it in the top bar and add its trailers and crew.</p>
+        <p className="text-[11px]" style={{ color: T.sub }}>New branches <b>inherit</b> your company catalog, pricing, branding, agreement, fees, and policies — so setup is quick. Use <b>“Override settings for this branch”</b> to change tax, fees, or the agreement where a branch differs (e.g. a different state). Trailers, crew, and bookings are per-location — switch to a branch in the top bar to add its inventory and staff. <b>Different equipment per branch</b> comes from what units you add there.</p>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
