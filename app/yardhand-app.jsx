@@ -347,15 +347,23 @@ export default function App() {
   const [extend, setExtend] = useState(null);   // extend modal
   const [authed, setAuthed] = useState(false);  // owner signed in this browser session
   const [employeeId, setEmployeeId] = useState(null); // team member signed in this browser session
+  const [activeLoc, setActiveLoc] = useState(null); // which location/branch this browser is viewing
 
   useEffect(() => {
     (async () => {
-      const s = await loadWorkspace();
+      const seeded = (await loadWorkspace()) || structuredClone(SEED);
       // backfill any newly-added business defaults (e.g. timezone, team code, buffers) so older
       // saved workspaces pick them up and Settings shows them explicitly — user values always win.
-      if (s && s.business) s.business = { ...structuredClone(SEED.business), ...s.business };
-      setState(s || structuredClone(SEED));
+      if (seeded.business) seeded.business = { ...structuredClone(SEED.business), ...seeded.business };
+      // multi-location: ensure at least one location and stamp existing inventory/crew/bookings to it
+      if (!Array.isArray(seeded.locations) || !seeded.locations.length) {
+        seeded.locations = [{ id: "loc1", name: seeded.business.yard || "Main location", area: seeded.business.yard || "", phone: seeded.business.phone || "" }];
+      }
+      const defLoc = seeded.locations[0].id;
+      ["trailers", "bookings", "contractors"].forEach((k) => { if (Array.isArray(seeded[k])) seeded[k].forEach((x) => { if (!x.locationId) x.locationId = defLoc; }); });
+      setState(seeded);
       setLoading(false);
+      try { const al = sessionStorage.getItem("yardhand_loc"); setActiveLoc(al && seeded.locations.some((l) => l.id === al) ? al : defLoc); } catch (e) { setActiveLoc(defLoc); }
     })();
     try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_owner") === "1") setAuthed(true); } catch (e) { /* ignore */ }
     try { if (typeof window !== "undefined") { const eid = sessionStorage.getItem("yardhand_emp"); if (eid) setEmployeeId(eid); } } catch (e) { /* ignore */ }
@@ -384,12 +392,19 @@ export default function App() {
   applyTheme(state.business); // recolor tokens from saved brand theme before children render
   setAppTz(state.business.timezone); // "today" follows the business's time zone
 
+  /* ── multi-location: everything below is scoped to the location this browser is viewing ── */
+  const locations = (state.locations && state.locations.length) ? state.locations : [{ id: "loc1", name: state.business.yard || "Main location", area: state.business.yard || "" }];
+  const locId = (activeLoc && locations.some((l) => l.id === activeLoc)) ? activeLoc : locations[0].id;
+  const inLoc = (x) => (x.locationId || locations[0].id) === locId;
+  const scoped = { ...state, trailers: (state.trailers || []).filter(inLoc), bookings: (state.bookings || []).filter(inLoc), contractors: (state.contractors || []).filter(inLoc) };
+  const switchLoc = (id) => { setActiveLoc(id); try { sessionStorage.setItem("yardhand_loc", id); } catch (e) {} };
+
   const typeBySize = (sz) => state.types.find((t) => t.size === sz);
 
-  /* derive status for a trailer on a given day */
+  /* derive status for a trailer on a given day (within the active location) */
   const trailerStatus = (tr) => {
     if (tr.maint) return "maintenance";
-    const bs = state.bookings.filter((b) => b.trailerId === tr.id && b.status !== "returned" && b.status !== "cancelled");
+    const bs = scoped.bookings.filter((b) => b.trailerId === tr.id && b.status !== "returned" && b.status !== "cancelled");
     const out = bs.find((b) => b.status === "out");
     if (out) return out.end < today() ? "overdue" : "out";
     const res = bs.find((b) => b.status === "reserved" && b.start <= today() && b.end >= today());
@@ -397,13 +412,13 @@ export default function App() {
     return "available";
   };
   const currentBooking = (tr) =>
-    state.bookings.find((b) => b.trailerId === tr.id && (b.status === "out" || (b.status === "reserved" && b.start <= today() && b.end >= today())));
+    scoped.bookings.find((b) => b.trailerId === tr.id && (b.status === "out" || (b.status === "reserved" && b.start <= today() && b.end >= today())));
 
-  /* find an available physical unit of a size for a date range */
+  /* find an available physical unit of a size for a date range (within the active location) */
   const findUnit = (size, start, end) => {
-    const units = state.trailers.filter((t) => t.size === size && !t.maint);
+    const units = scoped.trailers.filter((t) => t.size === size && !t.maint);
     for (const u of units) {
-      const clash = state.bookings.some(
+      const clash = scoped.bookings.some(
         (b) => b.trailerId === u.id && b.status !== "returned" && b.status !== "cancelled" && overlaps(start, end, b.start, b.end)
       );
       if (!clash) return u;
@@ -411,13 +426,13 @@ export default function App() {
     return null;
   };
   const countAvail = (size, start, end) =>
-    state.trailers.filter((t) => t.size === size && !t.maint).filter((u) =>
-      !state.bookings.some((b) => b.trailerId === u.id && b.status !== "returned" && b.status !== "cancelled" && overlaps(start, end, b.start, b.end))
+    scoped.trailers.filter((t) => t.size === size && !t.maint).filter((u) =>
+      !scoped.bookings.some((b) => b.trailerId === u.id && b.status !== "returned" && b.status !== "cancelled" && overlaps(start, end, b.start, b.end))
     ).length;
 
-  /* mutations */
+  /* mutations (operate on the real, full state by id; new items are stamped with the active location) */
   const update = (fn) => setState((s) => { const n = structuredClone(s); fn(n); return n; });
-  const addBooking = (bk) => { update((n) => n.bookings.push(bk)); };
+  const addBooking = (bk) => { update((n) => n.bookings.push({ ...bk, locationId: bk.locationId || locId })); };
   const setBooking = (id, patch) => update((n) => { const b = n.bookings.find((x) => x.id === id); Object.assign(b, patch); });
 
   return (
@@ -432,24 +447,24 @@ export default function App() {
           onAuthed={(id) => { setEmployeeId(id); try { sessionStorage.setItem("yardhand_emp", id); } catch (e) {} }} />
       ) : (
         <>
-          <TopBar state={state} mode={mode} setMode={setMode}
+          <TopBar state={state} mode={mode} setMode={setMode} locations={locations} locId={locId} switchLoc={switchLoc}
             signOut={() => { setAuthed(false); setEmployeeId(null); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); }} />
           {mode === "employee" ? (
             <EmployeePortal {...{ state, employeeId, setBooking, update, flash, signOut: () => { setEmployeeId(null); try { sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); } }} />
           ) : mode === "owner" ? (
             <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24">
               <OwnerNav tab={tab} setTab={setTab} />
-              {tab === "dashboard" && <Dashboard {...{ state, typeBySize, trailerStatus, currentBooking, setBooking, flash, openDetail: setDetail }} />}
-              {tab === "insights" && <InsightsView {...{ state }} />}
-              {tab === "calendar" && <CalendarBoard {...{ state, trailerStatus, openDetail: setDetail }} />}
-              {tab === "bookings" && <BookingsView {...{ state, typeBySize, setBooking, flash, openDetail: setDetail, openExtend: setExtend }} />}
-              {tab === "customers" && <CustomersView {...{ state, openDetail: setDetail }} />}
-              {tab === "team" && <TeamView {...{ state, setBooking, update, flash, openDetail: setDetail }} />}
-              {tab === "fleet" && <FleetView {...{ state, typeBySize, trailerStatus, currentBooking, update, flash }} />}
+              {tab === "dashboard" && <Dashboard {...{ state: scoped, typeBySize, trailerStatus, currentBooking, setBooking, flash, openDetail: setDetail }} />}
+              {tab === "insights" && <InsightsView {...{ state: scoped }} />}
+              {tab === "calendar" && <CalendarBoard {...{ state: scoped, trailerStatus, openDetail: setDetail }} />}
+              {tab === "bookings" && <BookingsView {...{ state: scoped, typeBySize, setBooking, flash, openDetail: setDetail, openExtend: setExtend }} />}
+              {tab === "customers" && <CustomersView {...{ state: scoped, openDetail: setDetail }} />}
+              {tab === "team" && <TeamView {...{ state: scoped, locId, setBooking, update, flash, openDetail: setDetail }} />}
+              {tab === "fleet" && <FleetView {...{ state: scoped, locId, typeBySize, trailerStatus, currentBooking, update, flash }} />}
               {tab === "settings" && <SettingsView {...{ state, setState, flash }} />}
             </div>
           ) : (
-            <CustomerArea {...{ state, typeBySize, countAvail, findUnit, addBooking, setBooking, flash, setMode, initialView: custStart }} />
+            <CustomerArea {...{ state: scoped, typeBySize, countAvail, findUnit, addBooking, setBooking, flash, setMode, initialView: custStart, locations, locId, switchLoc }} />
           )}
         </>
       )}
@@ -629,7 +644,9 @@ function BrandMark({ logo, size = 36 }) {
   return <div className="rounded-md flex items-center justify-center shrink-0" style={{ width: size, height: size, background: T.amber }}><Truck size={Math.round(size * 0.56)} style={{ color: T.steelDk }} /></div>;
 }
 
-function TopBar({ state, mode, setMode, signOut }) {
+function TopBar({ state, mode, setMode, signOut, locations, locId, switchLoc }) {
+  const locs = locations || [];
+  const cur = locs.find((l) => l.id === locId);
   return (
     <div style={{ background: T.steelDk }} className="sticky top-0 z-40 border-b" >
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-2">
@@ -637,9 +654,16 @@ function TopBar({ state, mode, setMode, signOut }) {
           <BrandMark logo={state.business.logo} size={36} />
           <div className="leading-tight min-w-0">
             <div className="font-extrabold tracking-tight text-white truncate" style={{ letterSpacing: "-0.01em" }}>{state.business.name}</div>
+            {mode === "owner" && locs.length > 1 && cur && <div className="text-[10px] font-bold" style={{ color: T.amber }}>{cur.name}</div>}
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {mode === "owner" && locs.length > 1 && switchLoc && (
+            <select value={locId} onChange={(e) => switchLoc(e.target.value)} title="Switch location"
+              className="px-2 py-1.5 rounded-md text-sm font-semibold" style={{ background: "rgba(255,255,255,0.12)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)" }}>
+              {locs.map((l) => <option key={l.id} value={l.id} style={{ color: "#000" }}>{l.name}</option>)}
+            </select>
+          )}
           <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: "rgba(255,255,255,0.08)" }}>
             <button onClick={() => setMode("landing")} className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2" }}>
               <Home size={15} /> <span className="hidden sm:inline">Site</span>
@@ -1415,7 +1439,7 @@ function ExtendModal({ b, state, typeBySize, onClose, onConfirm }) {
 }
 
 /* ---------------- FLEET --------------- */
-function FleetView({ state, typeBySize, trailerStatus, currentBooking, update, flash }) {
+function FleetView({ state, locId, typeBySize, trailerStatus, currentBooking, update, flash }) {
   const [addingType, setAddingType] = useState(false);
   const [unitSize, setUnitSize] = useState(null);
   const bySize = state.types.map((t) => ({ ...t, units: state.trailers.filter((tr) => tr.size === t.size) }));
@@ -1474,7 +1498,7 @@ function FleetView({ state, typeBySize, trailerStatus, currentBooking, update, f
       {addingType && <AddTypeModal existing={state.types} onPhoto={fileToScaledDataURL} onClose={() => setAddingType(false)}
         onAdd={(t) => { update((n) => n.types.push(t)); setAddingType(false); flash(`Added ${t.name}.`, true); }} />}
       {unitSize && <AddTrailerModal state={state} initialSize={unitSize} onClose={() => setUnitSize(null)}
-        onAdd={(tr) => { update((n) => n.trailers.push(tr)); setUnitSize(null); flash(`Added ${tr.assetId}.`, true); }} />}
+        onAdd={(tr) => { update((n) => n.trailers.push({ ...tr, locationId: locId })); setUnitSize(null); flash(`Added ${tr.assetId}.`, true); }} />}
     </div>
   );
 }
@@ -1974,7 +1998,7 @@ function CustomersView({ state, openDetail }) {
 }
 
 /* ---------------- DRIVERS & PAY --------------- */
-function TeamView({ state, setBooking, update, flash, openDetail }) {
+function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
   const [adding, setAdding] = useState(false);
   const [editAvail, setEditAvail] = useState(null); // {driverId, date}
   const runs = legRuns(state);
@@ -2266,7 +2290,7 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
       </Card>
 
       {adding && <AddContractorModal onClose={() => setAdding(false)}
-        onAdd={(c) => { update((n) => n.contractors.push(c)); setAdding(false); flash(`Added ${c.name}.`, true); }} />}
+        onAdd={(c) => { update((n) => n.contractors.push({ ...c, locationId: locId })); setAdding(false); flash(`Added ${c.name}.`, true); }} />}
       {editAvail && <AvailabilityEditor {...editAvail} state={state} update={update} onClose={() => setEditAvail(null)} />}
     </div>
   );
@@ -2361,6 +2385,17 @@ function SettingsView({ state, setState, flash }) {
   const removeType = (size) => { if (state.trailers.some((tr) => tr.size === size)) { flash("Remove its units first."); return; } setState((s) => ({ ...s, types: s.types.filter((t) => t.size !== size) })); flash("Equipment type removed.", true); };
   const onPhoto = async (size, file) => { if (!file) return; const url = await fileToScaledDataURL(file); if (url) { setType(size, { image: url }); flash("Photo updated."); } else flash("Couldn't read that image."); };
   const onLogo = async (file) => { if (!file) return; const url = await fileToScaledDataURL(file, 400, "image/png"); if (url) { set({ logo: url }); flash("Logo updated."); } else flash("Couldn't read that image."); };
+  // locations / branches
+  const locations = state.locations || [];
+  const setLocation = (id, patch) => setState((s) => ({ ...s, locations: (s.locations || []).map((l) => l.id === id ? { ...l, ...patch } : l) }));
+  const addLocation = () => { const id = "loc" + Date.now(); setState((s) => ({ ...s, locations: [...(s.locations || []), { id, name: "New location", area: "", phone: "" }] })); flash("Location added — switch to it from the top bar to add its trailers & crew.", true); };
+  const removeLocation = (id) => {
+    const used = (state.trailers || []).some((t) => (t.locationId) === id) || (state.bookings || []).some((bk) => bk.locationId === id) || (state.contractors || []).some((c) => c.locationId === id);
+    if (used) { flash("Move or remove that location's trailers, crew, and bookings first."); return; }
+    if ((state.locations || []).length <= 1) { flash("You need at least one location."); return; }
+    setState((s) => ({ ...s, locations: (s.locations || []).filter((l) => l.id !== id) }));
+    flash("Location removed.", true);
+  };
   return (
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
@@ -2378,6 +2413,29 @@ function SettingsView({ state, setState, flash }) {
             {TIMEZONES.map(([tz, label]) => <option key={tz} value={tz}>{label}</option>)}
           </select>
         </Field>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><MapPin size={16} style={{ color: T.amberDk }} /></span>
+            <h3 className="font-bold text-sm uppercase tracking-wide">Locations / branches</h3>
+          </div>
+          <button onClick={addLocation} className="text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={14} /> Add location</button>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Each location/branch has its own trailers, crew, and bookings. When you have more than one, a <b>location switcher</b> appears in the top bar — pick a branch and the whole dashboard shows just that location. New trailers, crew, and bookings you create belong to the location you're viewing.</p>
+        <div className="space-y-2">
+          {locations.map((l) => (
+            <div key={l.id} className="rounded-lg p-3 space-y-2" style={{ background: T.paper }}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Field label="Name"><input value={l.name || ""} onChange={(e) => setLocation(l.id, { name: e.target.value })} placeholder="e.g. Charlotte" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+                <Field label="Service area / yard"><input value={l.area || ""} onChange={(e) => setLocation(l.id, { area: e.target.value })} placeholder="e.g. Charlotte, NC" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+                <Field label="Phone (optional)"><input value={l.phone || ""} onChange={(e) => setLocation(l.id, { phone: e.target.value })} placeholder="local number" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+              </div>
+              {locations.length > 1 && <button onClick={() => removeLocation(l.id)} className="text-[11px] font-bold" style={{ color: T.red }}>Remove location</button>}
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px]" style={{ color: T.sub }}>Your equipment catalog, pricing, branding, and agreement are shared across all locations. Trailers (units), crew, and bookings are per-location. To move to a new branch's setup: add it here, then switch to it in the top bar and add its trailers and crew.</p>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -2762,11 +2820,22 @@ function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
 }
 
 /* ---------------- CUSTOMER AREA (book + manage sub-nav) --------------- */
-function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, setBooking, flash, setMode, initialView }) {
+function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, setBooking, flash, setMode, initialView, locations, locId, switchLoc }) {
   const [view, setView] = useState(initialView || "book"); // book | manage
+  const locs = locations || [];
+  const cur = locs.find((l) => l.id === locId);
   return (
     <div>
       <div className="max-w-2xl mx-auto px-4 md:px-6 pt-4">
+        {locs.length > 1 && switchLoc && (
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <MapPin size={14} style={{ color: T.sub }} />
+            <span className="text-xs" style={{ color: T.sub }}>Location:</span>
+            <select value={locId} onChange={(e) => switchLoc(e.target.value)} className="px-2 py-1.5 rounded-md text-sm font-bold" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+              {locs.map((l) => <option key={l.id} value={l.id}>{l.name}{l.area ? ` · ${l.area}` : ""}</option>)}
+            </select>
+          </div>
+        )}
         <div className="flex gap-1 p-1 rounded-lg w-fit mx-auto" style={{ background: T.graySoft }}>
           {[["book", "Book a trailer", Truck], ["manage", "Manage my booking", ClipboardList]].map(([v, l, Icon]) => (
             <button key={v} onClick={() => setView(v)} className="px-3.5 py-1.5 rounded-md text-sm font-bold flex items-center gap-1.5"

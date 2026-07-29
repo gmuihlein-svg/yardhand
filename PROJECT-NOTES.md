@@ -75,6 +75,20 @@ Team & dispatch · Fleet · Settings.
   The old per-employee job cards, separate needs-dispatch queue, and yard today/upcoming
   lists were removed to kill the duplication ("names/jobs above and below") the owner flagged.
 
+- **Multi-location / branches (foundation):** `state.locations[]` = `{id,name,area,phone}`;
+  every trailer, booking, and contractor carries a `locationId` (migration on load stamps
+  legacy rows + guarantees one default location). App holds a per-browser `activeLoc`
+  (sessionStorage `yardhand_loc`); it computes a **`scoped`** state (trailers/bookings/
+  contractors filtered to the active location) and passes `scoped` to all owner views + the
+  customer area, so the whole dashboard shows one branch at a time. The core helpers
+  (`trailerStatus`, `currentBooking`, `findUnit`, `countAvail`) run on `scoped`; `addBooking`
+  and new units/crew are stamped with the active `locId`. **Top-bar location switcher** shows
+  when >1 location; **customer booking** shows a branch picker when >1. Manage in Settings →
+  **"Locations / branches"** (add/rename/remove; can't remove one with data). Catalog (`types`),
+  pricing, branding, and the agreement are **shared** across locations; trailers/crew/bookings
+  are **per-location**. Employee portal uses full state (crew see their own jobs regardless).
+  Deferred: "Manage my booking" lookup is currently scoped to the picked branch (fine at one
+  location); a global-by-code lookup + a fuller customer branch experience are the next step.
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
 - **Insights analytics:** fleet ROI, weighted utilization, revenue KPIs; revenue-by-month,
