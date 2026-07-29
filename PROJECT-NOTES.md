@@ -91,6 +91,16 @@ Team & dispatch · Fleet · Settings.
   computes each booking's schedule (sent vs scheduled), shown in the booking detail; the
   confirmation screen reflects the settings. SENDING IS SIMULATED — real email/SMS + a
   scheduler are the remaining Phase 5 work (task #17).
+- **"Start here" daily checklist (Dashboard, top):** a plain-language list of what needs
+  the owner today, so nothing slips at login — overdue trailers, trailers going out today,
+  due-back-today, jobs still needing a driver, double-bookings, and finished jobs to pay.
+  Colour-coded (red urgent / amber today / blue money); collapses to a green "all caught up"
+  when empty. Each line says what to do and where. Computed in `Dashboard` (`dailyChecks`).
+- **Calendar (Availability board):** the current day is highlighted — a **TODAY** pill in the
+  header + an amber tint down today's column — and each rental's **return/due-back day** (the
+  booking's `end`) is marked with a ↻ icon and a dark right edge, so it's easy to see when
+  each trailer is due back. Marking a trailer out/returned lives on the Dashboard "Pickups &
+  returns today" rows, the Bookings list row buttons, and inside a booking's detail.
 - **Undo:** consequential actions (mark paid, mark returned/out, cancel, extend, reassign,
   sick-day reassign, auto-assign-all, remove equipment type, maintenance toggle, and even
   "Reset demo data") show a one-tap **Undo** in the toast (~6s) that restores the full

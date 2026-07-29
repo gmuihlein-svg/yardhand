@@ -711,6 +711,30 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
     { label: "Overdue", val: overdue.length, icon: AlertTriangle, c: T.red, bg: T.redSoft, onClick: () => setKpiList({ title: "Overdue", items: overdue }) },
   ];
 
+  // ── "what needs me today" checklist ──
+  const conflictCount = findConflicts(state).length;
+  const needDriver = state.bookings.reduce((n, b) => {
+    if (b.status === "cancelled" || b.status === "returned") return n;
+    if (b.outMethod === "delivery" && !b.outBy) n++;
+    if (b.returnMethod === "collect" && !b.returnBy) n++;
+    return n;
+  }, 0);
+  const toPay = state.bookings.reduce((n, b) => {
+    if (b.status === "cancelled") return n;
+    if (b.outBy && b.outBy !== "owner" && !b.outPaid && b.start < today()) n++;
+    if (b.returnBy && b.returnBy !== "owner" && !b.returnPaid && b.end < today()) n++;
+    return n;
+  }, 0);
+  const plural = (n) => (n === 1 ? "" : "s");
+  const dailyChecks = [
+    conflictCount > 0 && { level: "red", text: `Fix ${conflictCount} double-booking${plural(conflictCount)}`, hint: "see the red box just below" },
+    overdue.length > 0 && { level: "red", text: `${overdue.length} trailer${plural(overdue.length)} overdue`, hint: "chase the customer, then mark returned when it's back" },
+    pickupsToday.length > 0 && { level: "amber", text: `${pickupsToday.length} trailer${plural(pickupsToday.length)} going out today`, hint: "mark “Picked up / Delivered” when they leave (in Pickups & returns below)" },
+    dueToday.length > 0 && { level: "amber", text: `${dueToday.length} trailer${plural(dueToday.length)} due back today`, hint: "mark “Returned / Collected” when it arrives (below)" },
+    needDriver > 0 && { level: "amber", text: `${needDriver} job${plural(needDriver)} still needs a driver`, hint: "assign someone in Team & dispatch" },
+    toPay > 0 && { level: "blue", text: `${toPay} finished job${plural(toPay)} to pay`, hint: "pay your crew, then mark paid in Team & dispatch → To pay" },
+  ].filter(Boolean);
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-3 flex-wrap">
@@ -724,6 +748,40 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
           <span className="w-2 h-2 rounded-full" style={{ background: T.green }} /> {stats.available} of {state.trailers.length} trailers free
         </div>
       </div>
+
+      {/* Start-here daily checklist — what needs the owner today */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: dailyChecks.length ? T.amberSoft : T.greenSoft }}>
+            <ClipboardList size={16} style={{ color: dailyChecks.length ? T.amberDk : T.green }} />
+          </span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Start here · what needs you today</h3>
+        </div>
+        {dailyChecks.length === 0 ? (
+          <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: T.greenSoft }}>
+            <Check size={16} style={{ color: T.green }} />
+            <span className="text-sm font-semibold" style={{ color: T.green }}>You're all caught up — nothing needs you right now.</span>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {dailyChecks.map((c, i) => {
+              const col = c.level === "red" ? T.red : c.level === "amber" ? T.amberDk : T.blue;
+              const bg = c.level === "red" ? T.redSoft : c.level === "amber" ? T.amberSoft : T.blueSoft;
+              const Icon = c.level === "red" ? AlertTriangle : c.level === "blue" ? DollarSign : CalendarClock;
+              return (
+                <div key={i} className="flex items-start gap-2 p-2 rounded-lg" style={{ background: bg }}>
+                  <Icon size={15} className="shrink-0 mt-0.5" style={{ color: col }} />
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold" style={{ color: col }}>{c.text}</div>
+                    <div className="text-xs" style={{ color: T.sub }}>{c.hint}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
       {(() => {
         const conflicts = findConflicts(state);
         if (conflicts.length === 0) return null;
@@ -906,12 +964,21 @@ function CalendarBoard({ state, trailerStatus, openDetail }) {
             <div />
             {days.map((d, i) => (
               <div key={d} className="text-center pb-2">
-                <div className="text-[10px] font-bold uppercase" style={{ color: i === 0 ? T.amberDk : T.sub }}>
-                  {new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday: "narrow" })}
-                </div>
-                <div className="text-xs font-semibold tabular-nums" style={{ color: i === 0 ? T.ink : T.sub }}>
-                  {new Date(d + "T00:00:00").getDate()}
-                </div>
+                {i === 0 ? (
+                  <div className="inline-flex flex-col items-center rounded-md px-1 pt-0.5 pb-1" style={{ background: T.amber }}>
+                    <div className="text-[8px] font-extrabold uppercase tracking-wide" style={{ color: T.steelDk }}>Today</div>
+                    <div className="text-xs font-extrabold tabular-nums leading-none" style={{ color: T.steelDk }}>{new Date(d + "T00:00:00").getDate()}</div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-[10px] font-bold uppercase" style={{ color: T.sub }}>
+                      {new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday: "narrow" })}
+                    </div>
+                    <div className="text-xs font-semibold tabular-nums" style={{ color: T.sub }}>
+                      {new Date(d + "T00:00:00").getDate()}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -922,11 +989,15 @@ function CalendarBoard({ state, trailerStatus, openDetail }) {
               </div>
               {days.map((d) => {
                 const b = bookingFor(tr, d);
+                const isToday = d === start;
+                const isReturnDay = b && d === b.end;   // last day of a rental = trailer due back
                 const st = tr.maint ? STATUS.maintenance : b ? (b.status === "out" ? (b.end < today() ? STATUS.overdue : STATUS.out) : STATUS.reserved) : null;
                 return (
-                  <div key={d} className="h-full flex items-center px-0.5">
-                    <div onClick={() => b && openDetail(b)} className="w-full rounded" style={{ height: 20, background: st ? st.c : T.graySoft, opacity: st ? 0.9 : 0.5, cursor: b ? "pointer" : "default" }}
-                      title={b ? `${b.name} (${b.start}→${b.end}) — click for detail` : tr.maint ? "Down for maintenance" : "Available"} />
+                  <div key={d} className="h-full flex items-center px-0.5" style={{ background: isToday ? "rgba(242,169,0,0.14)" : undefined }}>
+                    <div onClick={() => b && openDetail(b)} className="w-full rounded flex items-center justify-end" style={{ height: 20, background: st ? st.c : T.graySoft, opacity: st ? 0.9 : 0.5, cursor: b ? "pointer" : "default", boxShadow: isReturnDay ? `inset -4px 0 0 ${T.steelDk}` : undefined }}
+                      title={b ? (isReturnDay ? `${b.name} — DUE BACK ${fmt(b.end)}` : `${b.name} (${b.start}→${b.end}) — click for detail`) : tr.maint ? "Down for maintenance" : "Available"}>
+                      {isReturnDay && <RotateCcw size={10} strokeWidth={3} style={{ color: "#fff", marginRight: 1 }} />}
+                    </div>
                   </div>
                 );
               })}
