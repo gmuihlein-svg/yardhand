@@ -249,6 +249,7 @@ const SEED = {
     bufferMins: 30, firstJobDriveMins: 30,
     notifyChannel: "both", notifyConfirm: true, notifyWaiver: true, notifyReminders: [48, 24],
     notifyTeamChannel: "text", notifyTeamAssign: true, notifyTeamReminder: true,
+    notifyReview: true, reviewLink: "", reviewMessage: "Thanks for renting with us! If everything went smoothly, would you leave us a quick review? It only takes a minute and really helps our small business. 🙏",
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
   types: [
@@ -982,12 +983,24 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
     if (b.returnBy && b.returnBy !== "owner" && !b.returnPaid && b.end < today()) n++;
     return n;
   }, 0);
+  // COI: bookings that require a Certificate of Insurance but don't have one, and COIs on file that are expiring/expired
+  const coiNeeded = state.bookings.reduce((n, b) => {
+    if (b.status === "cancelled" || b.status === "returned") return n;
+    if (coiRequired(typeBySize(b.size), b.type) && !b.coiFile) n++;
+    return n;
+  }, 0);
+  const coiSoonDate = addDays(today(), 14);
+  const coiFlags = state.bookings.filter((b) => (b.status === "reserved" || b.status === "out") && b.coiFile && b.coiExpiry && b.coiExpiry <= coiSoonDate);
+  const coiExpiredNow = coiFlags.filter((b) => b.coiExpiry < today()).length;
   const plural = (n) => (n === 1 ? "" : "s");
   const dailyChecks = [
     conflictCount > 0 && { level: "red", text: `Fix ${conflictCount} double-booking${plural(conflictCount)}`, hint: "see the red box just below" },
     overdue.length > 0 && { level: "red", text: `${overdue.length} trailer${plural(overdue.length)} overdue`, hint: "chase the customer, then mark returned when it's back" },
+    coiExpiredNow > 0 && { level: "red", text: `${coiExpiredNow} Certificate of Insurance expired`, hint: "get a current certificate before that trailer goes out" },
     pickupsToday.length > 0 && { level: "amber", text: `${pickupsToday.length} trailer${plural(pickupsToday.length)} going out today`, hint: "mark “Picked up / Delivered” when they leave (in Pickups & returns below)" },
     dueToday.length > 0 && { level: "amber", text: `${dueToday.length} trailer${plural(dueToday.length)} due back today`, hint: "mark “Returned / Collected” when it arrives (below)" },
+    coiNeeded > 0 && { level: "amber", text: `${coiNeeded} booking${plural(coiNeeded)} need a Certificate of Insurance`, hint: "customer can upload in “Manage my booking,” or add it in the booking's COI section" },
+    (coiFlags.length - coiExpiredNow) > 0 && { level: "amber", text: `${coiFlags.length - coiExpiredNow} COI${plural(coiFlags.length - coiExpiredNow)} expiring within 2 weeks`, hint: "ask the repeat customer for a fresh certificate so it doesn't lapse" },
     needDriver > 0 && { level: "amber", text: `${needDriver} job${plural(needDriver)} still needs a driver`, hint: "assign someone in Team & dispatch" },
     toPay > 0 && { level: "blue", text: `${toPay} finished job${plural(toPay)} to pay`, hint: "pay your crew, then mark paid in Team & dispatch → To pay" },
   ].filter(Boolean);
@@ -1591,6 +1604,11 @@ function notifyTimeline(state, b) {
   if (coiRequired(type, b.type) && !b.coiFile) {
     const h = (biz.notifyReminders && biz.notifyReminders.length) ? Math.min(...biz.notifyReminders) : 24;
     items.push({ label: "Reminder · upload Certificate of Insurance", at: pickup - h * 3600000, kind: "coi" });
+  }
+  if (biz.notifyReview !== false) {
+    // review request goes out a few hours after the rental is returned
+    const back = slotDateTime(b.end, b.returnTime || b.pickupTime).getTime() + 3 * 3600000;
+    items.push({ label: "Review request (after return)", at: back, kind: "review" });
   }
   return items.map((it) => ({ ...it, sent: it.at != null && it.at <= now }));
 }
@@ -2529,6 +2547,16 @@ function SettingsView({ state, setState, flash }) {
         </Field>
         <Toggle label="Booking confirmation" sub="Sent right after they book — appointment details + confirmation number." on={b.notifyConfirm !== false} set={(v) => set({ notifyConfirm: v })} />
         <Toggle label="Copy of signed waiver" sub="Send the customer their signed rental agreement the moment they sign." on={b.notifyWaiver !== false} set={(v) => set({ notifyWaiver: v })} />
+        <Toggle label="Ask for a review (after return)" sub="Once the rental is returned, invite the customer to leave a review by text/email." on={b.notifyReview !== false} set={(v) => set({ notifyReview: v })} />
+        {b.notifyReview !== false && (
+          <div className="pl-1 space-y-2" style={{ borderLeft: `2px solid ${T.line}` }}>
+            <div className="pl-3">
+              <Field label="Review link (paste your Google / Yelp review URL)"><input value={b.reviewLink || ""} onChange={(e) => set({ reviewLink: e.target.value })} placeholder="https://g.page/r/…/review" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+              <div className="mt-2"><Field label="Message to send"><textarea value={b.reviewMessage || ""} onChange={(e) => set({ reviewMessage: e.target.value })} rows={3} placeholder="Thanks for renting with us! Would you leave a quick review?" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field></div>
+              <p className="text-[11px] mt-1" style={{ color: T.sub }}>Your review link gets added to the end of the message automatically. Goes out by {channelLabel(b.notifyChannel)} a few hours after the trailer comes back.</p>
+            </div>
+          </div>
+        )}
         <div>
           <div className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: T.sub }}>Reminders before pickup</div>
           <div className="space-y-1.5">

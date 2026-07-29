@@ -103,6 +103,14 @@ Team & dispatch · Fleet · Settings.
   due-back-today, jobs still needing a driver, double-bookings, and finished jobs to pay.
   Colour-coded (red urgent / amber today / blue money); collapses to a green "all caught up"
   when empty. Each line says what to do and where. Computed in `Dashboard` (`dailyChecks`).
+  **Includes COI flags:** bookings that require a Certificate of Insurance but have none
+  (`coiNeeded`), COIs on file already expired (red), and COIs expiring within 2 weeks (amber) —
+  so a repeat customer's certificate never lapses unnoticed.
+- **Review request (after return):** Settings → Notifications → Customers has an
+  **"Ask for a review (after return)"** toggle (`notifyReview`), a **review link** field
+  (`reviewLink`, paste Google/Yelp URL) and an editable **message** (`reviewMessage`). Added to
+  `notifyTimeline` as a `review` item ~3h after the trailer is returned, sent by the customer
+  channel. Simulated until the messaging phase like the other notifications.
 - **Calendar (Availability board):** the current day is highlighted — a **TODAY** pill in the
   header + an amber tint down today's column — and each rental's **return/due-back day** (the
   booking's `end`) is marked with a ↻ icon and a dark right edge, so it's easy to see when
