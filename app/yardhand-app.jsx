@@ -250,6 +250,8 @@ const SEED = {
     notifyChannel: "both", notifyConfirm: true, notifyWaiver: true, notifyReminders: [48, 24],
     notifyTeamChannel: "text", notifyTeamAssign: true, notifyTeamReminder: true,
     notifyReview: true, reviewLink: "", reviewMessage: "Thanks for renting with us! If everything went smoothly, would you leave us a quick review? It only takes a minute and really helps our small business. 🙏",
+    ownerNotify: true, ownerNotifyChannel: "both", ownerAlertEmail: "", ownerAlertPhone: "",
+    ownerAlertNewBooking: true, ownerAlertCancel: true, ownerAlertTextToBook: true, ownerAlertScheduleChange: false,
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
   types: [
@@ -2588,6 +2590,32 @@ function SettingsView({ state, setState, flash }) {
           <Toggle label="New job assigned" sub="Message the crew member the moment a job lands on them (or gets moved to them)." on={b.notifyTeamAssign !== false} set={(v) => set({ notifyTeamAssign: v })} />
           <Toggle label="Reminder before the job" sub="A nudge shortly before pickup/collection so no one forgets." on={b.notifyTeamReminder !== false} set={(v) => set({ notifyTeamReminder: v })} />
           <p className="text-[11px] mt-1.5" style={{ color: T.sub }}>Crew messages go out by {channelLabel(b.notifyTeamChannel || "text")} to the phone/email on their profile.</p>
+        </div>
+
+        <div className="pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: T.sub }}>Alerts to you (the owner)</div>
+          <p className="text-[11px] mb-2" style={{ color: T.sub }}>Get pinged when something happens, so you don't have to keep the dashboard open. Sent to the email &amp; phone below (not your customer-facing business number).</p>
+          <Toggle label="Send me owner alerts" sub="Master switch for the alerts below." on={b.ownerNotify !== false} set={(v) => set({ ownerNotify: v })} />
+          {b.ownerNotify !== false && (
+            <div className="space-y-2 mt-1">
+              <Field label="Alert me by">
+                <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+                  {[["email", "Email"], ["text", "Text"], ["both", "Both"]].map(([v, l]) => (
+                    <button key={v} onClick={() => set({ ownerNotifyChannel: v })} className="flex-1 py-1.5 rounded-md text-sm font-bold" style={(b.ownerNotifyChannel || "both") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+                  ))}
+                </div>
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Your email (for alerts)"><input value={b.ownerAlertEmail || ""} onChange={(e) => set({ ownerAlertEmail: e.target.value })} placeholder="you@email.com" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+                <Field label="Your cell (for texts)"><input value={b.ownerAlertPhone || ""} onChange={(e) => set({ ownerAlertPhone: e.target.value })} placeholder="704-555-0000" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+              </div>
+              <Toggle label="New booking placed" sub="Someone books a trailer online — you hear about it right away." on={b.ownerAlertNewBooking !== false} set={(v) => set({ ownerAlertNewBooking: v })} />
+              <Toggle label="Text-to-book received" sub="A customer taps “Text to book” — get a heads-up so you can reply." on={b.ownerAlertTextToBook !== false} set={(v) => set({ ownerAlertTextToBook: v })} />
+              <Toggle label="Booking cancelled" sub="A customer cancels a reservation." on={b.ownerAlertCancel !== false} set={(v) => set({ ownerAlertCancel: v })} />
+              <Toggle label="Employee changes their schedule" sub="A crew member updates their availability in the Team portal." on={!!b.ownerAlertScheduleChange} set={(v) => set({ ownerAlertScheduleChange: v })} />
+              <p className="text-[11px]" style={{ color: T.sub }}>Owner alerts go out by {channelLabel(b.ownerNotifyChannel || "both")}.</p>
+            </div>
+          )}
         </div>
       </Card>
       <Card className="p-4 space-y-3">
