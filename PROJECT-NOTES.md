@@ -197,6 +197,13 @@ Team & dispatch · Fleet · Settings.
 - **Owner login:** branded sign-in gate + sign-out; public site & booking stay open.
 - **Workforce onboarding:** name, phone, tow vehicle, **email** (for future job alerts +
   portal login). Availability is set separately in the schedule grid.
+- **Per-equipment contracts:** the business-wide `business.agreementText` (renamed in UI to
+  "Standard rental agreement & waiver") is the default e-signed contract+waiver. Each equipment
+  type can now carry its own **`type.agreementText`** (Settings → Equipment photos & descriptions
+  → "Rental contract for this equipment"). At booking, the customer signs
+  `type.agreementText || business.agreementText`, and that exact text is snapshotted onto the
+  booking's `agreementText`. Blank per-type = falls back to the standard one. (Waiver and
+  contract are one combined document here; the per-type box lets different gear carry different terms.)
 - **Money:** tiered rental pricing, refundable deposit hold, delivery/collect + will-call/
   yard fees, optional damage waiver, sales tax, cancellation policy. All editable in Settings.
 - **Deliverables produced:** Operator's Guide (.docx), Partnership Pitch (.docx),

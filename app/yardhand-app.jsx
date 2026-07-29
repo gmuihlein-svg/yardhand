@@ -2490,6 +2490,10 @@ function SettingsView({ state, setState, flash }) {
               className="w-full p-2 rounded-lg text-xs mb-1.5" style={{ border: `1px solid ${T.line}` }} />
             <textarea value={t.tow || ""} onChange={(e) => setType(t.size, { tow: e.target.value })} rows={2} placeholder="The requirements — vehicle & hitch, operator license, transport, fuel/power, PPE… whatever renters must know."
               className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
+            <div className="text-[10px] font-bold uppercase tracking-wide mt-2 mb-1 flex items-center gap-1" style={{ color: T.blue }}><FileText size={11} /> Rental contract for this equipment</div>
+            <textarea value={t.agreementText || ""} onChange={(e) => setType(t.size, { agreementText: e.target.value })} rows={3} placeholder="Leave blank to use your standard agreement. Or paste a contract specific to this equipment — customers renting it e-sign THIS instead."
+              className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${t.agreementText ? T.amber : T.line}` }} />
+            <p className="text-[10px] mt-1" style={{ color: T.sub }}>{t.agreementText ? "Custom contract active for this equipment — renters sign it instead of the standard one." : "Blank = renters sign your Standard rental agreement (further down this page)."}</p>
           </div>
         ))}
         <p className="text-[11px]" style={{ color: T.sub }}>Photos are saved to this browser and auto-shrunk to fit. When you go live, they'll move to cloud storage.</p>
@@ -2635,9 +2639,9 @@ function SettingsView({ state, setState, flash }) {
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><ShieldCheck size={16} style={{ color: T.amberDk }} /></span>
-          <h3 className="font-bold text-sm uppercase tracking-wide">Rental agreement & waiver</h3>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Standard rental agreement & waiver</h3>
         </div>
-        <p className="text-xs" style={{ color: T.sub }}>Customers read and e-sign this before paying. Their typed signature + timestamp is saved to the booking; you can view or download it from any booking. Edit the text to fit your attorney-reviewed agreement.</p>
+        <p className="text-xs" style={{ color: T.sub }}>Your <b>default</b> contract — it combines the rental terms (the contract) and the liability waiver in one document customers read and e-sign before paying. Their typed signature + timestamp is saved to the booking. <b>Need different terms for specific equipment?</b> Give that equipment its own contract higher up on this page, under <b>“Equipment photos &amp; descriptions” → the “Rental contract for this equipment” box</b>; anything left blank falls back to this one. Edit to fit your attorney-reviewed agreement.</p>
         <textarea value={b.agreementText} onChange={(e) => set({ agreementText: e.target.value })} rows={8}
           className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}`, fontFamily: "ui-monospace, monospace" }} />
         <p className="text-[11px]" style={{ color: T.sub }}>Prototype note: this captures a signature record. A production e-sign service (DocuSign, Dropbox Sign, SignWell) adds a tamper-evident audit trail and secure storage when you go live.</p>
@@ -3052,7 +3056,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
       coiName: form.coiFile ? form.coiName : (coiOnFile ? coiOnFile.coiName : ""),
       coiExpiry: form.coiFile ? "" : (coiOnFile ? coiOnFile.coiExpiry : ""),
       notes: form.notes, dropFee: b.dropFee,
-      signName: form.signName, signedAt: new Date().toISOString(), agreementText: b.agreementText,
+      signName: form.signName, signedAt: new Date().toISOString(), agreementText: (type && type.agreementText) || b.agreementText,
     });
     setStepN(4);
   };
@@ -3323,7 +3327,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               </div>
               <div className="p-3">
                 <div className="rounded-lg p-3 text-xs whitespace-pre-line overflow-y-auto" style={{ background: T.paper, color: T.ink, maxHeight: 150, border: `1px solid ${T.line}` }}>
-                  {b.agreementText}
+                  {(type && type.agreementText) || b.agreementText}
                 </div>
                 <div className="mt-3">
                   <label className="text-xs font-bold uppercase tracking-wide block mb-1.5" style={{ color: T.sub }}>Type your full name to sign</label>
