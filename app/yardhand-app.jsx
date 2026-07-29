@@ -1786,12 +1786,11 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
           <button onClick={() => setAdding(true)} className="text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={14} /> Add employee</button>
         </div>
         <div className="text-xs mb-3 leading-snug" style={{ color: T.sub }}>
-          Everyone who works for you, and what each is owed for finished work. Add or pause people here.
+          Everyone who works for you. Add a new person, or use sick / inactive to take someone off the schedule.
         </div>
         <div className="space-y-2">
           {state.contractors.map((c) => {
-            const owed = owedBy[c.id] || 0;
-            const open = allJobs.filter((j) => j.by === c.id && !j.paid).length;
+            const open = allJobs.filter((j) => j.by === c.id && !j.paid && jobActive(j)).length;
             return (
               <div key={c.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
                 <div className="flex items-center gap-2 min-w-0">
@@ -1802,8 +1801,7 @@ function TeamView({ state, setBooking, update, flash, openDetail }) {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-sm font-extrabold tabular-nums" style={{ color: owed ? T.ink : T.sub }}>{owed ? `$${owed} owed` : "$0"}</div>
-                  <div className="text-[11px]" style={{ color: T.sub }}>{open} open job{open === 1 ? "" : "s"}</div>
+                  <div className="text-[11px]" style={{ color: T.sub }}>{open === 0 ? "no jobs booked" : `${open} job${open === 1 ? "" : "s"} booked`}</div>
                   <div className="flex gap-2 justify-end mt-0.5">
                     {c.active && <button onClick={() => sickDay(c.id, c.name.split(" ")[0])} className="text-[11px] font-bold" style={{ color: T.red }}>sick today</button>}
                     <button onClick={() => toggleActive(c)} className="text-[11px] font-bold" style={{ color: T.sub }}>{c.active ? "set inactive" : "set active"}</button>
