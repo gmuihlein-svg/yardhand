@@ -248,6 +248,7 @@ const SEED = {
     leadDeliveryHours: 12, leadCounterHours: 2,
     bufferMins: 30, firstJobDriveMins: 30,
     notifyChannel: "both", notifyConfirm: true, notifyWaiver: true, notifyReminders: [48, 24],
+    notifyTeamChannel: "text", notifyTeamAssign: true, notifyTeamReminder: true,
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
   types: [
@@ -2515,9 +2516,10 @@ function SettingsView({ state, setState, flash }) {
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><Mail size={16} style={{ color: T.blue }} /></span>
-          <h3 className="font-bold text-sm uppercase tracking-wide">When customers get notified</h3>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Notifications · customers &amp; crew</h3>
         </div>
-        <p className="text-xs" style={{ color: T.sub }}>Automatic messages to your customers. <b>Prototype note:</b> these are simulated for now — real texts and emails switch on in the messaging phase.</p>
+        <p className="text-xs" style={{ color: T.sub }}>Automatic messages — <b>both your customers and your workforce</b> get notified. Customers get booking/reminder messages; your crew get a heads-up when they're assigned a job. <b>Prototype note:</b> these are simulated for now — real texts and emails switch on in the messaging phase.</p>
+        <div className="text-xs font-bold uppercase tracking-wide" style={{ color: T.sub }}>Customers</div>
         <Field label="Send by">
           <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
             {[["email", "Email"], ["text", "Text"], ["both", "Both"]].map(([v, l]) => (
@@ -2542,7 +2544,22 @@ function SettingsView({ state, setState, flash }) {
             <div className="flex-1"><Field label="Add a reminder (hours before)"><NumInput v={newRem} on={setNewRem} /></Field></div>
             <button onClick={() => { const h = Math.max(1, Math.round(newRem)); if (!(b.notifyReminders || []).includes(h)) set({ notifyReminders: [...(b.notifyReminders || []), h] }); }} className="px-3 py-2.5 rounded-lg text-sm font-bold" style={{ background: T.steel, color: "#fff" }}>Add</button>
           </div>
-          <p className="text-[11px] mt-1.5" style={{ color: T.sub }}>Common: 48 and 24 hours before. All messages go out by {channelLabel(b.notifyChannel)}.</p>
+          <p className="text-[11px] mt-1.5" style={{ color: T.sub }}>Common: 48 and 24 hours before. Customer messages go out by {channelLabel(b.notifyChannel)}.</p>
+        </div>
+
+        <div className="pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: T.sub }}>Your team (workforce)</div>
+          <p className="text-[11px] mb-2" style={{ color: T.sub }}>When you assign someone a delivery, collection, or yard handoff, they get a heads-up with the job's time and address — so nothing slips.</p>
+          <Field label="Notify the crew by">
+            <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+              {[["email", "Email"], ["text", "Text"], ["both", "Both"]].map(([v, l]) => (
+                <button key={v} onClick={() => set({ notifyTeamChannel: v })} className="flex-1 py-1.5 rounded-md text-sm font-bold" style={(b.notifyTeamChannel || "text") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+              ))}
+            </div>
+          </Field>
+          <Toggle label="New job assigned" sub="Message the crew member the moment a job lands on them (or gets moved to them)." on={b.notifyTeamAssign !== false} set={(v) => set({ notifyTeamAssign: v })} />
+          <Toggle label="Reminder before the job" sub="A nudge shortly before pickup/collection so no one forgets." on={b.notifyTeamReminder !== false} set={(v) => set({ notifyTeamReminder: v })} />
+          <p className="text-[11px] mt-1.5" style={{ color: T.sub }}>Crew messages go out by {channelLabel(b.notifyTeamChannel || "text")} to the phone/email on their profile.</p>
         </div>
       </Card>
       <Card className="p-4 space-y-3">

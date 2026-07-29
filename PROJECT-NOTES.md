@@ -84,6 +84,13 @@ Team & dispatch · Fleet · Settings.
 - **Equipment model:** each **type/product** has name, capacity, tiered pricing, **photo,
   description**. **Add equipment** = new product/rental; **Add unit** = another physical
   unit of an existing product. Units carry a **purchase price** (powers ROI).
+- **Notifications — customers & crew (config + simulation built):** the Settings card is now
+  "Notifications · customers & crew" with two blocks: **Customers** (channel email/text/both
+  via `notifyChannel`, booking-confirm + waiver toggles, reminder lead-times) and **Your team
+  (workforce)** — channel `notifyTeamChannel` (email/text/both, default text), `notifyTeamAssign`
+  (heads-up when a job is assigned/reassigned), `notifyTeamReminder` (nudge before the job).
+  Sending is still SIMULATED — real SMS/email + scheduler is the remaining messaging-phase work
+  (tasks #7 workforce + #17 customers). Legacy note below (kept for the customer detail):
 - **Customer notifications (config + simulation built):** Settings "When customers get
   notified" card — channel (text/email/both), toggles for booking confirmation + waiver
   copy, and an editable list of reminder lead-times (default 48h + 24h). Business fields:
