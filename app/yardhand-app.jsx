@@ -1125,20 +1125,23 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
     if (b.returnBy && b.returnBy !== "owner" && !b.returnPaid && b.end < today()) n++;
     return n;
   }, 0);
-  // COI: bookings that require a Certificate of Insurance but don't have one, and COIs on file that are expiring/expired
-  const coiNeeded = state.bookings.reduce((n, b) => {
-    if (b.status === "cancelled" || b.status === "returned") return n;
-    if (coiRequired(typeBySize(b.size), b.type) && !b.coiFile) n++;
-    return n;
-  }, 0);
+  // COI: bookings that require a Certificate of Insurance but the customer hasn't uploaded one yet
+  const coiNeededBookings = state.bookings.filter((b) => b.status !== "cancelled" && b.status !== "returned" && coiRequired(typeBySize(b.size), b.type) && !b.coiFile);
   const coiSoonDate = addDays(today(), 14);
   const coiFlags = state.bookings.filter((b) => (b.status === "reserved" || b.status === "out") && b.coiFile && b.coiExpiry && b.coiExpiry <= coiSoonDate);
-  const coiExpiredNow = coiFlags.filter((b) => b.coiExpiry < today()).length;
+  const coiExpiredBookings = coiFlags.filter((b) => b.coiExpiry < today());   // certificate already lapsed
+  const coiExpiringBookings = coiFlags.filter((b) => b.coiExpiry >= today()); // lapses within 2 weeks
+  // unsigned rental agreement on a booking that's out or due to go out today/earlier (liability risk)
+  const unsignedActive = state.bookings.filter((b) => !b.signName && b.status !== "cancelled" && b.status !== "returned" && (b.status === "out" || b.start <= today()));
+  const maintCount = state.trailers.filter((t) => trailerStatus(t) === "maintenance").length;
   const plural = (n) => (n === 1 ? "" : "s");
+  // name one/two people or "X & N more" for a checklist line
+  const listNames = (labels) => labels.length === 1 ? labels[0] : labels.length === 2 ? `${labels[0]} & ${labels[1]}` : `${labels[0]} & ${labels.length - 1} more`;
+  const firstName = (c) => c.name.split(" ")[0];
+  // customer payments to collect: active bookings (out, or picking up today/earlier) not yet marked paid
+  const toCollect = state.bookings.filter((b) => !b.paid && b.status !== "cancelled" && b.status !== "returned" && (b.status === "out" || b.start <= today()));
   // ── on-screen pay reminders (dashboard only — no email/text), matched to how you pay your crew ──
   const payBasis = state.business.payBasis || "perjob";
-  const firstName = (c) => c.name.split(" ")[0];
-  const nameList = (arr) => arr.length === 1 ? firstName(arr[0]) : arr.length === 2 ? `${firstName(arr[0])} & ${firstName(arr[1])}` : `${firstName(arr[0])} & ${arr.length - 1} more`;
   // hourly: crew with finished, unpaid clocked hours
   const hoursDuePeople = payBasis === "hourly"
     ? state.contractors.filter((c) => (c.shifts || []).some((s) => s.out && !s.paid))
@@ -1153,17 +1156,23 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
       })())
     : [];
   const dailyChecks = [
+    // ── urgent (red) ──
     conflictCount > 0 && { level: "red", text: `Fix ${conflictCount} double-booking${plural(conflictCount)}`, hint: "see the red box just below" },
     overdue.length > 0 && { level: "red", text: `${overdue.length} trailer${plural(overdue.length)} overdue`, hint: "chase the customer, then mark returned when it's back" },
-    coiExpiredNow > 0 && { level: "red", text: `${coiExpiredNow} Certificate of Insurance expired`, hint: "get a current certificate before that trailer goes out" },
+    coiExpiredBookings.length > 0 && { level: "red", text: `COI expired · ${listNames(coiExpiredBookings.map((x) => x.name))}`, hint: "get a current certificate before that trailer goes out" },
+    unsignedActive.length > 0 && { level: "red", text: `Agreement not signed · ${listNames(unsignedActive.map((x) => x.name))}`, hint: "get the rental agreement signed before the trailer leaves the yard" },
+    // ── today (amber) ──
     pickupsToday.length > 0 && { level: "amber", text: `${pickupsToday.length} trailer${plural(pickupsToday.length)} going out today`, hint: "mark “Picked up / Delivered” when they leave (in Pickups & returns below)" },
     dueToday.length > 0 && { level: "amber", text: `${dueToday.length} trailer${plural(dueToday.length)} due back today`, hint: "mark “Returned / Collected” when it arrives (below)" },
-    coiNeeded > 0 && { level: "amber", text: `${coiNeeded} booking${plural(coiNeeded)} need a Certificate of Insurance`, hint: "customer can upload in “Manage my booking,” or add it in the booking's COI section" },
-    (coiFlags.length - coiExpiredNow) > 0 && { level: "amber", text: `${coiFlags.length - coiExpiredNow} COI${plural(coiFlags.length - coiExpiredNow)} expiring within 2 weeks`, hint: "ask the repeat customer for a fresh certificate so it doesn't lapse" },
+    coiNeededBookings.length > 0 && { level: "amber", text: `COI not uploaded · ${listNames(coiNeededBookings.map((x) => x.name))}`, hint: "chase the certificate — customer uploads in “Manage my booking,” or add it in the booking's COI section" },
+    coiExpiringBookings.length > 0 && { level: "amber", text: `COI expiring soon · ${listNames(coiExpiringBookings.map((x) => x.name))}`, hint: "ask the repeat customer for a fresh certificate before it lapses (within 2 weeks)" },
     needDriver > 0 && { level: "amber", text: `${needDriver} job${plural(needDriver)} still needs a driver`, hint: "assign someone in Team & dispatch" },
+    toCollect.length > 0 && { level: "amber", text: `Collect payment · ${listNames(toCollect.map((x) => x.name))}`, hint: "take their payment, then tap Mark paid on the booking" },
+    // ── money & housekeeping (blue) ──
     payBasis === "perjob" && toPay > 0 && { level: "blue", text: `${toPay} finished job${plural(toPay)} to pay`, hint: "pay your crew, then mark paid in Team & dispatch → To pay" },
-    hoursDuePeople.length > 0 && { level: "blue", text: `Pay ${nameList(hoursDuePeople)} for clocked hours`, hint: "see the hours & pay them in Team & dispatch → Payroll" },
-    salaryDuePeople.length > 0 && { level: "blue", text: `Payday — pay ${nameList(salaryDuePeople)}`, hint: `salary due (every ${state.business.flatPeriod === "biweekly" ? "2 weeks" : "week"}); pay in Team & dispatch → Payroll` },
+    hoursDuePeople.length > 0 && { level: "blue", text: `Pay ${listNames(hoursDuePeople.map(firstName))} for clocked hours`, hint: "see the hours & pay them in Team & dispatch → Payroll" },
+    salaryDuePeople.length > 0 && { level: "blue", text: `Payday — pay ${listNames(salaryDuePeople.map(firstName))}`, hint: `salary due (every ${state.business.flatPeriod === "biweekly" ? "2 weeks" : "week"}); pay in Team & dispatch → Payroll` },
+    maintCount > 0 && { level: "blue", text: `${maintCount} trailer${plural(maintCount)} in maintenance`, hint: "flip it back to available in Fleet when it's ready to rent again" },
   ].filter(Boolean);
 
   return (
@@ -1181,7 +1190,9 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
       </div>
 
       <HelpNote title="How to use your dashboard">
-        <p>This is your home base — <b>open it first each day</b>. The <b>Start here</b> box below lists exactly what needs you today (overdue trailers, pickups/returns, jobs needing a driver, COIs, and who needs <b>paying</b> — it names the person and matches how you pay your crew: finished <b>jobs</b> to pay if you pay per job, <b>clocked hours</b> if you pay hourly, or a <b>payday</b> reminder when a salary period comes around). It only shows on screen here — no email or text. Clear that list and you're on top of things.</p>
+        <p>This is your home base — <b>open it first each day</b>. The <b>Start here</b> box below is your catch-all so nothing slips through the cracks. It's colour-ranked — <b style={{ color: T.red }}>red</b> = urgent, <b style={{ color: T.amberDk }}>amber</b> = today, <b style={{ color: T.blue }}>blue</b> = money & housekeeping — and it names the customer or crew member so you know exactly who to chase. It surfaces:</p>
+        <p><b>Urgent:</b> double-bookings · overdue trailers · a Certificate of Insurance that's <b>expired</b> · a rental <b>agreement not signed</b> on a trailer that's out or going out. <b>Today:</b> trailers going out · trailers due back · a <b>COI not uploaded</b> yet by the customer · a COI <b>expiring within 2 weeks</b> · jobs still needing a driver · <b>customer payments to collect</b> (take payment, then Mark paid on the booking). <b>Money & housekeeping:</b> paying your crew (per-job / hourly / salary, named) · trailers sitting in <b>maintenance</b> to put back in service.</p>
+        <p>It only shows on screen here — <b>no email or text</b>. Clear the list and you're on top of the day.</p>
         <p>The four <b>tiles</b> (Out on rent, Available, Due back today, Overdue) are tappable — they open the matching list. <b>Pickups &amp; returns today</b> has one-tap buttons to mark trailers out or back. Everything updates live across your devices and your crew's.</p>
         <p>Use the tabs up top for the rest: Calendar, Bookings, Customers, Team &amp; dispatch, Fleet, Insights, and Settings — each has its own “How this page works” note.</p>
       </HelpNote>
@@ -4011,6 +4022,13 @@ function BookingDetail({ b, state, typeBySize, onClose, setBooking, flash, onExt
         <Row l="Rental window" r={`${fmt(b.start)} → ${fmt(b.end)} (${days}d)`} bold />
         <Row l="Rental total" r={`$${b.price}`} />
         <Row l="Deposit hold" r={`$${b.deposit}`} />
+        <div className="flex items-center justify-between pt-2 mt-1" style={{ borderTop: `1px solid ${T.line}` }}>
+          <span className="text-sm font-bold" style={{ color: b.paid ? T.green : T.amberDk }}>{b.paid ? "Paid in full" : "Payment not collected"}</span>
+          <button onClick={() => { setBooking(b.id, { paid: !b.paid }); flash(b.paid ? "Marked unpaid." : `Marked paid — $${b.price} collected.`, true); }}
+            className="text-[11px] font-bold px-2.5 py-1.5 rounded" style={b.paid ? { background: "#fff", color: T.sub, border: `1px solid ${T.line}` } : { background: T.steel, color: "#fff" }}>
+            {b.paid ? "Mark unpaid" : `Mark paid · $${b.price}`}
+          </button>
+        </div>
       </div>
 
       {/* THE LOGISTICS — how it goes out, how it comes back */}

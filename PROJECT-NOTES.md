@@ -170,14 +170,22 @@ Team & dispatch · Fleet · Settings.
   computes each booking's schedule (sent vs scheduled), shown in the booking detail; the
   confirmation screen reflects the settings. SENDING IS SIMULATED — real email/SMS + a
   scheduler are the remaining Phase 5 work (task #17).
-- **"Start here" daily checklist (Dashboard, top):** a plain-language list of what needs
-  the owner today, so nothing slips at login — overdue trailers, trailers going out today,
-  due-back-today, jobs still needing a driver, double-bookings, and finished jobs to pay.
-  Colour-coded (red urgent / amber today / blue money); collapses to a green "all caught up"
-  when empty. Each line says what to do and where. Computed in `Dashboard` (`dailyChecks`).
-  **Includes COI flags:** bookings that require a Certificate of Insurance but have none
-  (`coiNeeded`), COIs on file already expired (red), and COIs expiring within 2 weeks (amber) —
-  so a repeat customer's certificate never lapses unnoticed.
+- **"Start here" daily checklist (Dashboard, top):** the owner's catch-all so nothing slips at
+  login. Colour-ranked (red urgent / amber today / blue money & housekeeping); collapses to a
+  green "all caught up" when empty; each line says what to do and where, and **names the customer
+  or crew member** (`listNames` → one/two names else "X & N more"). Computed in `Dashboard`
+  (`dailyChecks`). Full coverage:
+  - **Red:** double-bookings · overdue trailers · COI **expired** (`coiExpiredBookings`) ·
+    rental **agreement not signed** on a trailer that's out or going out today (`unsignedActive`).
+  - **Amber (today):** trailers going out · trailers due back · **COI not uploaded** by the
+    customer (`coiNeededBookings`, keys off `!b.coiFile`) · COI **expiring within 2 weeks**
+    (`coiExpiringBookings`) · jobs still needing a driver · **customer payments to collect**
+    (`toCollect` = active/out bookings with `!b.paid`).
+  - **Blue:** paying the crew (per-job `toPay` gated to per-job mode / hourly `hoursDuePeople` /
+    salary `salaryDuePeople`) · trailers sitting in **maintenance** (`maintCount`).
+  - **Customer payment action:** `BookingDetail` has a **Mark paid / Mark unpaid** toggle
+    (sets `b.paid`, shows the rental total) so the "Collect payment" reminder is resolvable —
+    previously `b.paid` was tracked but had no owner action. Dashboard-only, no email/text.
 - **Crew handoff confirmations:** when a team member taps Mark delivered / handed over /
   collected / received in the portal, the booking is stamped `outDoneBy`+`outDoneAt` (or
   `returnDoneBy`+`returnDoneAt`). The owner's booking detail shows a green **"Crew confirmations"**
