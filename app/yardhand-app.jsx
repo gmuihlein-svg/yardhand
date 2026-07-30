@@ -245,7 +245,7 @@ const SEED = {
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
     dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, rr: 0,
-    workerModel: "contractor", payBasis: "perjob", paymentProcessor: "stripe", paymentAccount: "", payoutMethod: "manual",
+    workerModel: "contractor", payBasis: "perjob", flatPeriod: "weekly", paymentProcessor: "stripe", paymentAccount: "", payoutMethod: "manual",
     leadDeliveryHours: 12, leadCounterHours: 2,
     bufferMins: 30, firstJobDriveMins: 30,
     notifyChannel: "both", notifyConfirm: true, notifyWaiver: true, notifyReminders: [48, 24],
@@ -792,6 +792,10 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
 
   // ── hourly pay: clock in/out + earned-but-unpaid hours (independent of 1099/W2) ──
   const hourly = biz.payBasis === "hourly";
+  const flat = biz.payBasis === "flat";
+  const salary = me.flatRate || 0;
+  const flatPeriodWord = biz.flatPeriod === "biweekly" ? "2 weeks" : "week";
+  const myPayouts = (me.payouts || []).slice().sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8);
   const myShifts = me.shifts || [];
   const openShift = myShifts.find((s) => !s.out);                                   // currently clocked in
   const shiftHours = (s) => Math.max(0, ((s.out ? new Date(s.out) : new Date()) - new Date(s.in)) / 3600000);
@@ -799,7 +803,8 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
   const unpaidHours = unpaidShifts.reduce((sum, s) => sum + shiftHours(s), 0);
   const rate = me.hourlyRate || 0;
   const paidShifts = myShifts.filter((s) => s.out && s.paid).sort((a, b) => b.in.localeCompare(a.in)).slice(0, 8);
-  const clockIn = () => { update((n) => { const d = n.contractors.find((x) => x.id === me.id); d.shifts = [...(d.shifts || []), { in: new Date().toISOString() }]; }); flash("Clocked in — the clock is running.", true); };
+  // clock in against a specific job (bookingId+jobLabel) or a general shift (no args)
+  const clockIn = (bookingId, jobLabel) => { update((n) => { const d = n.contractors.find((x) => x.id === me.id); d.shifts = [...(d.shifts || []), { in: new Date().toISOString(), ...(bookingId ? { bookingId, jobLabel } : {}) }]; }); flash(jobLabel ? `Clocked in for ${jobLabel}.` : "Clocked in — the clock is running.", true); };
   const clockOut = () => { update((n) => { const d = n.contractors.find((x) => x.id === me.id); const sh = (d.shifts || []).find((s) => !s.out); if (sh) sh.out = new Date().toISOString(); }); flash("Clocked out — hours saved for your manager.", true); };
   const fmtClock = (iso) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -867,6 +872,20 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
         ) : (
           <div className="mt-3 text-xs p-2 rounded-lg text-center flex items-center justify-center gap-1" style={{ background: T.greenSoft, color: T.green }}><Check size={13} /> Done</div>
         )}
+        {hourly && (() => {
+          const myOpen = openShift && openShift.bookingId === bk.id;      // on the clock for THIS job
+          const otherOpen = openShift && !myOpen;                        // clocked into something else
+          return myOpen ? (
+            <button onClick={clockOut} className="w-full mt-2 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5" style={{ background: T.red, color: "#fff" }}>
+              <Clock size={15} /> Clock out of this job · {shiftHours(openShift).toFixed(1)}h
+            </button>
+          ) : (
+            <button onClick={() => clockIn(bk.id, `${j.label} · ${bk.name}`)} disabled={otherOpen}
+              className="w-full mt-2 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-40" style={{ background: T.paper, color: T.steel, border: `1px solid ${T.line}` }}>
+              <Clock size={15} /> {otherOpen ? "Clocked into another job" : "Clock in for this job"}
+            </button>
+          );
+        })()}
       </Card>
     );
   };
@@ -886,7 +905,9 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
         <p><b>My jobs</b> — your assigned deliveries, pickups, and returns. Tap <b>Call</b> or <b>Directions</b> to reach the customer, <b>Add photos</b> to snap checkout/return pics, and the big button to mark a job <b>delivered / handed over / collected / received</b> when it's done (your manager sees it instantly).</p>
         <p><b>My hours</b> — tap any day to set the hours you can work as a range; you'll only be booked for times you mark free.</p>
         {hourly
-          ? <p><b>Time &amp; pay</b> — you're paid by the hour, so <b>Clock in</b> when you start work and <b>Clock out</b> when you're done. Your hours add up here and your manager pays you for them — you'll see what you've earned and what's already been paid.</p>
+          ? <p><b>Time &amp; pay</b> — you're paid by the hour, so <b>Clock in</b> when you start work and <b>Clock out</b> when you're done. Two ways to clock in: the big button here starts a <b>general shift</b>, or open a job under <b>My jobs</b> and tap <b>Clock in for this job</b> to tie your time to that customer (it shows on your shift list so your manager can see what you worked on). Your hours add up here and your manager pays you for them — you'll see what you've earned and what's already been paid.</p>
+          : flat
+          ? <p><b>My pay</b> — you're on a salary, so you're paid a fixed amount every {flatPeriodWord}. This shows your rate and your recent pay.</p>
           : <p><b>My pay</b> — you're paid per job. This shows what you're owed for finished jobs and what's already been paid.</p>}
       </HelpNote>
 
@@ -936,12 +957,12 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
           <Card className="p-4" style={{ background: openShift ? T.greenSoft : "#fff" }}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-bold">{openShift ? "You're on the clock" : "You're clocked out"}</div>
-                <div className="text-xs mt-0.5" style={{ color: T.sub }}>{openShift ? <>Since {fmtClock(openShift.in)} · <b>{shiftHours(openShift).toFixed(1)}h</b> so far</> : "Tap below when you start work."}</div>
+                <div className="text-sm font-bold">{openShift ? (openShift.jobLabel ? `On the clock · ${openShift.jobLabel}` : "You're on the clock") : "You're clocked out"}</div>
+                <div className="text-xs mt-0.5" style={{ color: T.sub }}>{openShift ? <>Since {fmtClock(openShift.in)} · <b>{shiftHours(openShift).toFixed(1)}h</b> so far</> : "Tap below for a general shift, or clock in on a specific job under My jobs."}</div>
               </div>
               {openShift
                 ? <button onClick={clockOut} className="px-4 py-2.5 rounded-lg font-bold shrink-0 flex items-center gap-1.5" style={{ background: T.red, color: "#fff" }}><Clock size={16} /> Clock out</button>
-                : <button onClick={clockIn} className="px-4 py-2.5 rounded-lg font-bold shrink-0 flex items-center gap-1.5" style={{ background: T.steel, color: "#fff" }}><Clock size={16} /> Clock in</button>}
+                : <button onClick={() => clockIn()} className="px-4 py-2.5 rounded-lg font-bold shrink-0 flex items-center gap-1.5" style={{ background: T.steel, color: "#fff" }}><Clock size={16} /> Clock in</button>}
             </div>
           </Card>
           {/* earned but unpaid */}
@@ -956,13 +977,13 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
               <div className="space-y-1.5">
                 {unpaidShifts.map((s, i) => (
                   <div key={"u" + i} className="flex items-center justify-between text-sm p-2 rounded-lg" style={{ background: T.paper }}>
-                    <div className="min-w-0 truncate"><span className="font-semibold tabular-nums">{shiftHours(s).toFixed(1)}h</span> <span className="text-xs" style={{ color: T.sub }}>· {fmtClock(s.in)}</span></div>
+                    <div className="min-w-0 truncate"><span className="font-semibold tabular-nums">{shiftHours(s).toFixed(1)}h</span> <span className="text-xs" style={{ color: T.sub }}>· {s.jobLabel || "General shift"} · {fmtClock(s.in)}</span></div>
                     <span className="text-xs font-bold px-2 py-0.5 rounded shrink-0" style={{ color: T.amberDk, background: T.amberSoft }}>Unpaid</span>
                   </div>
                 ))}
                 {paidShifts.map((s, i) => (
                   <div key={"p" + i} className="flex items-center justify-between text-sm p-2 rounded-lg" style={{ background: T.paper }}>
-                    <div className="min-w-0 truncate"><span className="font-semibold tabular-nums">{shiftHours(s).toFixed(1)}h</span> <span className="text-xs" style={{ color: T.sub }}>· {fmtClock(s.in)}</span></div>
+                    <div className="min-w-0 truncate"><span className="font-semibold tabular-nums">{shiftHours(s).toFixed(1)}h</span> <span className="text-xs" style={{ color: T.sub }}>· {s.jobLabel || "General shift"} · {fmtClock(s.in)}</span></div>
                     <span className="text-xs font-bold px-2 py-0.5 rounded shrink-0" style={{ color: T.green, background: T.greenSoft }}>Paid</span>
                   </div>
                 ))}
@@ -972,7 +993,30 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
         </div>
       )}
 
-      {tab === "pay" && !hourly && (
+      {tab === "pay" && flat && (
+        <div className="space-y-4">
+          <Card className="p-4" style={{ background: T.steelDk }}>
+            <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amber }}>Your salary</div>
+            <div className="text-4xl font-extrabold text-white tabular-nums">${salary}</div>
+            <div className="text-xs mt-1" style={{ color: "#B7C0C6" }}>every {flatPeriodWord} · a fixed amount, no matter the jobs or hours · your manager pays this out</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-sm font-bold mb-2">Recent pay</div>
+            {myPayouts.length === 0 ? <Empty>No pay logged yet.</Empty> : (
+              <div className="space-y-1.5">
+                {myPayouts.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm p-2 rounded-lg" style={{ background: T.paper }}>
+                    <div className="min-w-0 truncate"><span className="font-semibold tabular-nums">${p.amount}</span> <span className="text-xs" style={{ color: T.sub }}>· {fmt(p.at.slice(0, 10))}</span></div>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded shrink-0" style={{ color: T.green, background: T.greenSoft }}>Paid</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {tab === "pay" && !hourly && !flat && (
         <div className="space-y-4">
           <Card className="p-4" style={{ background: T.steelDk }}>
             <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amber }}>Owed to you</div>
@@ -1091,6 +1135,15 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
   const coiFlags = state.bookings.filter((b) => (b.status === "reserved" || b.status === "out") && b.coiFile && b.coiExpiry && b.coiExpiry <= coiSoonDate);
   const coiExpiredNow = coiFlags.filter((b) => b.coiExpiry < today()).length;
   const plural = (n) => (n === 1 ? "" : "s");
+  // salary payday reminder: salaried crew whose last pay was a full period ago (or never paid)
+  const salPeriodDays = state.business.flatPeriod === "biweekly" ? 14 : 7;
+  const payrollDue = state.business.payBasis === "flat"
+    ? state.contractors.filter((c) => c.active && (c.flatRate || 0) > 0 && (() => {
+        const last = (c.payouts || []).slice(-1)[0];
+        if (!last) return true;
+        return Math.floor((new Date(today() + "T00:00:00") - new Date(last.at)) / 86400000) >= salPeriodDays;
+      })()).length
+    : 0;
   const dailyChecks = [
     conflictCount > 0 && { level: "red", text: `Fix ${conflictCount} double-booking${plural(conflictCount)}`, hint: "see the red box just below" },
     overdue.length > 0 && { level: "red", text: `${overdue.length} trailer${plural(overdue.length)} overdue`, hint: "chase the customer, then mark returned when it's back" },
@@ -1101,6 +1154,7 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
     (coiFlags.length - coiExpiredNow) > 0 && { level: "amber", text: `${coiFlags.length - coiExpiredNow} COI${plural(coiFlags.length - coiExpiredNow)} expiring within 2 weeks`, hint: "ask the repeat customer for a fresh certificate so it doesn't lapse" },
     needDriver > 0 && { level: "amber", text: `${needDriver} job${plural(needDriver)} still needs a driver`, hint: "assign someone in Team & dispatch" },
     toPay > 0 && { level: "blue", text: `${toPay} finished job${plural(toPay)} to pay`, hint: "pay your crew, then mark paid in Team & dispatch → To pay" },
+    payrollDue > 0 && { level: "blue", text: `Payroll due · ${payrollDue} on salary to pay`, hint: `it's been a ${state.business.flatPeriod === "biweekly" ? "pay period (2 weeks)" : "week"} — pay your salaried crew in Team & dispatch → Payroll` },
   ].filter(Boolean);
 
   return (
@@ -1118,7 +1172,7 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
       </div>
 
       <HelpNote title="How to use your dashboard">
-        <p>This is your home base — <b>open it first each day</b>. The <b>Start here</b> box below lists exactly what needs you today (overdue trailers, pickups/returns, jobs needing a driver, COIs, payments). Clear that list and you're on top of things.</p>
+        <p>This is your home base — <b>open it first each day</b>. The <b>Start here</b> box below lists exactly what needs you today (overdue trailers, pickups/returns, jobs needing a driver, COIs, payments, and — if you pay a <b>salary</b> — a <b>payroll-due</b> reminder when a pay period has come around and your salaried crew hasn't been paid yet). Clear that list and you're on top of things.</p>
         <p>The four <b>tiles</b> (Out on rent, Available, Due back today, Overdue) are tappable — they open the matching list. <b>Pickups &amp; returns today</b> has one-tap buttons to mark trailers out or back. Everything updates live across your devices and your crew's.</p>
         <p>Use the tabs up top for the rest: Calendar, Bookings, Customers, Team &amp; dispatch, Fleet, Insights, and Settings — each has its own “How this page works” note.</p>
       </HelpNote>
@@ -2114,6 +2168,9 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
   const personName = (id) => id === "owner" ? "You" : (state.contractors.find((c) => c.id === id)?.name.split(" ")[0] || "—");
 
   const hourly = state.business.payBasis === "hourly";                    // paid by clocked hours (payroll) vs per job — independent of 1099/W2
+  const flat = state.business.payBasis === "flat";                        // fixed salary per period
+  const flatPeriod = state.business.flatPeriod === "biweekly" ? "biweekly" : "weekly";
+  const periodWord = flatPeriod === "biweekly" ? "2 weeks" : "week";
   const payVia = state.business.payoutMethod === "platform";              // pay through the platform vs mark it paid yourself
   const payWord = payVia ? "Pay" : "Mark paid";
   const reassign = (r, cid) => setBooking(r.bookingId, r.leg === "out" ? { outBy: cid } : { returnBy: cid });
@@ -2130,6 +2187,13 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
   const payEmployee = (row) => {
     update((n) => { const d = n.contractors.find((x) => x.id === row.c.id); (d.shifts || []).forEach((s) => { if (s.out && !s.paid) s.paid = true; }); });
     flash(`${payVia ? "Sent" : "Marked paid"} ${row.c.name.split(" ")[0]} $${row.amount.toFixed(2)} for ${row.hours.toFixed(1)}h.`, true);
+  };
+  // salary: each active person gets a fixed amount per period; a Pay button logs a payout
+  const salaryRows = state.contractors.filter((c) => c.active).map((c) => ({ c, amount: c.flatRate || 0, last: (c.payouts || []).slice(-1)[0] || null }));
+  const salaryTotal = salaryRows.reduce((s, r) => s + r.amount, 0);
+  const paySalary = (c, amount) => {
+    update((n) => { const d = n.contractors.find((x) => x.id === c.id); d.payouts = [...(d.payouts || []), { at: new Date().toISOString(), amount }]; });
+    flash(`${payVia ? "Sent" : "Logged"} ${c.name.split(" ")[0]}'s $${amount} ${flatPeriod === "biweekly" ? "bi-weekly" : "weekly"} pay.`, true);
   };
   const setMode = (m) => update((n) => { n.business.dispatchMode = m; });
   const setCounterMode = (m) => update((n) => { n.business.counterMode = m; });
@@ -2222,14 +2286,16 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
       </div>
       <HelpNote>
         <p>One crew, two kinds of work: <b>delivery/collection runs</b> (someone drives) and <b>will-call/yard handoffs</b> (someone staffs the yard). The same people can do both.</p>
-        <p>Read it top to bottom: <b>1)</b> upcoming jobs and who's covering each (assign with the dropdown; unassigned road runs are highlighted), <b>2)</b> {hourly ? "payroll — clocked hours × each person's rate, with a Pay button" : "who you owe for finished jobs, one line each, with a Pay/Mark-paid button"}, <b>3)</b> your people (add/pause, sick-day{hourly ? ", and set each one's hourly rate" : ""}), <b>4)</b> each person's working hours — tap a day to set a range, <b>5)</b> auto-assign settings.</p>
+        <p>Read it top to bottom: <b>1)</b> upcoming jobs and who's covering each (assign with the dropdown; unassigned road runs are highlighted), <b>2)</b> {hourly ? "payroll — clocked hours × each person's rate, with a Pay button" : flat ? `payroll — each person's fixed ${periodWord === "2 weeks" ? "bi-weekly" : "weekly"} salary, with a Pay button` : "who you owe for finished jobs, one line each, with a Pay/Mark-paid button"}, <b>3)</b> your people (add/pause, sick-day{hourly ? ", and set each one's hourly rate" : flat ? ", and set each one's salary" : ""}), <b>4)</b> each person's working hours — tap a day to set a range, <b>5)</b> auto-assign settings.</p>
         <p><b>How you pay your team</b> is set in Settings → "How you pay your team" (two separate choices: their tax status — {state.business.workerModel === "employee" ? "W2 employees" : "1099 contractors"} — and how you pay them). {hourly
           ? <>You're paying <b>by the hour</b>: your crew <b>clock in/out</b> from their portal, and section 2 above adds up each person's hours × rate so you can pay them hourly. Set each person's rate on their card in section 3. (Hourly works whether they're 1099 or W2.)</>
-          : <>You're paying <b>per job</b>: they earn your delivery-run and yard-handoff fees, and section 2 above lists each finished, unpaid job to pay off. Switch to "by the hour" in Settings if you put your crew on hourly pay instead.</>}</p>
+          : flat
+          ? <>You're paying a <b>salary</b>: each active person gets the same fixed amount every {periodWord} regardless of jobs or hours. Section 2 above lists everyone with their {periodWord === "2 weeks" ? "bi-weekly" : "weekly"} amount and a Pay button; set each person's salary on their card in section 3. Change the period (weekly / every 2 weeks) in Settings.</>
+          : <>You're paying <b>per job</b>: they earn your delivery-run and yard-handoff fees, and section 2 above lists each finished, unpaid job to pay off. Switch to hourly or salary in Settings if that fits your crew better.</>}</p>
         <p>{state.business.payoutMethod === "platform"
           ? <>Your <b>Pay</b> buttons send pay <b>through the platform</b> (set in Settings → Payments) — one tap clears what's owed. Payouts are simulated until your payout account is connected.</>
           : <>You pay your crew your own way, then tap <b>Mark paid</b> here to clear it. Switch to pay-through-the-platform in Settings → Payments if you'd rather send it with one tap.</>}</p>
-        <p>Your crew can set their own hours{hourly ? ", clock in/out," : ""} and mark jobs done from their <b>Team sign-in</b> on your public site.</p>
+        <p>Your crew can set their own hours{hourly ? ", clock in/out (either a general shift or against a specific job, which tags those hours to that customer)," : ""} and mark jobs done from their <b>Team sign-in</b> on your public site. You can also set anyone's hours yourself on the grid in section 4.</p>
       </HelpNote>
 
       <Card className="p-4" style={{ background: T.blueSoft }}>
@@ -2306,6 +2372,28 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
             </div>
           )}
         </Card>
+      ) : flat ? (
+        <Card className="p-4">
+          <div className="text-sm font-bold mb-1">2 · Payroll <span className="font-normal" style={{ color: T.sub }}>· ${salaryTotal} per {periodWord}</span></div>
+          <div className="text-xs mb-3 leading-snug" style={{ color: T.sub }}>
+            Your crew is on <b>salary</b> — each active person gets the same fixed amount every {periodWord}, no matter how many jobs or hours. Set each person's amount on their card in section 3. {payVia
+              ? <>When it's payday, tap <b>Pay</b> to send it through the platform.</>
+              : <>When it's payday, run it your usual way and tap <b>Mark paid</b> to log it.</>}
+          </div>
+          {salaryRows.length === 0 ? <Empty>No active crew right now.</Empty> : (
+            <div className="space-y-1.5">
+              {salaryRows.map((row) => (
+                <div key={row.c.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{row.c.name}</div>
+                    <div className="text-xs" style={{ color: T.sub }}>${row.amount}/{periodWord}{row.amount === 0 ? " · set an amount on their card →" : ""}{row.last ? ` · last paid ${fmt(row.last.at.slice(0, 10))}` : ""}</div>
+                  </div>
+                  <button onClick={() => paySalary(row.c, row.amount)} disabled={row.amount === 0} className="text-[11px] font-bold px-2.5 py-1.5 rounded shrink-0 disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>{payWord} ${row.amount}</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       ) : (
       <Card className="p-4">
         <div className="text-sm font-bold mb-1">2 · To pay <span className="font-normal" style={{ color: T.sub }}>· ${owedTotal} owed</span></div>
@@ -2357,6 +2445,13 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
                         <span className="text-[11px]" style={{ color: T.sub }}>Pay $</span>
                         <input type="number" min="0" step="0.5" defaultValue={c.hourlyRate || 0} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (c.hourlyRate || 0)) { update((n) => { const d = n.contractors.find((x) => x.id === c.id); d.hourlyRate = v; }); flash(`Set ${c.name.split(" ")[0]}'s rate to $${v}/hr.`, true); } }} className="w-16 px-1.5 py-0.5 rounded text-[11px] tabular-nums" style={{ border: `1px solid ${T.line}` }} />
                         <span className="text-[11px]" style={{ color: T.sub }}>/hr</span>
+                      </div>
+                    )}
+                    {flat && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-[11px]" style={{ color: T.sub }}>Salary $</span>
+                        <input type="number" min="0" step="10" defaultValue={c.flatRate || 0} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (c.flatRate || 0)) { update((n) => { const d = n.contractors.find((x) => x.id === c.id); d.flatRate = v; }); flash(`Set ${c.name.split(" ")[0]}'s salary to $${v}/${periodWord}.`, true); } }} className="w-16 px-1.5 py-0.5 rounded text-[11px] tabular-nums" style={{ border: `1px solid ${T.line}` }} />
+                        <span className="text-[11px]" style={{ color: T.sub }}>/{periodWord}</span>
                       </div>
                     )}
                   </div>
@@ -2453,7 +2548,7 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
         </div>
       </Card>
 
-      {adding && <AddContractorModal hourly={hourly} onClose={() => setAdding(false)}
+      {adding && <AddContractorModal payBasis={state.business.payBasis} periodWord={periodWord} onClose={() => setAdding(false)}
         onAdd={(c) => { update((n) => n.contractors.push({ ...c, locationId: locId })); setAdding(false); flash(`Added ${c.name}.`, true); }} />}
       {editAvail && <AvailabilityEditor {...editAvail} state={state} update={update} onClose={() => setEditAvail(null)} />}
     </div>
@@ -2518,9 +2613,11 @@ function AvailabilityEditor({ driverId, date, state, update, onClose }) {
   );
 }
 
-function AddContractorModal({ onClose, onAdd, hourly }) {
+function AddContractorModal({ onClose, onAdd, payBasis, periodWord }) {
   const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); const [vehicle, setVehicle] = useState(""); const [rate, setRate] = useState("");
-  const isW2 = hourly;
+  const hourly = payBasis === "hourly", flat = payBasis === "flat";
+  const rateLabel = hourly ? "Hourly pay rate ($/hr)" : flat ? `Salary ($/${periodWord})` : "Hourly pay rate ($/hr) — optional";
+  const unit = hourly ? "/hr" : flat ? `/${periodWord}` : "/hr";
   return (
     <Modal onClose={onClose} title="Add employee">
       <div className="space-y-3">
@@ -2530,18 +2627,20 @@ function AddContractorModal({ onClose, onAdd, hourly }) {
           <Field label="Tow vehicle (if they drive)"><input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. F-250 · leave blank for yard-only" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         </div>
         <Field label="Email (for job alerts & their portal login)"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@yourcompany.com" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
-        <Field label={isW2 ? "Hourly pay rate ($/hr)" : "Hourly pay rate ($/hr) — optional"}>
+        <Field label={rateLabel}>
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold" style={{ color: T.sub }}>$</span>
-            <input type="number" min="0" step="0.5" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 22" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
-            <span className="text-sm" style={{ color: T.sub }}>/hr</span>
+            <input type="number" min="0" step={flat ? "10" : "0.5"} value={rate} onChange={(e) => setRate(e.target.value)} placeholder={flat ? "e.g. 800" : "e.g. 22"} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+            <span className="text-sm" style={{ color: T.sub }}>{unit}</span>
           </div>
         </Field>
       </div>
-      <p className="text-xs mt-3" style={{ color: T.sub }}>{isW2
+      <p className="text-xs mt-3" style={{ color: T.sub }}>{hourly
         ? <>You pay by the hour, so this person clocks in/out from their portal and is paid at this rate — you'll see their hours and total on the payroll list in Team &amp; dispatch. You can change the rate anytime on their card. At launch, collect the right paperwork first (W-4 for W2, or W-9 for 1099) — see the guide.</>
+        : flat
+        ? <>You pay a salary, so this person gets ${rate || "—"} every {periodWord} regardless of jobs or hours — you'll see them on the payroll list in Team &amp; dispatch with a Pay button. You can change the amount anytime on their card. At launch, collect the right paperwork first (W-4 for W2, or W-9 for 1099) — see the guide.</>
         : <>The same person can drive delivery/collection runs and staff yard handoffs — assign them to either from Team &amp; dispatch. At launch, collect a signed agreement and the right tax form (W-9 for 1099, W-4 for W2) and a COI before their first job (see the guide). An hourly rate is optional here since you pay per job.</>}</p>
-      <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, email, vehicle: vehicle || "—", active: true, hourlyRate: Number(rate) || 0, shifts: [] })}
+      <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, email, vehicle: vehicle || "—", active: true, hourlyRate: (hourly || !flat) ? (Number(rate) || 0) : 0, flatRate: flat ? (Number(rate) || 0) : 0, shifts: [] })}
         className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add employee</button>
     </Modal>
   );
@@ -2602,7 +2701,7 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
       <SectionTitle>Settings</SectionTitle>
       <HelpNote>
         <p>Everything that makes the app <b>yours</b>: business name & time zone, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, booking notice and buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
-        <p><b>How you pay your team</b> is two separate choices: their <b>tax status</b> (1099 contractors vs W2 employees — just paperwork wording) and <b>how you pay them</b> (per job, or by the hour). Any mix works — a 1099 contractor paid hourly is fine. Per-job shows a "who you owe" list; by-the-hour shows a payroll list (each person's clocked hours × their rate), and your crew clock in/out from their portal.</p>
+        <p><b>How you pay your team</b> is two separate choices: their <b>tax status</b> (1099 contractors vs W2 employees — just paperwork wording) and <b>how you pay them</b> — <b>per job</b>, <b>by the hour</b>, or a <b>salary</b> (a fixed amount weekly or every 2 weeks). Any mix works — a 1099 contractor paid hourly, a W2 on salary, etc. Per-job shows a "who you owe" list; by-the-hour shows a payroll list of clocked hours × rate (crew clock in/out from their portal); salary shows a payroll list of each person's fixed amount with a Pay button. You set each person's rate/salary on their card in Team &amp; dispatch.</p>
         <p><b>Payments</b> is how money moves: pick how you <b>collect from customers</b> (Stripe, Square, PayPal/Venmo, Authorize.net, or manual cash/check), and how you <b>pay your team</b> — <b>through the platform</b> (a one-tap "Pay $X" button sends their payout) or <b>yourself</b> (you pay them your own way and just tap "Mark paid"). Real charging and payouts turn on when the payments backend is connected; for now they're set up and simulated.</p>
         <p>Every change <b>saves automatically</b> to the cloud — no save button. Scroll through the cards top to bottom; each has its own short explanation.</p>
       </HelpNote>
@@ -2849,15 +2948,26 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         </p>
         <Field label="How you pay them">
           <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
-            {[["perjob", "Per job"], ["hourly", "By the hour"]].map(([v, l]) => (
+            {[["perjob", "Per job"], ["hourly", "By the hour"], ["flat", "Salary"]].map(([v, l]) => (
               <button key={v} onClick={() => set({ payBasis: v })} className="flex-1 py-1.5 rounded-md text-sm font-bold" style={(b.payBasis || "perjob") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
             ))}
           </div>
         </Field>
+        {(b.payBasis || "perjob") === "flat" && (
+          <Field label="Pay period">
+            <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+              {[["weekly", "Weekly"], ["biweekly", "Every 2 weeks"]].map(([v, l]) => (
+                <button key={v} onClick={() => set({ flatPeriod: v })} className="flex-1 py-1.5 rounded-md text-sm font-bold" style={(b.flatPeriod || "weekly") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+              ))}
+            </div>
+          </Field>
+        )}
         <p className="text-[11px]" style={{ color: T.sub }}>
           {(b.payBasis || "perjob") === "perjob"
             ? "Per job: Team & dispatch tracks a fee for each delivery run and yard handoff, lists each finished job you still owe, and you pay per job. Best for crews paid a flat amount per delivery/pickup."
-            : "By the hour: Team & dispatch shows a payroll view instead (each person's clocked hours × their rate) with one Pay button per person. Set each person's hourly rate on their card, and they clock in/out from their portal. Works for hourly contractors and W2 employees alike."}
+            : (b.payBasis === "hourly")
+            ? "By the hour: Team & dispatch shows a payroll view instead (each person's clocked hours × their rate) with one Pay button per person. Set each person's hourly rate on their card, and they clock in/out from their portal. Works for hourly contractors and W2 employees alike."
+            : `Salary: each person gets the same fixed amount every ${b.flatPeriod === "biweekly" ? "two weeks" : "week"}, no matter how many jobs or hours. Team & dispatch shows a payroll list with each person's ${b.flatPeriod === "biweekly" ? "bi-weekly" : "weekly"} amount and a Pay button; set each person's salary on their card. Best for a steady crew you keep on regardless of volume.`}
         </p>
       </Card>
       <Card className="p-4 space-y-3">

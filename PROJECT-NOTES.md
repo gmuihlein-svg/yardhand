@@ -113,8 +113,8 @@ Team & dispatch · Fleet · Settings.
 - **Flexible pay model + payments/payouts:** two **independent** settings so the app fits any
   crew (owner asked: "some people use contractors but pay them hourly too, right?"). **Tax
   status** `business.workerModel` (`contractor`=1099 / `employee`=W2) is paperwork wording only.
-  **Pay basis** `business.payBasis` (`perjob` / `hourly`) drives the pay UI, and any mix works
-  (a 1099 contractor paid hourly, a W2 on payroll, etc.). Both toggles live in Settings →
+  **Pay basis** `business.payBasis` (`perjob` / `hourly` / `flat`) drives the pay UI, and any mix
+  works (a 1099 contractor paid hourly, a W2 on salary, etc.). Both toggles live in Settings →
   **"How you pay your team."**
   - **Per job** (default): Team & dispatch section 2 = "To pay" list of finished unpaid jobs
     (the existing `payJobs`/`owedBy`), pay each one off. Employee portal "My pay" shows owed/paid.
@@ -122,8 +122,18 @@ Team & dispatch · Fleet · Settings.
     `unpaid shifts hours × hourlyRate` with a Pay button that marks all their finished shifts
     paid. Roster cards get an inline **$/hr rate editor**. `AddContractorModal` collects a rate.
     Employee portal tab becomes **"Time & pay"**: **Clock in / Clock out** (writes
-    `contractor.shifts[] = {in, out, paid}`), an "Earned, not paid yet" total (hours × rate),
-    and a recent-shifts list. Hours are computed live from shift timestamps.
+    `contractor.shifts[] = {in, out, paid, bookingId?, jobLabel?}`), an "Earned, not paid yet"
+    total (hours × rate), and a recent-shifts list. Hours computed live from shift timestamps.
+    **Two ways to clock in:** a general shift (big button on the Time & pay tab) OR **against a
+    specific job** — each job card in "My jobs" has a *Clock in for this job* button that tags
+    the shift with `bookingId`+`jobLabel`; only one job open at a time (others show "Clocked into
+    another job"); the tag shows on the shift list and the on-the-clock header.
+  - **Salary / flat** (`flat = payBasis === "flat"`): each active person gets a fixed amount every
+    period. `business.flatPeriod` = `weekly` / `biweekly` (Settings shows a period selector).
+    Section 2 = "Payroll" list of each active person's `flatRate` per period with a Pay button
+    that logs `contractor.payouts[] = {at, amount}` (shows "last paid <date>"). Roster cards get a
+    **$/period salary editor**. `AddContractorModal` collects the salary. Employee portal "My pay"
+    shows their salary + recent pay (no clock-in). No hours/jobs accumulation — it's a fixed recurring pay.
   - **Payments** (Settings → Payments card): `paymentProcessor` = how customers pay you
     (Stripe/Square/PayPal-Venmo/Authorize.net/manual) + `paymentAccount`; `payoutMethod` = how
     you pay your team — `platform` (one-tap **Pay $X** button labels; simulated payout) vs
@@ -317,7 +327,8 @@ the code per customer.
   deliveryFee, dropFee, counterFee, taxRate, waiverRate), refund policy, agreementText,
   bookHorizonDays, dispatchMode, counterMode, leadDeliveryHours, leadCounterHours,
   **workerModel** (`contractor`=1099 / `employee`=W2 — paperwork wording only),
-  **payBasis** (`perjob` / `hourly` — drives the pay UI, independent of workerModel),
+  **payBasis** (`perjob` / `hourly` / `flat` — drives the pay UI, independent of workerModel),
+  **flatPeriod** (`weekly` / `biweekly` — salary period when payBasis=flat),
   **paymentProcessor** (stripe/square/paypal/authorize/manual — how customers pay),
   **paymentAccount**, **payoutMethod** (`platform`=one-tap Pay button / `manual`=Mark paid).
 - `types[]` — equipment products: size (key), name, cuyd, daily/weekly/biweekly/monthly,
@@ -325,7 +336,9 @@ the code per customer.
   booking cards + review; e.g. towing for trailers, operator/transport/power for other gear).
 - `trailers[]` — physical units: id, assetId, size, vin, maint, **cost** (purchase price).
 - `contractors[]` — workforce: id, name, phone, **email**, vehicle, active, avail{},
-  **hourlyRate** (for hourly pay), **shifts[]** (`{in, out, paid}` ISO clock-in/out records).
+  **hourlyRate** (hourly pay), **flatRate** (salary amount per period), **shifts[]**
+  (`{in, out, paid, bookingId?, jobLabel?}` — clock-in/out records; `bookingId`/`jobLabel`
+  set when clocked in against a specific job), **payouts[]** (`{at, amount}` — logged salary pays).
 - `bookings[]` — id, code, trailerId, size, customer info, start/end, times, status
   (reserved/out/returned/overdue via date/cancelled), waiver, outMethod/returnMethod,
   outBy/returnBy + paid flags, price, deposit, coi, coiFile, coiName, signName/signedAt,
