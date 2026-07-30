@@ -391,20 +391,22 @@ export default function App() {
     );
   }
 
-  applyTheme(state.business); // recolor tokens from saved brand theme before children render
-
   /* ── multi-location: everything below is scoped to the location this browser is viewing ── */
   const locations = (state.locations && state.locations.length) ? state.locations : [{ id: "loc1", name: state.business.yard || "Main location", area: state.business.yard || "" }];
   const locId = (activeLoc && locations.some((l) => l.id === activeLoc)) ? activeLoc : locations[0].id;
   const activeLocation = locations.find((l) => l.id === locId) || locations[0];
-  setAppTz(activeLocation.timezone || state.business.timezone); // "today" follows THIS location's time zone
   const inLoc = (x) => (x.locationId || locations[0].id) === locId;
-  // each branch inherits the company settings, then applies its own overrides (tax, fees, agreement, …)
+  // Each branch has its OWN settings + equipment catalog. The first branch uses the top-level
+  // business/types; other branches keep their own copy (seeded from the first branch when added).
   const scopedBusiness = { ...state.business, ...(activeLocation.overrides || {}) };
-  const scoped = { ...state, business: scopedBusiness, trailers: (state.trailers || []).filter(inLoc), bookings: (state.bookings || []).filter(inLoc), contractors: (state.contractors || []).filter(inLoc) };
+  const scopedTypes = activeLocation.types || state.types;
+  const scoped = { ...state, business: scopedBusiness, types: scopedTypes, trailers: (state.trailers || []).filter(inLoc), bookings: (state.bookings || []).filter(inLoc), contractors: (state.contractors || []).filter(inLoc) };
   const switchLoc = (id) => { setActiveLoc(id); try { sessionStorage.setItem("yardhand_loc", id); } catch (e) {} };
 
-  const typeBySize = (sz) => state.types.find((t) => t.size === sz);
+  applyTheme(scopedBusiness); // recolor from the active branch's brand (its own logo/colors)
+  setAppTz(activeLocation.timezone || scopedBusiness.timezone); // "today" follows THIS location's time zone
+
+  const typeBySize = (sz) => scopedTypes.find((t) => t.size === sz);
 
   /* derive status for a trailer on a given day (within the active location) */
   const trailerStatus = (tr) => {
@@ -466,7 +468,7 @@ export default function App() {
               {tab === "customers" && <CustomersView {...{ state: scoped, openDetail: setDetail }} />}
               {tab === "team" && <TeamView {...{ state: scoped, locId, setBooking, update, flash, openDetail: setDetail }} />}
               {tab === "fleet" && <FleetView {...{ state: scoped, locId, typeBySize, trailerStatus, currentBooking, update, flash }} />}
-              {tab === "settings" && <SettingsView {...{ state, setState, flash }} />}
+              {tab === "settings" && <SettingsView {...{ state, setState, flash, locId, locations, switchLoc }} />}
             </div>
           ) : (
             <CustomerArea {...{ state: scoped, typeBySize, countAvail, findUnit, addBooking, setBooking, flash, setMode, initialView: custStart, locations, locId, switchLoc }} />
@@ -1527,7 +1529,11 @@ function FleetView({ state, locId, typeBySize, trailerStatus, currentBooking, up
         </Card>
       ))}
       {addingType && <AddTypeModal existing={state.types} onPhoto={fileToScaledDataURL} onClose={() => setAddingType(false)}
-        onAdd={(t) => { update((n) => n.types.push(t)); setAddingType(false); flash(`Added ${t.name}.`, true); }} />}
+        onAdd={(t) => { update((n) => {
+          const base = n.locations && n.locations[0] ? n.locations[0].id : null;
+          if (!locId || locId === base) n.types.push(t);
+          else { const l = (n.locations || []).find((x) => x.id === locId); if (l) l.types = [...(l.types || n.types), t]; }
+        }); setAddingType(false); flash(`Added ${t.name}.`, true); }} />}
       {unitSize && <AddTrailerModal state={state} initialSize={unitSize} onClose={() => setUnitSize(null)}
         onAdd={(tr) => { update((n) => n.trailers.push({ ...tr, locationId: locId })); setUnitSize(null); flash(`Added ${tr.assetId}.`, true); }} />}
     </div>
@@ -2418,27 +2424,48 @@ function AddContractorModal({ onClose, onAdd }) {
 }
 
 /* ---------------- SETTINGS --------------- */
-function SettingsView({ state, setState, flash }) {
-  const b = state.business;
+function SettingsView({ state, setState, flash, locId, locations: locsProp, switchLoc }) {
   const [addingType, setAddingType] = useState(false);
   const [confirm, setConfirm] = useState(null); // {title, body, confirmLabel, onYes}
   const [newRem, setNewRem] = useState(24); // hours for a new reminder
-  const set = (patch) => setState((s) => ({ ...s, business: { ...s.business, ...patch } }));
-  const setType = (size, patch) => setState((s) => ({ ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) }));
-  const addType = (t) => { setState((s) => ({ ...s, types: [...s.types, t] })); setAddingType(false); flash(`Added ${t.name}.`, true); };
-  const removeType = (size) => { if (state.trailers.some((tr) => tr.size === size)) { flash("Remove its units first."); return; } setState((s) => ({ ...s, types: s.types.filter((t) => t.size !== size) })); flash("Equipment type removed.", true); };
+  // Settings edit the branch you're currently in (top-bar switcher). The first branch is the
+  // "base" (top-level business/types); other branches keep their own independent copy.
+  const locations = state.locations || [];
+  const baseId = locations[0] ? locations[0].id : null;
+  const curId = (locId && locations.some((l) => l.id === locId)) ? locId : baseId;
+  const curLoc = locations.find((l) => l.id === curId);
+  const isBase = !curLoc || curId === baseId;
+  const b = isBase ? state.business : { ...state.business, ...(curLoc.overrides || {}) };
+  const types = isBase ? state.types : (curLoc.types || state.types);
+  const multi = locations.length > 1;
+  const set = (patch) => setState((s) => {
+    if (isBase) return { ...s, business: { ...s.business, ...patch } };
+    return { ...s, locations: s.locations.map((l) => l.id === curId ? { ...l, overrides: { ...(l.overrides || {}), ...patch } } : l) };
+  });
+  const setType = (size, patch) => setState((s) => {
+    if (isBase) return { ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) };
+    return { ...s, locations: s.locations.map((l) => l.id === curId ? { ...l, types: (l.types || s.types).map((t) => t.size === size ? { ...t, ...patch } : t) } : l) };
+  });
+  const addType = (t) => { const nt = { ...t, agreementText: t.agreementText || b.agreementText || "" }; setState((s) => {
+    if (isBase) return { ...s, types: [...s.types, nt] };
+    return { ...s, locations: s.locations.map((l) => l.id === curId ? { ...l, types: [...(l.types || s.types), nt] } : l) };
+  }); setAddingType(false); flash(`Added ${nt.name}.`, true); };
+  const copyContractToAll = (text) => setState((s) => {
+    if (isBase) return { ...s, types: s.types.map((t) => ({ ...t, agreementText: text })) };
+    return { ...s, locations: s.locations.map((l) => l.id === curId ? { ...l, types: (l.types || s.types).map((t) => ({ ...t, agreementText: text })) } : l) };
+  });
+  const removeType = (size) => {
+    if ((state.trailers || []).some((tr) => tr.size === size && (tr.locationId || baseId) === curId)) { flash("Remove its units first."); return; }
+    setState((s) => {
+      if (isBase) return { ...s, types: s.types.filter((t) => t.size !== size) };
+      return { ...s, locations: s.locations.map((l) => l.id === curId ? { ...l, types: (l.types || s.types).filter((t) => t.size !== size) } : l) };
+    }); flash("Equipment removed.", true);
+  };
   const onPhoto = async (size, file) => { if (!file) return; const url = await fileToScaledDataURL(file); if (url) { setType(size, { image: url }); flash("Photo updated."); } else flash("Couldn't read that image."); };
   const onLogo = async (file) => { if (!file) return; const url = await fileToScaledDataURL(file, 400, "image/png"); if (url) { set({ logo: url }); flash("Logo updated."); } else flash("Couldn't read that image."); };
   // locations / branches
-  const locations = state.locations || [];
   const setLocation = (id, patch) => setState((s) => ({ ...s, locations: (s.locations || []).map((l) => l.id === id ? { ...l, ...patch } : l) }));
-  const addLocation = () => { const id = "loc" + Date.now(); setState((s) => ({ ...s, locations: [...(s.locations || []), { id, name: "New location", area: "", phone: "", timezone: (s.business.timezone || "America/New_York") }] })); flash("Location added — switch to it from the top bar to add its trailers & crew.", true); };
-  const setLocationOverride = (id, key, val) => setState((s) => ({ ...s, locations: (s.locations || []).map((l) => {
-    if (l.id !== id) return l;
-    const ov = { ...(l.overrides || {}) };
-    if (val === "" || val == null || (typeof val === "number" && Number.isNaN(val))) delete ov[key]; else ov[key] = val;
-    return { ...l, overrides: ov };
-  }) }));
+  const addLocation = () => { const id = "loc" + Date.now(); setState((s) => ({ ...s, locations: [...(s.locations || []), { id, name: "New location", area: "", phone: "", timezone: (s.business.timezone || "America/New_York"), overrides: structuredClone(s.business), types: structuredClone(s.types) }] })); flash("Location added as a copy of your first branch — switch to it in the top bar, then change whatever's different.", true); };
   const removeLocation = (id) => {
     const used = (state.trailers || []).some((t) => (t.locationId) === id) || (state.bookings || []).some((bk) => bk.locationId === id) || (state.contractors || []).some((c) => c.locationId === id);
     if (used) { flash("Move or remove that location's trailers, crew, and bookings first."); return; }
@@ -2453,6 +2480,11 @@ function SettingsView({ state, setState, flash }) {
         <p>Everything that makes the app <b>yours</b>: business name & time zone, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, booking notice and buffers, who covers jobs, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
         <p>Every change <b>saves automatically</b> to the cloud — no save button. Scroll through the cards top to bottom; each has its own short explanation.</p>
       </HelpNote>
+      {multi && curLoc && (
+        <div className="rounded-xl p-3 flex items-center gap-2 text-sm font-bold" style={{ background: T.amberSoft, color: T.amberDk, border: `1px solid ${T.amber}` }}>
+          <MapPin size={16} /> Editing settings for <b>{curLoc.name}</b> — these changes apply to this branch only. Switch branches in the top bar.
+        </div>
+      )}
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Building2 size={16} style={{ color: T.amberDk }} /></span>
@@ -2462,11 +2494,7 @@ function SettingsView({ state, setState, flash }) {
         <Field label="Legal / insured name for COIs (if different — e.g. your LLC)"><input value={b.legalName || ""} onChange={(e) => set({ legalName: e.target.value })} placeholder="Leave blank to use your business name" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Yard location"><input value={b.yard} onChange={(e) => set({ yard: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Business phone (shown to customers · used for the “Text to book” button)"><input value={b.phone} onChange={(e) => set({ phone: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
-        <Field label="Time zone (sets your “today”, due-dates & schedule)">
-          <select value={b.timezone || "America/New_York"} onChange={(e) => set({ timezone: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
-            {TIMEZONES.map(([tz, label]) => <option key={tz} value={tz}>{label}</option>)}
-          </select>
-        </Field>
+        <p className="text-[11px]" style={{ color: T.sub }}>Set each branch's time zone below under Locations.</p>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between">
@@ -2476,50 +2504,27 @@ function SettingsView({ state, setState, flash }) {
           </div>
           <button onClick={addLocation} className="text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={14} /> Add location</button>
         </div>
-        <p className="text-xs" style={{ color: T.sub }}>Each location/branch has its own trailers, crew, and bookings. When you have more than one, a <b>location switcher</b> appears in the top bar — pick a branch and the whole dashboard shows just that location. New trailers, crew, and bookings you create belong to the location you're viewing.</p>
+        <p className="text-xs" style={{ color: T.sub }}>Each branch is <b>fully independent</b> — its own equipment, pricing, waiver, fees, branding, crew, trailers, and bookings. A <b>location switcher</b> in the top bar lets you jump between them; whichever branch you're in is the one you're viewing <b>and editing</b> everywhere in Settings. Adding a branch copies your <b>first branch's</b> full setup so you're not starting from scratch — then change whatever differs.</p>
         <div className="space-y-2">
-          {locations.map((l) => (
-            <div key={l.id} className="rounded-lg p-3 space-y-2" style={{ background: T.paper }}>
+          {locations.map((l, i) => (
+            <div key={l.id} className="rounded-lg p-3 space-y-2" style={{ background: l.id === curId ? T.amberSoft : T.paper, border: l.id === curId ? `1px solid ${T.amber}` : "1px solid transparent" }}>
+              {l.id === curId && <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: T.amberDk }}>You're editing this branch now</div>}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Field label="Name"><input value={l.name || ""} onChange={(e) => setLocation(l.id, { name: e.target.value })} placeholder="e.g. Charlotte" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+                <Field label={`Name${i === 0 ? " (first branch · the template for new ones)" : ""}`}><input value={l.name || ""} onChange={(e) => setLocation(l.id, { name: e.target.value })} placeholder="e.g. Charlotte" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
                 <Field label="Service area / yard"><input value={l.area || ""} onChange={(e) => setLocation(l.id, { area: e.target.value })} placeholder="e.g. Charlotte, NC" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
                 <Field label="Phone (optional)"><input value={l.phone || ""} onChange={(e) => setLocation(l.id, { phone: e.target.value })} placeholder="local number" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
                 <Field label="Time zone (this branch's local time)">
-                  <select value={l.timezone || b.timezone || "America/New_York"} onChange={(e) => setLocation(l.id, { timezone: e.target.value })} className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+                  <select value={l.timezone || "America/New_York"} onChange={(e) => setLocation(l.id, { timezone: e.target.value })} className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
                     {TIMEZONES.map(([tz, label]) => <option key={tz} value={tz}>{label}</option>)}
                   </select>
                 </Field>
               </div>
-              <details className="mt-1">
-                <summary className="text-[11px] font-bold cursor-pointer" style={{ color: T.blue }}>Override settings for this branch{l.overrides && Object.keys(l.overrides).length ? ` · ${Object.keys(l.overrides).length} set` : ""}</summary>
-                <div className="mt-2 space-y-2 pl-1" style={{ borderLeft: `2px solid ${T.line}` }}>
-                  <p className="text-[10px] pl-2" style={{ color: T.sub }}>Leave any field blank to use your company default. Fill one in to make it different at this branch only.</p>
-                  <div className="pl-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <Field label={`Sales tax % (co: ${Math.round((b.taxRate || 0) * 100)}%)`}>
-                      <input inputMode="decimal" value={l.overrides && l.overrides.taxRate != null ? Math.round(l.overrides.taxRate * 100) : ""} onChange={(e) => setLocationOverride(l.id, "taxRate", e.target.value === "" ? "" : (+e.target.value) / 100)} placeholder="inherit" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
-                    </Field>
-                    <Field label={`Deposit $ (co: $${b.deposit})`}>
-                      <input inputMode="numeric" value={l.overrides && l.overrides.deposit != null ? l.overrides.deposit : ""} onChange={(e) => setLocationOverride(l.id, "deposit", e.target.value === "" ? "" : +e.target.value)} placeholder="inherit" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
-                    </Field>
-                    <Field label={`Delivery $ (co: $${b.deliveryFee})`}>
-                      <input inputMode="numeric" value={l.overrides && l.overrides.deliveryFee != null ? l.overrides.deliveryFee : ""} onChange={(e) => setLocationOverride(l.id, "deliveryFee", e.target.value === "" ? "" : +e.target.value)} placeholder="inherit" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
-                    </Field>
-                    <Field label={`Will-call $ (co: $${b.dropFee})`}>
-                      <input inputMode="numeric" value={l.overrides && l.overrides.dropFee != null ? l.overrides.dropFee : ""} onChange={(e) => setLocationOverride(l.id, "dropFee", e.target.value === "" ? "" : +e.target.value)} placeholder="inherit" className="w-full p-2 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
-                    </Field>
-                  </div>
-                  <div className="pl-2">
-                    <Field label="Rental agreement & waiver for this branch (blank = company default)">
-                      <textarea value={l.overrides && l.overrides.agreementText != null ? l.overrides.agreementText : ""} onChange={(e) => setLocationOverride(l.id, "agreementText", e.target.value)} rows={3} placeholder="Leave blank to use the company agreement. Paste this branch's version (e.g. different state terms) to override." className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
-                    </Field>
-                  </div>
-                </div>
-              </details>
-              {locations.length > 1 && <button onClick={() => removeLocation(l.id)} className="text-[11px] font-bold mt-1" style={{ color: T.red }}>Remove location</button>}
+              {l.id !== curId && switchLoc && <button onClick={() => switchLoc(l.id)} className="text-[11px] font-bold" style={{ color: T.steel }}>Switch here to edit this branch's settings →</button>}
+              {locations.length > 1 && <button onClick={() => removeLocation(l.id)} className="text-[11px] font-bold ml-3" style={{ color: T.red }}>Remove location</button>}
             </div>
           ))}
         </div>
-        <p className="text-[11px]" style={{ color: T.sub }}>New branches <b>inherit</b> your company catalog, pricing, branding, agreement, fees, and policies — so setup is quick. Use <b>“Override settings for this branch”</b> to change tax, fees, or the agreement where a branch differs (e.g. a different state). Trailers, crew, and bookings are per-location — switch to a branch in the top bar to add its inventory and staff. <b>Different equipment per branch</b> comes from what units you add there.</p>
+        <p className="text-[11px]" style={{ color: T.sub }}>To set up a branch: switch to it (top bar or the link above), then edit any Settings card — equipment, pricing, waiver, fees, branding — and it changes <b>that branch only</b>. Its trailers, crew, and bookings are added from that branch's Fleet and Team tabs.</p>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -2584,7 +2589,7 @@ function SettingsView({ state, setState, flash }) {
           <h3 className="font-bold text-sm uppercase tracking-wide">Pricing</h3>
         </div>
         <p className="text-xs" style={{ color: T.sub }}>Set the rate for each piece of equipment. A customer's total blends these automatically — longer rentals use the cheaper weekly, 2-week, and 4-week rates.</p>
-        {state.types.map((t) => (
+        {types.map((t) => (
           <div key={t.size} className="rounded-lg p-3" style={{ background: T.paper }}>
             <div className="font-bold text-sm mb-2">{t.name}</div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -2605,7 +2610,7 @@ function SettingsView({ state, setState, flash }) {
           <button onClick={() => setAddingType(true)} className="text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={14} /> Add equipment</button>
         </div>
         <p className="text-xs" style={{ color: T.sub }}>The photo and description customers see when they pick this equipment. Every equipment type — including new ones you add — has its own photo and write-up.</p>
-        {state.types.map((t) => (
+        {types.map((t) => (
           <div key={t.size} className="rounded-lg p-3" style={{ background: T.paper }}>
             <div className="flex items-start gap-3">
               {t.image
@@ -2614,8 +2619,8 @@ function SettingsView({ state, setState, flash }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-bold text-sm truncate">{t.name}</div>
-                  {state.types.length > 1 && <button onClick={() => {
-                    if (state.trailers.some((tr) => tr.size === t.size)) { flash("Remove its units first."); return; }
+                  {types.length > 1 && <button onClick={() => {
+                    if (state.trailers.some((tr) => tr.size === t.size && (tr.locationId || baseId) === curId)) { flash("Remove its units first."); return; }
                     setConfirm({ title: `Remove ${t.name}?`, body: "This removes this product from your catalog and the customer booking page. You can undo it right after.", confirmLabel: "Remove", danger: true, onYes: () => removeType(t.size) });
                   }} title="Remove type" className="p-1 rounded" style={{ color: T.sub }}><Trash2 size={14} /></button>}
                 </div>

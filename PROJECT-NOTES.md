@@ -94,16 +94,22 @@ Team & dispatch · Fleet · Settings.
   are **per-location**. Employee portal uses full state (crew see their own jobs regardless).
   Deferred: "Manage my booking" lookup is currently scoped to the picked branch (fine at one
   location); a global-by-code lookup + a fuller customer branch experience are the next step.
-  **Model = shared defaults + per-branch overrides (owner's choice).** Each `location` has its
-  own **`timezone`** (drives `today()`/schedule when that branch is active) and an optional
-  **`overrides`** object. `scoped.business = { ...state.business, ...(activeLocation.overrides||{}) }`
-  so any branch inherits company settings but can override specifics. Settings → Locations →
-  each branch has an **"Override settings for this branch"** panel (blank = inherit): sales tax,
-  deposit, delivery fee, will-call fee, and a **per-branch rental agreement/waiver** (e.g.
-  different-state terms). Verified: a 10% branch tax override shows $57 vs the $40 default on the
-  same booking. Different **equipment per branch** falls out of per-location inventory (units).
-  Follow-ups if wanted: per-branch equipment *pricing* overrides (pricing lives on shared
-  `types`), per-branch hours/buffers, and exposing more override fields.
+  **Model = fully independent branches, seeded by copying the first branch on add (owner's
+  final choice).** Each `location` carries its OWN complete config: `overrides` (a full business
+  snapshot) and `types` (its own equipment catalog), plus `timezone`, name/area/phone. The FIRST
+  location is the "base" and uses top-level `state.business`/`state.types`; other locations use
+  their own copies. App: `scopedBusiness = {...state.business, ...(activeLocation.overrides||{})}`,
+  `scopedTypes = activeLocation.timezone ? (activeLocation.types||state.types) : state.types`
+  (actually `activeLocation.types || state.types`), `typeBySize` + `scoped.types` use scopedTypes;
+  `applyTheme`/`setAppTz` use the active branch. **Settings edits whichever branch you're in**
+  (top-bar switcher = `curId`): `set`/`setType`/`addType`/`removeType`/`copyContractToAll` write
+  to the base (state.business/types) when on branch 1, else to that location's overrides/types.
+  A banner shows "Editing settings for <branch>." **Adding a location deep-copies the first
+  branch** (`overrides: clone(business)`, `types: clone(types)`) so setup is instant, then you
+  change only what differs. Fleet "Add equipment" is branch-aware too. Verified independent:
+  renaming the new branch to "Dallas Branch Co" left branch 1 as "Ext Professionals." The
+  location switcher tab stays. Per-branch: settings, catalog, pricing, waiver, branding, fees,
+  crew, trailers, bookings. Deferred: "Manage my booking" global-by-code lookup across branches.
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
 - **Insights analytics:** fleet ROI, weighted utilization, revenue KPIs; revenue-by-month,
