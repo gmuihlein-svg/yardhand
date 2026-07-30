@@ -245,6 +245,7 @@ const SEED = {
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
     dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, rr: 0,
+    workerModel: "contractor", payBasis: "perjob", paymentProcessor: "stripe", paymentAccount: "", payoutMethod: "manual",
     leadDeliveryHours: 12, leadCounterHours: 2,
     bufferMins: 30, firstJobDriveMins: 30,
     notifyChannel: "both", notifyConfirm: true, notifyWaiver: true, notifyReminders: [48, 24],
@@ -789,6 +790,19 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
   const owedTotal = owedJobs.reduce((s, j) => s + j.fee, 0);
   const paidJobs = mine.filter((j) => j.paid).sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 10);
 
+  // ── hourly pay: clock in/out + earned-but-unpaid hours (independent of 1099/W2) ──
+  const hourly = biz.payBasis === "hourly";
+  const myShifts = me.shifts || [];
+  const openShift = myShifts.find((s) => !s.out);                                   // currently clocked in
+  const shiftHours = (s) => Math.max(0, ((s.out ? new Date(s.out) : new Date()) - new Date(s.in)) / 3600000);
+  const unpaidShifts = myShifts.filter((s) => s.out && !s.paid).sort((a, b) => b.in.localeCompare(a.in));
+  const unpaidHours = unpaidShifts.reduce((sum, s) => sum + shiftHours(s), 0);
+  const rate = me.hourlyRate || 0;
+  const paidShifts = myShifts.filter((s) => s.out && s.paid).sort((a, b) => b.in.localeCompare(a.in)).slice(0, 8);
+  const clockIn = () => { update((n) => { const d = n.contractors.find((x) => x.id === me.id); d.shifts = [...(d.shifts || []), { in: new Date().toISOString() }]; }); flash("Clocked in — the clock is running.", true); };
+  const clockOut = () => { update((n) => { const d = n.contractors.find((x) => x.id === me.id); const sh = (d.shifts || []).find((s) => !s.out); if (sh) sh.out = new Date().toISOString(); }); flash("Clocked out — hours saved for your manager.", true); };
+  const fmtClock = (iso) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
   const addPhotos = async (bk, leg, files) => {
     if (!files || !files.length) return;
     const urls = [];
@@ -870,11 +884,14 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
 
       <HelpNote title="How your portal works">
         <p><b>My jobs</b> — your assigned deliveries, pickups, and returns. Tap <b>Call</b> or <b>Directions</b> to reach the customer, <b>Add photos</b> to snap checkout/return pics, and the big button to mark a job <b>delivered / handed over / collected / received</b> when it's done (your manager sees it instantly).</p>
-        <p><b>My hours</b> — tap any day to set the hours you can work as a range; you'll only be booked for times you mark free. <b>My pay</b> — what you're owed and what's been paid.</p>
+        <p><b>My hours</b> — tap any day to set the hours you can work as a range; you'll only be booked for times you mark free.</p>
+        {hourly
+          ? <p><b>Time &amp; pay</b> — you're paid by the hour, so <b>Clock in</b> when you start work and <b>Clock out</b> when you're done. Your hours add up here and your manager pays you for them — you'll see what you've earned and what's already been paid.</p>
+          : <p><b>My pay</b> — you're paid per job. This shows what you're owed for finished jobs and what's already been paid.</p>}
       </HelpNote>
 
       <div className="flex gap-1 p-1 rounded-lg mb-4" style={{ background: T.graySoft }}>
-        {[["jobs", "My jobs", Truck], ["hours", "My hours", CalendarClock], ["pay", "My pay", DollarSign]].map(([v, l, Icon]) => (
+        {[["jobs", "My jobs", Truck], ["hours", "My hours", CalendarClock], ["pay", hourly ? "Time & pay" : "My pay", hourly ? Clock : DollarSign]].map(([v, l, Icon]) => (
           <button key={v} onClick={() => setTab(v)} className="flex-1 py-2 rounded-md text-sm font-bold flex items-center justify-center gap-1.5" style={tab === v ? { background: "#fff", color: T.ink, boxShadow: "0 1px 2px rgba(0,0,0,0.08)" } : { color: T.sub }}><Icon size={15} /> {l}</button>
         ))}
       </div>
@@ -913,7 +930,49 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
         </Card>
       )}
 
-      {tab === "pay" && (
+      {tab === "pay" && hourly && (
+        <div className="space-y-4">
+          {/* clock in / out */}
+          <Card className="p-4" style={{ background: openShift ? T.greenSoft : "#fff" }}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-bold">{openShift ? "You're on the clock" : "You're clocked out"}</div>
+                <div className="text-xs mt-0.5" style={{ color: T.sub }}>{openShift ? <>Since {fmtClock(openShift.in)} · <b>{shiftHours(openShift).toFixed(1)}h</b> so far</> : "Tap below when you start work."}</div>
+              </div>
+              {openShift
+                ? <button onClick={clockOut} className="px-4 py-2.5 rounded-lg font-bold shrink-0 flex items-center gap-1.5" style={{ background: T.red, color: "#fff" }}><Clock size={16} /> Clock out</button>
+                : <button onClick={clockIn} className="px-4 py-2.5 rounded-lg font-bold shrink-0 flex items-center gap-1.5" style={{ background: T.steel, color: "#fff" }}><Clock size={16} /> Clock in</button>}
+            </div>
+          </Card>
+          {/* earned but unpaid */}
+          <Card className="p-4" style={{ background: T.steelDk }}>
+            <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amber }}>Earned, not paid yet</div>
+            <div className="text-4xl font-extrabold text-white tabular-nums">${(unpaidHours * rate).toFixed(2)}</div>
+            <div className="text-xs mt-1" style={{ color: "#B7C0C6" }}>{unpaidHours.toFixed(1)} hour{unpaidHours === 1 ? "" : "s"} × ${rate}/hr · your manager runs payroll and clears these</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-sm font-bold mb-2">Recent shifts</div>
+            {[...unpaidShifts, ...paidShifts].length === 0 ? <Empty>No shifts yet — clock in to start tracking hours.</Empty> : (
+              <div className="space-y-1.5">
+                {unpaidShifts.map((s, i) => (
+                  <div key={"u" + i} className="flex items-center justify-between text-sm p-2 rounded-lg" style={{ background: T.paper }}>
+                    <div className="min-w-0 truncate"><span className="font-semibold tabular-nums">{shiftHours(s).toFixed(1)}h</span> <span className="text-xs" style={{ color: T.sub }}>· {fmtClock(s.in)}</span></div>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded shrink-0" style={{ color: T.amberDk, background: T.amberSoft }}>Unpaid</span>
+                  </div>
+                ))}
+                {paidShifts.map((s, i) => (
+                  <div key={"p" + i} className="flex items-center justify-between text-sm p-2 rounded-lg" style={{ background: T.paper }}>
+                    <div className="min-w-0 truncate"><span className="font-semibold tabular-nums">{shiftHours(s).toFixed(1)}h</span> <span className="text-xs" style={{ color: T.sub }}>· {fmtClock(s.in)}</span></div>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded shrink-0" style={{ color: T.green, background: T.greenSoft }}>Paid</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {tab === "pay" && !hourly && (
         <div className="space-y-4">
           <Card className="p-4" style={{ background: T.steelDk }}>
             <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amber }}>Owed to you</div>
@@ -2054,8 +2113,24 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
   const counterAuto = state.business.counterMode === "auto";
   const personName = (id) => id === "owner" ? "You" : (state.contractors.find((c) => c.id === id)?.name.split(" ")[0] || "—");
 
+  const hourly = state.business.payBasis === "hourly";                    // paid by clocked hours (payroll) vs per job — independent of 1099/W2
+  const payVia = state.business.payoutMethod === "platform";              // pay through the platform vs mark it paid yourself
+  const payWord = payVia ? "Pay" : "Mark paid";
   const reassign = (r, cid) => setBooking(r.bookingId, r.leg === "out" ? { outBy: cid } : { returnBy: cid });
-  const markPaidJob = (r, jobFee) => { setBooking(r.bookingId, r.leg === "out" ? { outPaid: true } : { returnPaid: true }); flash(`Marked paid $${jobFee}.`, true); };
+  const markPaidJob = (r, jobFee) => { setBooking(r.bookingId, r.leg === "out" ? { outPaid: true } : { returnPaid: true }); flash(payVia ? `Sent $${jobFee} payout.` : `Marked paid $${jobFee}.`, true); };
+  // W2 payroll: clocked hours (finished shifts not yet paid) × their rate, per person
+  const shiftHours = (s) => Math.max(0, (new Date(s.out) - new Date(s.in)) / 3600000);
+  const payrollRows = state.contractors.map((c) => {
+    const shifts = (c.shifts || []).filter((s) => s.out && !s.paid);
+    const hours = shifts.reduce((sum, s) => sum + shiftHours(s), 0);
+    const rate = c.hourlyRate || 0;
+    return { c, shifts, hours, rate, amount: hours * rate };
+  }).filter((r) => r.hours > 0);
+  const payrollTotal = payrollRows.reduce((s, r) => s + r.amount, 0);
+  const payEmployee = (row) => {
+    update((n) => { const d = n.contractors.find((x) => x.id === row.c.id); (d.shifts || []).forEach((s) => { if (s.out && !s.paid) s.paid = true; }); });
+    flash(`${payVia ? "Sent" : "Marked paid"} ${row.c.name.split(" ")[0]} $${row.amount.toFixed(2)} for ${row.hours.toFixed(1)}h.`, true);
+  };
   const setMode = (m) => update((n) => { n.business.dispatchMode = m; });
   const setCounterMode = (m) => update((n) => { n.business.counterMode = m; });
 
@@ -2147,8 +2222,14 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
       </div>
       <HelpNote>
         <p>One crew, two kinds of work: <b>delivery/collection runs</b> (someone drives) and <b>will-call/yard handoffs</b> (someone staffs the yard). The same people can do both.</p>
-        <p>Read it top to bottom: <b>1)</b> upcoming jobs and who's covering each (assign with the dropdown; unassigned road runs are highlighted), <b>2)</b> who you owe for finished work (Mark paid), <b>3)</b> your people (add/pause, sick-day), <b>4)</b> each person's working hours — tap a day to set a range, <b>5)</b> auto-assign settings.</p>
-        <p>Employees can set their own hours and mark jobs done from their <b>Team sign-in</b> on your public site.</p>
+        <p>Read it top to bottom: <b>1)</b> upcoming jobs and who's covering each (assign with the dropdown; unassigned road runs are highlighted), <b>2)</b> {hourly ? "payroll — clocked hours × each person's rate, with a Pay button" : "who you owe for finished jobs, one line each, with a Pay/Mark-paid button"}, <b>3)</b> your people (add/pause, sick-day{hourly ? ", and set each one's hourly rate" : ""}), <b>4)</b> each person's working hours — tap a day to set a range, <b>5)</b> auto-assign settings.</p>
+        <p><b>How you pay your team</b> is set in Settings → "How you pay your team" (two separate choices: their tax status — {state.business.workerModel === "employee" ? "W2 employees" : "1099 contractors"} — and how you pay them). {hourly
+          ? <>You're paying <b>by the hour</b>: your crew <b>clock in/out</b> from their portal, and section 2 above adds up each person's hours × rate so you can pay them hourly. Set each person's rate on their card in section 3. (Hourly works whether they're 1099 or W2.)</>
+          : <>You're paying <b>per job</b>: they earn your delivery-run and yard-handoff fees, and section 2 above lists each finished, unpaid job to pay off. Switch to "by the hour" in Settings if you put your crew on hourly pay instead.</>}</p>
+        <p>{state.business.payoutMethod === "platform"
+          ? <>Your <b>Pay</b> buttons send pay <b>through the platform</b> (set in Settings → Payments) — one tap clears what's owed. Payouts are simulated until your payout account is connected.</>
+          : <>You pay your crew your own way, then tap <b>Mark paid</b> here to clear it. Switch to pay-through-the-platform in Settings → Payments if you'd rather send it with one tap.</>}</p>
+        <p>Your crew can set their own hours{hourly ? ", clock in/out," : ""} and mark jobs done from their <b>Team sign-in</b> on your public site.</p>
       </HelpNote>
 
       <Card className="p-4" style={{ background: T.blueSoft }}>
@@ -2202,11 +2283,36 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
         )}
       </Card>
 
-      {/* ─────────── 2) PAY — finished jobs you still owe someone for ─────────── */}
+      {/* ─────────── 2) PAY — hourly payroll (hours × rate) OR per-job pay ─────────── */}
+      {hourly ? (
+        <Card className="p-4">
+          <div className="text-sm font-bold mb-1">2 · Payroll <span className="font-normal" style={{ color: T.sub }}>· ${payrollTotal.toFixed(2)} to pay</span></div>
+          <div className="text-xs mb-3 leading-snug" style={{ color: T.sub }}>
+            Your crew is paid by the hour. This adds up the hours they've <b>clocked</b> from their portal (that you haven't paid yet) times their rate. {payVia
+              ? <>Tap <b>Pay</b> to send their pay through the platform — it clears those hours.</>
+              : <>Pay them however you do payroll, then tap <b>Mark paid</b> to clear those hours.</>} Set each person's rate on their card in section 3.
+          </div>
+          {payrollRows.length === 0 ? <Empty>No unpaid hours right now — employees clock in/out from their portal.</Empty> : (
+            <div className="space-y-1.5">
+              {payrollRows.map((row) => (
+                <div key={row.c.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{row.c.name}</div>
+                    <div className="text-xs" style={{ color: T.sub }}>{row.hours.toFixed(1)}h × ${row.rate}/hr{row.rate === 0 ? " · set a rate on their card →" : ""}</div>
+                  </div>
+                  <button onClick={() => payEmployee(row)} className="text-[11px] font-bold px-2.5 py-1.5 rounded shrink-0" style={{ background: T.steel, color: "#fff" }}>{payWord} ${row.amount.toFixed(2)}</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      ) : (
       <Card className="p-4">
         <div className="text-sm font-bold mb-1">2 · To pay <span className="font-normal" style={{ color: T.sub }}>· ${owedTotal} owed</span></div>
         <div className="text-xs mb-3 leading-snug" style={{ color: T.sub }}>
-          Finished jobs you haven't paid yet ({owedTotal > 0 ? <><b>${owedRoad}</b> delivery runs · <b>${owedYardTotal}</b> yard handoffs</> : "nothing right now"}). Anything you covered yourself is free. Pay the person in Stripe, then tap <b>Mark paid</b> here to clear it.
+          Finished jobs you haven't paid yet ({owedTotal > 0 ? <><b>${owedRoad}</b> delivery runs · <b>${owedYardTotal}</b> yard handoffs</> : "nothing right now"}). Anything you covered yourself is free. {payVia
+            ? <>Tap <b>Pay</b> to send it through the platform and clear it.</>
+            : <>Pay the person in {state.business.paymentProcessor === "manual" ? "cash/check" : "your payment app"}, then tap <b>Mark paid</b> here to clear it.</>}
         </div>
         {payJobs.length === 0 ? <Empty>All caught up — nobody's owed right now.</Empty> : (
           <div className="space-y-1.5">
@@ -2219,12 +2325,13 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
                     <div className="text-xs" style={{ color: T.sub }}>{fmt(j.date)} · {j.kind === "road" ? "delivery run" : "yard handoff"}</div>
                   </div>
                 </button>
-                <button onClick={() => markPaidJob(j, j.jobFee)} className="text-[11px] font-bold px-2.5 py-1.5 rounded shrink-0" style={{ background: T.steel, color: "#fff" }}>Mark paid ${j.jobFee}</button>
+                <button onClick={() => markPaidJob(j, j.jobFee)} className="text-[11px] font-bold px-2.5 py-1.5 rounded shrink-0" style={{ background: T.steel, color: "#fff" }}>{payWord} ${j.jobFee}</button>
               </div>
             ))}
           </div>
         )}
       </Card>
+      )}
 
       {/* ─────────── 3) THE PEOPLE — roster ─────────── */}
       <Card className="p-4">
@@ -2245,6 +2352,13 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
                   <div className="min-w-0">
                     <div className="font-bold text-sm truncate">{c.name} {!c.active && <span className="text-xs font-normal" style={{ color: T.sub }}>· inactive</span>}</div>
                     <div className="text-xs truncate" style={{ color: T.sub }}>{c.vehicle} · {c.phone}</div>
+                    {hourly && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-[11px]" style={{ color: T.sub }}>Pay $</span>
+                        <input type="number" min="0" step="0.5" defaultValue={c.hourlyRate || 0} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (c.hourlyRate || 0)) { update((n) => { const d = n.contractors.find((x) => x.id === c.id); d.hourlyRate = v; }); flash(`Set ${c.name.split(" ")[0]}'s rate to $${v}/hr.`, true); } }} className="w-16 px-1.5 py-0.5 rounded text-[11px] tabular-nums" style={{ border: `1px solid ${T.line}` }} />
+                        <span className="text-[11px]" style={{ color: T.sub }}>/hr</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
@@ -2339,7 +2453,7 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
         </div>
       </Card>
 
-      {adding && <AddContractorModal onClose={() => setAdding(false)}
+      {adding && <AddContractorModal hourly={hourly} onClose={() => setAdding(false)}
         onAdd={(c) => { update((n) => n.contractors.push({ ...c, locationId: locId })); setAdding(false); flash(`Added ${c.name}.`, true); }} />}
       {editAvail && <AvailabilityEditor {...editAvail} state={state} update={update} onClose={() => setEditAvail(null)} />}
     </div>
@@ -2404,8 +2518,9 @@ function AvailabilityEditor({ driverId, date, state, update, onClose }) {
   );
 }
 
-function AddContractorModal({ onClose, onAdd }) {
-  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); const [vehicle, setVehicle] = useState("");
+function AddContractorModal({ onClose, onAdd, hourly }) {
+  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); const [vehicle, setVehicle] = useState(""); const [rate, setRate] = useState("");
+  const isW2 = hourly;
   return (
     <Modal onClose={onClose} title="Add employee">
       <div className="space-y-3">
@@ -2415,9 +2530,18 @@ function AddContractorModal({ onClose, onAdd }) {
           <Field label="Tow vehicle (if they drive)"><input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. F-250 · leave blank for yard-only" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         </div>
         <Field label="Email (for job alerts & their portal login)"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@yourcompany.com" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label={isW2 ? "Hourly pay rate ($/hr)" : "Hourly pay rate ($/hr) — optional"}>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold" style={{ color: T.sub }}>$</span>
+            <input type="number" min="0" step="0.5" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 22" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+            <span className="text-sm" style={{ color: T.sub }}>/hr</span>
+          </div>
+        </Field>
       </div>
-      <p className="text-xs mt-3" style={{ color: T.sub }}>The same person can drive delivery/collection runs and staff yard handoffs — assign them to either from Team &amp; dispatch. At launch, collect a signed agreement, W-9, and COI before their first job (see the guide). You'll 1099 anyone paid $600+/yr.</p>
-      <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, email, vehicle: vehicle || "—", active: true })}
+      <p className="text-xs mt-3" style={{ color: T.sub }}>{isW2
+        ? <>You pay by the hour, so this person clocks in/out from their portal and is paid at this rate — you'll see their hours and total on the payroll list in Team &amp; dispatch. You can change the rate anytime on their card. At launch, collect the right paperwork first (W-4 for W2, or W-9 for 1099) — see the guide.</>
+        : <>The same person can drive delivery/collection runs and staff yard handoffs — assign them to either from Team &amp; dispatch. At launch, collect a signed agreement and the right tax form (W-9 for 1099, W-4 for W2) and a COI before their first job (see the guide). An hourly rate is optional here since you pay per job.</>}</p>
+      <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, email, vehicle: vehicle || "—", active: true, hourlyRate: Number(rate) || 0, shifts: [] })}
         className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add employee</button>
     </Modal>
   );
@@ -2477,7 +2601,9 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
       <HelpNote>
-        <p>Everything that makes the app <b>yours</b>: business name & time zone, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, booking notice and buffers, who covers jobs, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
+        <p>Everything that makes the app <b>yours</b>: business name & time zone, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, booking notice and buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
+        <p><b>How you pay your team</b> is two separate choices: their <b>tax status</b> (1099 contractors vs W2 employees — just paperwork wording) and <b>how you pay them</b> (per job, or by the hour). Any mix works — a 1099 contractor paid hourly is fine. Per-job shows a "who you owe" list; by-the-hour shows a payroll list (each person's clocked hours × their rate), and your crew clock in/out from their portal.</p>
+        <p><b>Payments</b> is how money moves: pick how you <b>collect from customers</b> (Stripe, Square, PayPal/Venmo, Authorize.net, or manual cash/check), and how you <b>pay your team</b> — <b>through the platform</b> (a one-tap "Pay $X" button sends their payout) or <b>yourself</b> (you pay them your own way and just tap "Mark paid"). Real charging and payouts turn on when the payments backend is connected; for now they're set up and simulated.</p>
         <p>Every change <b>saves automatically</b> to the cloud — no save button. Scroll through the cards top to bottom; each has its own short explanation.</p>
       </HelpNote>
       {multi && curLoc && (
@@ -2701,6 +2827,62 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
           {b.ownerWorks !== false
             ? "You can be assigned handoffs, and you're the default cover for the yard counter (Team & dispatch → auto-assign settings). Turn this off if you only manage and never handle equipment yourself."
             : "You'll never be auto-assigned or offered on any job. Will-call pickups and yard returns will look for an available crew member — if none is free, that slot won't be bookable, so keep enough staff scheduled."}
+        </p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Users size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">How you pay your team</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>These are two separate choices — your workers' <b>tax status</b> and <b>how you pay them</b>. Any mix works (a 1099 contractor paid by the hour, a W2 employee on payroll, etc.).</p>
+        <Field label="Your workers are… (tax status)">
+          <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+            {[["contractor", "1099 contractors"], ["employee", "W2 employees"]].map(([v, l]) => (
+              <button key={v} onClick={() => set({ workerModel: v })} className="flex-1 py-1.5 rounded-md text-sm font-bold" style={(b.workerModel || "contractor") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+            ))}
+          </div>
+        </Field>
+        <p className="text-[11px]" style={{ color: T.sub }}>
+          {(b.workerModel || "contractor") === "contractor"
+            ? "1099 contractors: they run their own business. Collect a W-9 and 1099 anyone paid $600+/yr — this is just paperwork wording, it doesn't change how the app pays them (set that below)."
+            : "W2 employees: on your payroll. You'll W-4 them and handle withholding, insurance, and workers' comp — this is paperwork wording; how the app pays them is the next setting."}
+        </p>
+        <Field label="How you pay them">
+          <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+            {[["perjob", "Per job"], ["hourly", "By the hour"]].map(([v, l]) => (
+              <button key={v} onClick={() => set({ payBasis: v })} className="flex-1 py-1.5 rounded-md text-sm font-bold" style={(b.payBasis || "perjob") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+            ))}
+          </div>
+        </Field>
+        <p className="text-[11px]" style={{ color: T.sub }}>
+          {(b.payBasis || "perjob") === "perjob"
+            ? "Per job: Team & dispatch tracks a fee for each delivery run and yard handoff, lists each finished job you still owe, and you pay per job. Best for crews paid a flat amount per delivery/pickup."
+            : "By the hour: Team & dispatch shows a payroll view instead (each person's clocked hours × their rate) with one Pay button per person. Set each person's hourly rate on their card, and they clock in/out from their portal. Works for hourly contractors and W2 employees alike."}
+        </p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><CreditCard size={16} style={{ color: T.green }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Payments</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>How money moves in and out. <b>Prototype note:</b> these are set up here now and switch to live processing when the payments backend is connected.</p>
+        <Field label="Collect customer payments through">
+          <select value={b.paymentProcessor || "stripe"} onChange={(e) => set({ paymentProcessor: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+            {[["stripe", "Stripe"], ["square", "Square"], ["paypal", "PayPal / Venmo"], ["authorize", "Authorize.net"], ["manual", "Manual (cash, check, or your own invoice)"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </Field>
+        <Field label="Your account / merchant ID (optional for now)"><input value={b.paymentAccount || ""} onChange={(e) => set({ paymentAccount: e.target.value })} placeholder="Connect your account when live" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label="Pay your team">
+          <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+            {[["platform", "Through the platform"], ["manual", "I pay them myself"]].map(([v, l]) => (
+              <button key={v} onClick={() => set({ payoutMethod: v })} className="flex-1 py-1.5 rounded-md text-sm font-bold" style={(b.payoutMethod || "manual") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+            ))}
+          </div>
+        </Field>
+        <p className="text-[11px]" style={{ color: T.sub }}>
+          {(b.payoutMethod || "manual") === "platform"
+            ? "The app sends payouts to your workers (to their bank or debit card) — a “Pay $X” button on each person. Real payouts turn on when the backend is connected (requires bank verification, like the messaging phase)."
+            : "You pay your workers outside the app (Zelle, check, payroll service). The app just tracks who's owed / their hours and you mark them paid."}
         </p>
       </Card>
       <Card className="p-4 space-y-3">
