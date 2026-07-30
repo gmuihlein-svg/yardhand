@@ -155,8 +155,9 @@ Team & dispatch · Fleet · Settings.
   real website + booking system (point a custom domain at the Vercel URL and it's live). **All copy
   is editable** in Settings → **"Your website (storefront)"** — hero headline (two lines, 2nd is the
   accent colour), subheadline, trust line, equipment-section heading/sub, the "how it works" steps
-  (add/remove, title+desc; icons fixed by index), the "why choose us" reasons (add/remove), and the
-  bottom CTA. Defaults live in module const `SITE_DEFAULTS` (Ext Professionals' dump-trailer wording),
+  (add/remove, title+desc; icons fixed by index), the "why choose us" reasons (add/remove), the
+  bottom CTA, and a swappable **hero image** (`business.heroImage` — upload a photo of your equipment;
+  falls back to the built-in SVG trailer illustration when empty; `onHeroImage` via `fileToScaledDataURL`). Defaults live in module const `SITE_DEFAULTS` (Ext Professionals' dump-trailer wording),
   spread into `SEED.business` and merged into existing workspaces on load; `Landing` reads each field
   as `b.field || SITE_DEFAULTS.field` (helper `g()`), so nothing changes for the owner out of the box
   and any other business rewrites it for their vertical. **`business.siteMode`** switches the public

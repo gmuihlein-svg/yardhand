@@ -611,21 +611,27 @@ function Landing({ state, typeBySize, go, owner, team }) {
             <span style={{ color: T.amber }}>★★★★★</span> {g("trustLine")}
           </div>
         </div>
-        {/* signature: dump-trailer illustration */}
-        <div className="rounded-2xl p-6 flex items-center justify-center" style={{ background: T.steelDk }}>
-          <svg viewBox="0 0 340 200" className="w-full" style={{ maxWidth: 380 }}>
-            <line x1="15" y1="165" x2="325" y2="165" stroke={T.amber} strokeWidth="3" />
-            <g>
-              <polygon points="70,150 250,150 235,70 120,70" fill="#3A4C57" stroke={T.amber} strokeWidth="3" strokeLinejoin="round" />
-              <polygon points="120,70 235,70 245,95 128,95" fill={T.amber} opacity="0.9" />
-              <circle cx="150" cy="120" r="9" fill="#55666F" /><circle cx="175" cy="130" r="11" fill="#4A5A63" /><circle cx="200" cy="118" r="8" fill="#55666F" />
-            </g>
-            <line x1="70" y1="152" x2="18" y2="152" stroke="#3A4C57" strokeWidth="6" strokeLinecap="round" />
-            <circle cx="16" cy="152" r="6" fill={T.amber} />
-            <circle cx="120" cy="165" r="17" fill="#1E2A32" stroke="#55666F" strokeWidth="3" /><circle cx="120" cy="165" r="5" fill={T.amber} />
-            <circle cx="200" cy="165" r="17" fill="#1E2A32" stroke="#55666F" strokeWidth="3" /><circle cx="200" cy="165" r="5" fill={T.amber} />
-          </svg>
-        </div>
+        {/* hero image — the owner's uploaded photo, or the built-in illustration as a fallback */}
+        {b.heroImage ? (
+          <div className="rounded-2xl overflow-hidden" style={{ background: T.steelDk }}>
+            <img src={b.heroImage} alt={`${b.name} — ${g("heroTitle")} ${g("heroAccent")}`} className="w-full h-full object-cover" style={{ maxHeight: 340 }} />
+          </div>
+        ) : (
+          <div className="rounded-2xl p-6 flex items-center justify-center" style={{ background: T.steelDk }}>
+            <svg viewBox="0 0 340 200" className="w-full" style={{ maxWidth: 380 }}>
+              <line x1="15" y1="165" x2="325" y2="165" stroke={T.amber} strokeWidth="3" />
+              <g>
+                <polygon points="70,150 250,150 235,70 120,70" fill="#3A4C57" stroke={T.amber} strokeWidth="3" strokeLinejoin="round" />
+                <polygon points="120,70 235,70 245,95 128,95" fill={T.amber} opacity="0.9" />
+                <circle cx="150" cy="120" r="9" fill="#55666F" /><circle cx="175" cy="130" r="11" fill="#4A5A63" /><circle cx="200" cy="118" r="8" fill="#55666F" />
+              </g>
+              <line x1="70" y1="152" x2="18" y2="152" stroke="#3A4C57" strokeWidth="6" strokeLinecap="round" />
+              <circle cx="16" cy="152" r="6" fill={T.amber} />
+              <circle cx="120" cy="165" r="17" fill="#1E2A32" stroke="#55666F" strokeWidth="3" /><circle cx="120" cy="165" r="5" fill={T.amber} />
+              <circle cx="200" cy="165" r="17" fill="#1E2A32" stroke="#55666F" strokeWidth="3" /><circle cx="200" cy="165" r="5" fill={T.amber} />
+            </svg>
+          </div>
+        )}
       </section>
 
       {/* fleet */}
@@ -2762,6 +2768,7 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
   };
   const onPhoto = async (size, file) => { if (!file) return; const url = await fileToScaledDataURL(file); if (url) { setType(size, { image: url }); flash("Photo updated."); } else flash("Couldn't read that image."); };
   const onLogo = async (file) => { if (!file) return; const url = await fileToScaledDataURL(file, 400, "image/png"); if (url) { set({ logo: url }); flash("Logo updated."); } else flash("Couldn't read that image."); };
+  const onHeroImage = async (file) => { if (!file) return; const url = await fileToScaledDataURL(file, 1000); if (url) { set({ heroImage: url }); flash("Hero image updated."); } else flash("Couldn't read that image."); };
   // storefront copy (editable public-site text)
   const stepsArr = b.steps || SITE_DEFAULTS.steps;
   const reasonsArr = b.reasons || SITE_DEFAULTS.reasons;
@@ -2786,7 +2793,7 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
       <SectionTitle>Settings</SectionTitle>
       <HelpNote>
         <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, booking notice and buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
-        <p><b>Your website (storefront)</b> is your public page — a real website + booking system you can point your own domain at. Every word is editable (headline, subheadline, trust line, the equipment heading, the “how it works” steps, the “why choose us” reasons, and the bottom call-to-action), so it fits any business, not just dump trailers. The <b>Customer-facing site</b> switch has three settings: <b>Full site</b> (hosted landing page + online booking), <b>Booking only</b> (skips the marketing sections and shows just your equipment + booking — put a “Book now” link to it on your own website), or <b>Owner-only</b> (no public page; visitors see a “call/text to book” card and you enter bookings yourself).</p>
+        <p><b>Your website (storefront)</b> is your public page — a real website + booking system you can point your own domain at. Every word is editable (headline, subheadline, trust line, the equipment heading, the “how it works” steps, the “why choose us” reasons, and the bottom call-to-action), and you can upload your own <b>hero image</b> (a photo of your equipment or a job) in place of the built-in illustration — so it fits any business, not just dump trailers. The <b>Customer-facing site</b> switch has three settings: <b>Full site</b> (hosted landing page + online booking), <b>Booking only</b> (skips the marketing sections and shows just your equipment + booking — put a “Book now” link to it on your own website), or <b>Owner-only</b> (no public page; visitors see a “call/text to book” card and you enter bookings yourself).</p>
         <p><b>How you pay your team</b> is two separate choices: their <b>tax status</b> (1099 contractors vs W2 employees — just paperwork wording) and <b>how you pay them</b> — <b>per job</b>, <b>by the hour</b>, or a <b>salary</b> (a fixed amount weekly or every 2 weeks). Any mix works — a 1099 contractor paid hourly, a W2 on salary, etc. Per-job shows a "who you owe" list; by-the-hour shows a payroll list of clocked hours × rate (crew clock in/out from their portal); salary shows a payroll list of each person's fixed amount with a Pay button. You set each person's rate/salary on their card in Team &amp; dispatch.</p>
         <p><b>Payments</b> is how money moves: pick how you <b>collect from customers</b> (Stripe, Square, PayPal/Venmo, Authorize.net, or manual cash/check), and how you <b>pay your team</b> — <b>through the platform</b> (a one-tap "Pay $X" button sends their payout) or <b>yourself</b> (you pay them your own way and just tap "Mark paid"). Real charging and payouts turn on when the payments backend is connected; for now they're set up and simulated.</p>
         <p>Every change <b>saves automatically</b> to the cloud — no save button. Scroll through the cards top to bottom; each has its own short explanation.</p>
@@ -2842,6 +2849,24 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
               </div>
               <Field label="Subheadline (one or two sentences under the headline)"><textarea value={b.heroSub ?? ""} placeholder={SITE_DEFAULTS.heroSub} onChange={(e) => set({ heroSub: e.target.value })} rows={2} className="w-full p-2.5 rounded-lg text-sm mt-2" style={{ border: `1px solid ${T.line}` }} /></Field>
               <Field label="Trust line (small line with the ★★★★★)"><input value={b.trustLine ?? ""} placeholder={SITE_DEFAULTS.trustLine} onChange={(e) => set({ trustLine: e.target.value })} className="w-full p-2.5 rounded-lg text-sm mt-2" style={{ border: `1px solid ${T.line}` }} /></Field>
+              <div className="mt-3">
+                <div className="text-xs font-bold uppercase tracking-wide block mb-1.5" style={{ color: T.sub }}>Hero image (photo beside the headline)</div>
+                <div className="flex items-start gap-3">
+                  {b.heroImage
+                    ? <img src={b.heroImage} alt="hero" className="w-28 h-20 rounded-lg object-cover shrink-0" style={{ border: `1px solid ${T.line}` }} />
+                    : <div className="w-28 h-20 rounded-lg flex items-center justify-center shrink-0 text-center px-1" style={{ background: T.steelDk }}><span className="text-[9px] font-bold" style={{ color: T.amber }}>Built-in illustration</span></div>}
+                  <div className="min-w-0">
+                    <div className="flex gap-2 flex-wrap">
+                      <label className="text-[11px] font-bold px-2.5 py-1.5 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>
+                        {b.heroImage ? "Replace photo" : "Upload photo"}
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => onHeroImage(e.target.files?.[0])} />
+                      </label>
+                      {b.heroImage && <button onClick={() => { set({ heroImage: "" }); flash("Reverted to the built-in illustration.", true); }} className="text-[11px] font-bold px-2.5 py-1.5 rounded" style={{ background: T.redSoft, color: T.red }}>Remove</button>}
+                    </div>
+                    <p className="text-[11px] mt-1.5" style={{ color: T.sub }}>Upload a photo of your equipment or a job. Leave it empty to use the built-in illustration. Auto-shrunk to fit.</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
