@@ -76,10 +76,14 @@ Team & dispatch · Fleet · Settings.
   lists were removed to kill the duplication ("names/jobs above and below") the owner flagged.
 
 - **In-platform help / training:** a reusable collapsible `HelpNote` component ("How this
-  page works", starts closed) sits at the top of every screen — Dashboard, Insights, Calendar,
-  Bookings, Customers, Team & dispatch, Fleet, Settings, the customer booking flow, and the
-  employee portal — with plain-language, screen-specific guidance for training a non-technical
-  owner/crew. Complements the per-card explanatory text already throughout.
+  page works", **starts closed** — a click-to-expand dropdown with a rotating chevron, so it
+  never clutters) sits at the top of every screen — Dashboard, Insights, Calendar, Bookings,
+  Customers, Team & dispatch, Fleet, Settings, the customer booking flow, and the employee portal
+  — with detailed, plain-language, screen-specific operating instructions so a non-technical
+  owner/crew can run the software without asking anyone. **Standing rule:** every new feature gets
+  written into the relevant page's HelpNote. Page-level intros live ONLY in the dropdown (the old
+  always-visible blue "This page is…" intro card on Team & dispatch was removed as duplicate
+  clutter); short per-section hints under each card still stay visible as inline context.
 - **Multi-location / branches (foundation):** `state.locations[]` = `{id,name,area,phone}`;
   every trailer, booking, and contractor carries a `locationId` (migration on load stamps
   legacy rows + guarantees one default location). App holds a per-browser `activeLoc`

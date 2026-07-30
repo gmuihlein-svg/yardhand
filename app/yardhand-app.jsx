@@ -2318,12 +2318,6 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
         <p>Your crew can set their own hours{hourly ? ", clock in/out (either a general shift or against a specific job, which tags those hours to that customer)," : ""} and mark jobs done from their <b>Team sign-in</b> on your public site. You can also set anyone's hours yourself on the grid in section 4.</p>
       </HelpNote>
 
-      <Card className="p-4" style={{ background: T.blueSoft }}>
-        <div className="text-sm" style={{ color: T.blue }}>
-          This page is your crew and their work, in order: <b>1)</b> who's covering each upcoming job, <b>2)</b> who you need to pay for finished jobs, <b>3)</b> your people, <b>4)</b> the hours they can work, <b>5)</b> auto-assign settings. A rental has two kinds of jobs — a <b>delivery run</b> someone drives out, and a <b>yard handoff</b> when the customer comes to your yard. The same people do both.
-        </div>
-      </Card>
-
       {/* ─────────── 1) COVERAGE — upcoming jobs & who's on each ─────────── */}
       <Card className="p-4">
         <div className="flex items-center justify-between gap-2 mb-1">
