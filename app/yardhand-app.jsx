@@ -252,7 +252,7 @@ const SEED = {
     notifyTeamChannel: "text", notifyTeamAssign: true, notifyTeamReminder: true,
     notifyReview: true, reviewLink: "", reviewMessage: "Thanks for renting with us! If everything went smoothly, would you leave us a quick review? It only takes a minute and really helps our small business. 🙏",
     ownerNotify: true, ownerNotifyChannel: "both", ownerAlertEmail: "", ownerAlertPhone: "",
-    ownerAlertNewBooking: true, ownerAlertCancel: true, ownerAlertTextToBook: true, ownerAlertScheduleChange: false, ownerAlertHandoff: true,
+    ownerAlertNewBooking: true, ownerAlertCancel: true, ownerAlertTextToBook: true, ownerAlertScheduleChange: false, ownerAlertHandoff: true, ownerAlertPayroll: true,
     textToBookAutoReply: true, bookingLink: "", textToBookMessage: "Thanks for reaching out! You can book your trailer online in about a minute here:", textToBookNotifyChannel: "both",
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
@@ -1135,14 +1135,20 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
   const coiFlags = state.bookings.filter((b) => (b.status === "reserved" || b.status === "out") && b.coiFile && b.coiExpiry && b.coiExpiry <= coiSoonDate);
   const coiExpiredNow = coiFlags.filter((b) => b.coiExpiry < today()).length;
   const plural = (n) => (n === 1 ? "" : "s");
+  // ── pay reminders, matched to how you pay your crew (Settings → How you pay your team) ──
+  const payBasis = state.business.payBasis || "perjob";
   // salary payday reminder: salaried crew whose last pay was a full period ago (or never paid)
   const salPeriodDays = state.business.flatPeriod === "biweekly" ? 14 : 7;
-  const payrollDue = state.business.payBasis === "flat"
+  const payrollDue = payBasis === "flat"
     ? state.contractors.filter((c) => c.active && (c.flatRate || 0) > 0 && (() => {
         const last = (c.payouts || []).slice(-1)[0];
         if (!last) return true;
         return Math.floor((new Date(today() + "T00:00:00") - new Date(last.at)) / 86400000) >= salPeriodDays;
       })()).length
+    : 0;
+  // hourly reminder: crew with finished, unpaid clocked hours
+  const hoursDue = payBasis === "hourly"
+    ? state.contractors.filter((c) => (c.shifts || []).some((s) => s.out && !s.paid)).length
     : 0;
   const dailyChecks = [
     conflictCount > 0 && { level: "red", text: `Fix ${conflictCount} double-booking${plural(conflictCount)}`, hint: "see the red box just below" },
@@ -1153,7 +1159,8 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
     coiNeeded > 0 && { level: "amber", text: `${coiNeeded} booking${plural(coiNeeded)} need a Certificate of Insurance`, hint: "customer can upload in “Manage my booking,” or add it in the booking's COI section" },
     (coiFlags.length - coiExpiredNow) > 0 && { level: "amber", text: `${coiFlags.length - coiExpiredNow} COI${plural(coiFlags.length - coiExpiredNow)} expiring within 2 weeks`, hint: "ask the repeat customer for a fresh certificate so it doesn't lapse" },
     needDriver > 0 && { level: "amber", text: `${needDriver} job${plural(needDriver)} still needs a driver`, hint: "assign someone in Team & dispatch" },
-    toPay > 0 && { level: "blue", text: `${toPay} finished job${plural(toPay)} to pay`, hint: "pay your crew, then mark paid in Team & dispatch → To pay" },
+    payBasis === "perjob" && toPay > 0 && { level: "blue", text: `${toPay} finished job${plural(toPay)} to pay`, hint: "pay your crew, then mark paid in Team & dispatch → To pay" },
+    hoursDue > 0 && { level: "blue", text: `${hoursDue} employee${plural(hoursDue)} with unpaid hours to pay`, hint: "run payroll in Team & dispatch → Payroll, then Pay / Mark paid" },
     payrollDue > 0 && { level: "blue", text: `Payroll due · ${payrollDue} on salary to pay`, hint: `it's been a ${state.business.flatPeriod === "biweekly" ? "pay period (2 weeks)" : "week"} — pay your salaried crew in Team & dispatch → Payroll` },
   ].filter(Boolean);
 
@@ -1172,7 +1179,7 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
       </div>
 
       <HelpNote title="How to use your dashboard">
-        <p>This is your home base — <b>open it first each day</b>. The <b>Start here</b> box below lists exactly what needs you today (overdue trailers, pickups/returns, jobs needing a driver, COIs, payments, and — if you pay a <b>salary</b> — a <b>payroll-due</b> reminder when a pay period has come around and your salaried crew hasn't been paid yet). Clear that list and you're on top of things.</p>
+        <p>This is your home base — <b>open it first each day</b>. The <b>Start here</b> box below lists exactly what needs you today (overdue trailers, pickups/returns, jobs needing a driver, COIs, and a <b>pay reminder</b> that matches how you pay your crew — finished <b>jobs</b> to pay if you pay per job, <b>unpaid hours</b> if you pay hourly, or a <b>payday</b> reminder when a salary period comes around). Clear that list and you're on top of things.</p>
         <p>The four <b>tiles</b> (Out on rent, Available, Due back today, Overdue) are tappable — they open the matching list. <b>Pickups &amp; returns today</b> has one-tap buttons to mark trailers out or back. Everything updates live across your devices and your crew's.</p>
         <p>Use the tabs up top for the rest: Calendar, Bookings, Customers, Team &amp; dispatch, Fleet, Insights, and Settings — each has its own “How this page works” note.</p>
       </HelpNote>
@@ -3076,7 +3083,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
               <Toggle label="Text-to-book received" sub="A customer taps “Text to book” — get a heads-up so you can reply." on={b.ownerAlertTextToBook !== false} set={(v) => set({ ownerAlertTextToBook: v })} />
               <Toggle label="Booking cancelled" sub="A customer cancels a reservation." on={b.ownerAlertCancel !== false} set={(v) => set({ ownerAlertCancel: v })} />
               <Toggle label="Employee changes their schedule" sub="A crew member updates their availability in the Team portal." on={!!b.ownerAlertScheduleChange} set={(v) => set({ ownerAlertScheduleChange: v })} />
-              <p className="text-[11px]" style={{ color: T.sub }}>Owner alerts go out by {channelLabel(b.ownerNotifyChannel || "both")}.</p>
+              <Toggle label="Time to pay your crew (payroll reminder)" sub={`A reminder when it's time to pay — ${b.payBasis === "flat" ? "each payday for your salaried crew" : b.payBasis === "hourly" ? "when your crew has unpaid clocked hours" : "when finished jobs are waiting to be paid"}. Matches how you pay your team (Settings → How you pay your team).`} on={b.ownerAlertPayroll !== false} set={(v) => set({ ownerAlertPayroll: v })} />
+              <p className="text-[11px]" style={{ color: T.sub }}>Owner alerts go out by {channelLabel(b.ownerNotifyChannel || "both")}. The payroll reminder also shows on your Dashboard's “Start here” list. Scheduled email/text sends switch on when the messaging backend is connected.</p>
             </div>
           )}
         </div>
