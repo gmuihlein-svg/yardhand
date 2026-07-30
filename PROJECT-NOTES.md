@@ -134,9 +134,12 @@ Team & dispatch · Fleet · Settings.
     that logs `contractor.payouts[] = {at, amount}` (shows "last paid <date>"). Roster cards get a
     **$/period salary editor**. `AddContractorModal` collects the salary. Employee portal "My pay"
     shows their salary + recent pay (no clock-in). No hours/jobs accumulation — it's a fixed recurring pay.
-    The Dashboard "Start here" per-job "N finished jobs to pay" reminder is gated to per-job mode
-    (`payBasis === "perjob"`) so it doesn't show stale in hourly/salary. No payday/payroll reminder —
-    the owner checks their bank and pays; deliberately left out (owner's call).
+  - **On-screen pay reminders (Dashboard "Start here", no email/text):** matched to `payBasis` and it
+    **names the person** — per-job = "N finished jobs to pay" (gated to per-job mode); hourly =
+    "Pay <name(s)> for clocked hours"; salary = "Payday — pay <name(s)>" (period-based via `flatPeriod`,
+    fires when last payout is a full period old or never paid). `nameList` shows one/two names else
+    "<name> & N more". **Deliberately dashboard-only** — the owner rejected email/text payday nags
+    ("they can check their bank"), so there is NO `ownerAlertPayroll` toggle and no scheduled send.
   - **Payments** (Settings → Payments card): `paymentProcessor` = how customers pay you
     (Stripe/Square/PayPal-Venmo/Authorize.net/manual) + `paymentAccount`; `payoutMethod` = how
     you pay your team — `platform` (one-tap **Pay $X** button labels; simulated payout) vs

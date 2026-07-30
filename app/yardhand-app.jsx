@@ -1135,7 +1135,23 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
   const coiFlags = state.bookings.filter((b) => (b.status === "reserved" || b.status === "out") && b.coiFile && b.coiExpiry && b.coiExpiry <= coiSoonDate);
   const coiExpiredNow = coiFlags.filter((b) => b.coiExpiry < today()).length;
   const plural = (n) => (n === 1 ? "" : "s");
-  const payBasis = state.business.payBasis || "perjob"; // per-job "To pay" reminder only shows in per-job mode
+  // ── on-screen pay reminders (dashboard only — no email/text), matched to how you pay your crew ──
+  const payBasis = state.business.payBasis || "perjob";
+  const firstName = (c) => c.name.split(" ")[0];
+  const nameList = (arr) => arr.length === 1 ? firstName(arr[0]) : arr.length === 2 ? `${firstName(arr[0])} & ${firstName(arr[1])}` : `${firstName(arr[0])} & ${arr.length - 1} more`;
+  // hourly: crew with finished, unpaid clocked hours
+  const hoursDuePeople = payBasis === "hourly"
+    ? state.contractors.filter((c) => (c.shifts || []).some((s) => s.out && !s.paid))
+    : [];
+  // salary: crew whose last pay was a full period ago (or never paid) → it's payday
+  const salPeriodDays = state.business.flatPeriod === "biweekly" ? 14 : 7;
+  const salaryDuePeople = payBasis === "flat"
+    ? state.contractors.filter((c) => c.active && (c.flatRate || 0) > 0 && (() => {
+        const last = (c.payouts || []).slice(-1)[0];
+        if (!last) return true;
+        return Math.floor((new Date(today() + "T00:00:00") - new Date(last.at)) / 86400000) >= salPeriodDays;
+      })())
+    : [];
   const dailyChecks = [
     conflictCount > 0 && { level: "red", text: `Fix ${conflictCount} double-booking${plural(conflictCount)}`, hint: "see the red box just below" },
     overdue.length > 0 && { level: "red", text: `${overdue.length} trailer${plural(overdue.length)} overdue`, hint: "chase the customer, then mark returned when it's back" },
@@ -1146,6 +1162,8 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
     (coiFlags.length - coiExpiredNow) > 0 && { level: "amber", text: `${coiFlags.length - coiExpiredNow} COI${plural(coiFlags.length - coiExpiredNow)} expiring within 2 weeks`, hint: "ask the repeat customer for a fresh certificate so it doesn't lapse" },
     needDriver > 0 && { level: "amber", text: `${needDriver} job${plural(needDriver)} still needs a driver`, hint: "assign someone in Team & dispatch" },
     payBasis === "perjob" && toPay > 0 && { level: "blue", text: `${toPay} finished job${plural(toPay)} to pay`, hint: "pay your crew, then mark paid in Team & dispatch → To pay" },
+    hoursDuePeople.length > 0 && { level: "blue", text: `Pay ${nameList(hoursDuePeople)} for clocked hours`, hint: "see the hours & pay them in Team & dispatch → Payroll" },
+    salaryDuePeople.length > 0 && { level: "blue", text: `Payday — pay ${nameList(salaryDuePeople)}`, hint: `salary due (every ${state.business.flatPeriod === "biweekly" ? "2 weeks" : "week"}); pay in Team & dispatch → Payroll` },
   ].filter(Boolean);
 
   return (
@@ -1163,7 +1181,7 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
       </div>
 
       <HelpNote title="How to use your dashboard">
-        <p>This is your home base — <b>open it first each day</b>. The <b>Start here</b> box below lists exactly what needs you today (overdue trailers, pickups/returns, jobs needing a driver, COIs, payments). Clear that list and you're on top of things.</p>
+        <p>This is your home base — <b>open it first each day</b>. The <b>Start here</b> box below lists exactly what needs you today (overdue trailers, pickups/returns, jobs needing a driver, COIs, and who needs <b>paying</b> — it names the person and matches how you pay your crew: finished <b>jobs</b> to pay if you pay per job, <b>clocked hours</b> if you pay hourly, or a <b>payday</b> reminder when a salary period comes around). It only shows on screen here — no email or text. Clear that list and you're on top of things.</p>
         <p>The four <b>tiles</b> (Out on rent, Available, Due back today, Overdue) are tappable — they open the matching list. <b>Pickups &amp; returns today</b> has one-tap buttons to mark trailers out or back. Everything updates live across your devices and your crew's.</p>
         <p>Use the tabs up top for the rest: Calendar, Bookings, Customers, Team &amp; dispatch, Fleet, Insights, and Settings — each has its own “How this page works” note.</p>
       </HelpNote>
