@@ -235,8 +235,35 @@ function mkHistory() {
 }
 
 /* ---------------- seed data (mirrors the financial model) --------------- */
+// Editable public-storefront copy. Each business can rewrite all of this in Settings → Your website.
+// Defaults are Ext Professionals' dump-trailer wording so the owner's site is unchanged out of the box.
+const SITE_DEFAULTS = {
+  siteMode: "full", // full = hosted storefront + booking · booking = booking page only (own website markets) · owner = no public page
+  heroTitle: "Dump trailers,",
+  heroAccent: "ready when you are.",
+  heroSub: "Rent a dump trailer for concrete, roofing, cleanouts, or yard debris. Tow it yourself or we deliver. Book online in under a minute.",
+  trustLine: "Trusted by Charlotte contractors & homeowners",
+  fleetHeading: "Pick your size",
+  fleetSub: "Three sizes, honest pricing. Rates blend down by the week and month.",
+  ctaHeading: "Need a trailer this week?",
+  ctaSub: "Check availability and book online now — or text/call us.",
+  steps: [
+    { t: "Pick your size", d: "Choose the equipment that fits your job." },
+    { t: "Book online", d: "Pick dates, will-call or delivery, and pay in a minute." },
+    { t: "Sign & go", d: "E-sign the agreement and you're ready to work." },
+    { t: "Return it", d: "Drop it back or we collect — quick inspection and you're done." },
+  ],
+  reasons: [
+    { t: "No CDL needed", d: "Every trailer tows on a normal license behind a properly rated truck." },
+    { t: "Book in a minute", d: "Real-time availability, instant confirmation, no phone tag." },
+    { t: "Delivery or will-call", d: "Grab it from the yard or have us drop it and collect it." },
+    { t: "Local & straightforward", d: "Local, transparent pricing, easy to reach." },
+  ],
+};
+
 const SEED = {
   business: {
+    ...SITE_DEFAULTS,
     name: "Ext Professionals",
     yard: "Charlotte, NC",
     phone: "(704) 555-0100",
@@ -499,18 +526,49 @@ export default function App() {
 /* ---------------- LANDING (public marketing page) --------------- */
 function Landing({ state, typeBySize, go, owner, team }) {
   const b = state.business;
-  const steps = [
-    { icon: Truck, t: "Pick your size", d: "Choose a 5×8, 7×12, or 7×14 dump trailer for your job." },
-    { icon: CalendarDays, t: "Book online", d: "Pick dates, will-call or delivery, and pay in a minute." },
-    { icon: ShieldCheck, t: "Sign & go", d: "E-sign the agreement, tow it on a normal license, haul your debris." },
-    { icon: RotateCcw, t: "Return it", d: "Drop it back or we collect — quick inspection and you're done." },
-  ];
-  const reasons = [
-    ["No CDL needed", "Every trailer tows on a normal license behind a properly rated truck."],
-    ["Book in a minute", "Real-time availability, instant confirmation, no phone tag."],
-    ["Delivery or will-call", "Grab it from the yard or have us drop it and collect it."],
-    ["Local & straightforward", `Charlotte-based, transparent pricing, ${b.phone}.`],
-  ];
+  const siteMode = b.siteMode || "full";           // full storefront · booking-only · owner-only
+  const smsHref = `sms:${(b.phone || "").replace(/\D/g, "")}`;
+  const telHref = `tel:${(b.phone || "").replace(/\D/g, "")}`;
+  const stepIcons = [Truck, CalendarDays, ShieldCheck, RotateCcw];
+  const steps = (b.steps || SITE_DEFAULTS.steps).map((s, i) => ({ ...s, icon: stepIcons[i % stepIcons.length] }));
+  const reasons = b.reasons || SITE_DEFAULTS.reasons;
+  const g = (k) => b[k] || SITE_DEFAULTS[k];        // editable copy with default fallback
+
+  // OWNER-ONLY: no public storefront — the business takes bookings directly and runs everything from the dashboard.
+  if (siteMode === "owner") {
+    return (
+      <div style={{ background: T.paper, color: T.ink, minHeight: "100vh" }} className="flex flex-col">
+        <header className="sticky top-0 z-40" style={{ background: T.steelDk }}>
+          <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center gap-2.5">
+            <BrandMark logo={b.logo} size={36} />
+            <div className="leading-tight">
+              <div className="font-extrabold tracking-tight text-white">{b.name}</div>
+              <div className="text-[11px] uppercase tracking-widest" style={{ color: T.amber }}>{b.yard}</div>
+            </div>
+          </div>
+        </header>
+        <section className="max-w-lg mx-auto px-4 py-20 text-center flex-1">
+          <h1 className="font-extrabold tracking-tight" style={{ fontSize: "clamp(1.8rem,5vw,2.6rem)", letterSpacing: "-0.02em" }}>{b.name}</h1>
+          <p className="mt-3 text-base" style={{ color: T.sub }}>To rent, please call or text us — we'll get you set up.</p>
+          <div className="flex flex-wrap gap-3 justify-center mt-6">
+            <a href={telHref} className="px-5 py-3 rounded-xl text-base font-extrabold flex items-center gap-2" style={{ background: T.amber, color: T.steelDk }}><Phone size={17} /> Call {b.phone}</a>
+            <a href={smsHref} className="px-5 py-3 rounded-xl text-base font-bold" style={{ background: T.steelDk, color: "#fff" }}>Text us</a>
+          </div>
+        </section>
+        <footer style={{ background: T.steelDk }}>
+          <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-sm" style={{ color: "#B7C0C6" }}>{b.name} · {b.yard} · {b.phone}</div>
+            <div className="flex items-center gap-4">
+              {team && <button onClick={team} className="text-xs" style={{ color: "#6C7178" }}>Team sign-in</button>}
+              <button onClick={owner} className="text-xs" style={{ color: "#6C7178" }}>Owner login</button>
+            </div>
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
+  const full = siteMode === "full";                 // booking-only hides the marketing sections
   return (
     <div style={{ background: T.paper, color: T.ink }}>
       {/* header */}
@@ -537,10 +595,10 @@ function Landing({ state, typeBySize, go, owner, team }) {
             <MapPin size={12} /> Serving {b.yard} & nearby
           </div>
           <h1 className="font-extrabold tracking-tight" style={{ fontSize: "clamp(2.2rem, 6vw, 3.6rem)", lineHeight: 1.02, letterSpacing: "-0.03em" }}>
-            Dump trailers,<br /><span style={{ color: T.amberDk }}>ready when you are.</span>
+            {g("heroTitle")}<br /><span style={{ color: T.amberDk }}>{g("heroAccent")}</span>
           </h1>
           <p className="mt-4 text-base md:text-lg" style={{ color: T.sub }}>
-            Rent a dump trailer for concrete, roofing, cleanouts, or yard debris. Tow it yourself or we deliver. Book online in under a minute.
+            {g("heroSub")}
           </p>
           <div className="flex flex-wrap gap-3 mt-6">
             <button onClick={() => go("book")} className="px-5 py-3 rounded-xl text-base font-extrabold flex items-center gap-2" style={{ background: T.amber, color: T.steelDk }}>Book a trailer <ArrowRight size={17} /></button>
@@ -550,7 +608,7 @@ function Landing({ state, typeBySize, go, owner, team }) {
             <Phone size={17} style={{ color: T.amber }} /> Text to book a trailer · {b.phone}
           </a>
           <div className="flex items-center gap-2 mt-4 text-sm" style={{ color: T.sub }}>
-            <span style={{ color: T.amber }}>★★★★★</span> Trusted by Charlotte contractors & homeowners
+            <span style={{ color: T.amber }}>★★★★★</span> {g("trustLine")}
           </div>
         </div>
         {/* signature: dump-trailer illustration */}
@@ -572,8 +630,8 @@ function Landing({ state, typeBySize, go, owner, team }) {
 
       {/* fleet */}
       <section className="max-w-6xl mx-auto px-4 md:px-6 py-10">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-center">Pick your size</h2>
-        <p className="text-center mt-2 mb-8" style={{ color: T.sub }}>Three sizes, honest pricing. Rates blend down by the week and month.</p>
+        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-center">{g("fleetHeading")}</h2>
+        <p className="text-center mt-2 mb-8" style={{ color: T.sub }}>{g("fleetSub")}</p>
         <div className="grid md:grid-cols-3 gap-4">
           {state.types.map((t, i) => (
             <div key={t.size} className="rounded-2xl p-5 flex flex-col" style={{ background: "#fff", border: `1px solid ${i === 0 ? T.amber : T.line}` }}>
@@ -589,7 +647,8 @@ function Landing({ state, typeBySize, go, owner, team }) {
         </div>
       </section>
 
-      {/* how it works */}
+      {/* how it works — marketing (hidden in booking-only mode) */}
+      {full && (
       <section style={{ background: "#fff" }}>
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-12">
           <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-center mb-8">How it works</h2>
@@ -607,24 +666,27 @@ function Landing({ state, typeBySize, go, owner, team }) {
           </div>
         </div>
       </section>
+      )}
 
-      {/* why us */}
+      {/* why us — marketing (hidden in booking-only mode) */}
+      {full && (
       <section className="max-w-6xl mx-auto px-4 md:px-6 py-12">
         <div className="grid md:grid-cols-2 gap-4">
-          {reasons.map(([t, d]) => (
-            <div key={t} className="flex items-start gap-3 p-4 rounded-xl" style={{ background: "#fff", border: `1px solid ${T.line}` }}>
+          {reasons.map((r) => (
+            <div key={r.t} className="flex items-start gap-3 p-4 rounded-xl" style={{ background: "#fff", border: `1px solid ${T.line}` }}>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: T.amberSoft }}><Check size={17} style={{ color: T.amberDk }} /></div>
-              <div><div className="font-bold">{t}</div><div className="text-sm" style={{ color: T.sub }}>{d}</div></div>
+              <div><div className="font-bold">{r.t}</div><div className="text-sm" style={{ color: T.sub }}>{r.d}</div></div>
             </div>
           ))}
         </div>
       </section>
+      )}
 
       {/* CTA band */}
       <section className="max-w-6xl mx-auto px-4 md:px-6 pb-14">
         <div className="rounded-2xl p-8 md:p-10 text-center" style={{ background: T.steelDk }}>
-          <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">Need a trailer this week?</h2>
-          <p className="mt-2" style={{ color: "#B7C0C6" }}>Check availability and book online now — or text/call {b.phone}.</p>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">{g("ctaHeading")}</h2>
+          <p className="mt-2" style={{ color: "#B7C0C6" }}>{g("ctaSub")} {b.phone}</p>
           <div className="flex flex-wrap gap-3 justify-center mt-5">
             <button onClick={() => go("book")} className="px-6 py-3 rounded-xl text-base font-extrabold flex items-center gap-2" style={{ background: T.amber, color: T.steelDk }}>Book a trailer <ArrowRight size={17} /></button>
             <button onClick={() => go("manage")} className="px-6 py-3 rounded-xl text-base font-bold text-white" style={{ background: "rgba(255,255,255,0.1)" }}>Manage my booking</button>
@@ -2700,6 +2762,15 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
   };
   const onPhoto = async (size, file) => { if (!file) return; const url = await fileToScaledDataURL(file); if (url) { setType(size, { image: url }); flash("Photo updated."); } else flash("Couldn't read that image."); };
   const onLogo = async (file) => { if (!file) return; const url = await fileToScaledDataURL(file, 400, "image/png"); if (url) { set({ logo: url }); flash("Logo updated."); } else flash("Couldn't read that image."); };
+  // storefront copy (editable public-site text)
+  const stepsArr = b.steps || SITE_DEFAULTS.steps;
+  const reasonsArr = b.reasons || SITE_DEFAULTS.reasons;
+  const setStep = (i, patch) => set({ steps: stepsArr.map((s, j) => j === i ? { ...s, ...patch } : s) });
+  const addStep = () => set({ steps: [...stepsArr, { t: "New step", d: "" }] });
+  const removeStep = (i) => set({ steps: stepsArr.filter((_, j) => j !== i) });
+  const setReason = (i, patch) => set({ reasons: reasonsArr.map((r, j) => j === i ? { ...r, ...patch } : r) });
+  const addReason = () => set({ reasons: [...reasonsArr, { t: "New reason", d: "" }] });
+  const removeReason = (i) => set({ reasons: reasonsArr.filter((_, j) => j !== i) });
   // locations / branches
   const setLocation = (id, patch) => setState((s) => ({ ...s, locations: (s.locations || []).map((l) => l.id === id ? { ...l, ...patch } : l) }));
   const addLocation = () => { const id = "loc" + Date.now(); setState((s) => ({ ...s, locations: [...(s.locations || []), { id, name: "New location", area: "", phone: "", timezone: (s.business.timezone || "America/New_York"), overrides: structuredClone(s.business), types: structuredClone(s.types) }] })); flash("Location added as a copy of your first branch — switch to it in the top bar, then change whatever's different.", true); };
@@ -2714,7 +2785,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
       <HelpNote>
-        <p>Everything that makes the app <b>yours</b>: business name & time zone, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, booking notice and buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
+        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, booking notice and buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
+        <p><b>Your website (storefront)</b> is your public page — a real website + booking system you can point your own domain at. Every word is editable (headline, subheadline, trust line, the equipment heading, the “how it works” steps, the “why choose us” reasons, and the bottom call-to-action), so it fits any business, not just dump trailers. The <b>Customer-facing site</b> switch has three settings: <b>Full site</b> (hosted landing page + online booking), <b>Booking only</b> (skips the marketing sections and shows just your equipment + booking — put a “Book now” link to it on your own website), or <b>Owner-only</b> (no public page; visitors see a “call/text to book” card and you enter bookings yourself).</p>
         <p><b>How you pay your team</b> is two separate choices: their <b>tax status</b> (1099 contractors vs W2 employees — just paperwork wording) and <b>how you pay them</b> — <b>per job</b>, <b>by the hour</b>, or a <b>salary</b> (a fixed amount weekly or every 2 weeks). Any mix works — a 1099 contractor paid hourly, a W2 on salary, etc. Per-job shows a "who you owe" list; by-the-hour shows a payroll list of clocked hours × rate (crew clock in/out from their portal); salary shows a payroll list of each person's fixed amount with a Pay button. You set each person's rate/salary on their card in Team &amp; dispatch.</p>
         <p><b>Payments</b> is how money moves: pick how you <b>collect from customers</b> (Stripe, Square, PayPal/Venmo, Authorize.net, or manual cash/check), and how you <b>pay your team</b> — <b>through the platform</b> (a one-tap "Pay $X" button sends their payout) or <b>yourself</b> (you pay them your own way and just tap "Mark paid"). Real charging and payouts turn on when the payments backend is connected; for now they're set up and simulated.</p>
         <p>Every change <b>saves automatically</b> to the cloud — no save button. Scroll through the cards top to bottom; each has its own short explanation.</p>
@@ -2734,6 +2806,101 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         <Field label="Yard location"><input value={b.yard} onChange={(e) => set({ yard: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <Field label="Business phone (shown to customers · used for the “Text to book” button)"><input value={b.phone} onChange={(e) => set({ phone: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         <p className="text-[11px]" style={{ color: T.sub }}>Set each branch's time zone below under Locations.</p>
+      </Card>
+
+      {/* ─────────── YOUR WEBSITE / STOREFRONT ─────────── */}
+      <Card className="p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Home size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Your website (storefront)</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Your public page is a real website + booking system — point your own domain at it and it's live. Rewrite every word below to match your business, or turn the public page off if you'd rather use your own site.</p>
+
+        {/* site mode */}
+        <Field label="Customer-facing site">
+          <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+            {[["full", "Full site"], ["booking", "Booking only"], ["owner", "Owner-only (off)"]].map(([v, l]) => (
+              <button key={v} onClick={() => set({ siteMode: v })} className="flex-1 py-1.5 rounded-md text-xs font-bold" style={(b.siteMode || "full") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+            ))}
+          </div>
+        </Field>
+        <p className="text-[11px]" style={{ color: T.sub }}>
+          {(b.siteMode || "full") === "full"
+            ? "Full site: your hosted landing page (everything below) plus online booking. Best if you don't have a website of your own."
+            : b.siteMode === "booking"
+            ? "Booking only: skips the marketing sections (how-it-works, why-us) and shows just your equipment + booking. Put a “Book now” link to this page on your own website — your site does the marketing, this handles booking."
+            : "Owner-only: no public page at all. Visitors see a simple “call/text to book” card; you enter every booking yourself from the dashboard. Best if you only want the back-office."}
+        </p>
+
+        {(b.siteMode || "full") !== "owner" && (
+          <>
+            <div className="pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
+              <div className="text-[10px] font-bold uppercase tracking-wide mb-2" style={{ color: T.blue }}>Headline (top of the page)</div>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Headline line 1"><input value={b.heroTitle ?? ""} placeholder={SITE_DEFAULTS.heroTitle} onChange={(e) => set({ heroTitle: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+                <Field label="Headline line 2 (accent color)"><input value={b.heroAccent ?? ""} placeholder={SITE_DEFAULTS.heroAccent} onChange={(e) => set({ heroAccent: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+              </div>
+              <Field label="Subheadline (one or two sentences under the headline)"><textarea value={b.heroSub ?? ""} placeholder={SITE_DEFAULTS.heroSub} onChange={(e) => set({ heroSub: e.target.value })} rows={2} className="w-full p-2.5 rounded-lg text-sm mt-2" style={{ border: `1px solid ${T.line}` }} /></Field>
+              <Field label="Trust line (small line with the ★★★★★)"><input value={b.trustLine ?? ""} placeholder={SITE_DEFAULTS.trustLine} onChange={(e) => set({ trustLine: e.target.value })} className="w-full p-2.5 rounded-lg text-sm mt-2" style={{ border: `1px solid ${T.line}` }} /></Field>
+            </div>
+
+            <div className="pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
+              <div className="text-[10px] font-bold uppercase tracking-wide mb-2" style={{ color: T.blue }}>Equipment section heading</div>
+              <div className="grid grid-cols-1 gap-2">
+                <Field label="Heading (above your equipment list)"><input value={b.fleetHeading ?? ""} placeholder={SITE_DEFAULTS.fleetHeading} onChange={(e) => set({ fleetHeading: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+                <Field label="Sub-line (under the heading)"><input value={b.fleetSub ?? ""} placeholder={SITE_DEFAULTS.fleetSub} onChange={(e) => set({ fleetSub: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+              </div>
+            </div>
+
+            {(b.siteMode || "full") === "full" && (
+              <>
+                <div className="pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: T.blue }}>“How it works” steps</div>
+                    <button onClick={addStep} className="text-[11px] font-bold px-2 py-1 rounded flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={12} /> Add step</button>
+                  </div>
+                  <div className="space-y-2">
+                    {stepsArr.map((s, i) => (
+                      <div key={i} className="rounded-lg p-2.5" style={{ background: T.paper }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-bold" style={{ color: T.amber }}>STEP {i + 1}</span>
+                          {stepsArr.length > 1 && <button onClick={() => removeStep(i)} style={{ color: T.sub }}><Trash2 size={13} /></button>}
+                        </div>
+                        <input value={s.t} onChange={(e) => setStep(i, { t: e.target.value })} placeholder="Step title" className="w-full p-2 rounded-lg text-sm mb-1.5" style={{ border: `1px solid ${T.line}` }} />
+                        <input value={s.d} onChange={(e) => setStep(i, { d: e.target.value })} placeholder="Short description" className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: T.blue }}>“Why choose us” reasons</div>
+                    <button onClick={addReason} className="text-[11px] font-bold px-2 py-1 rounded flex items-center gap-1" style={{ background: T.amber, color: T.steelDk }}><Plus size={12} /> Add reason</button>
+                  </div>
+                  <div className="space-y-2">
+                    {reasonsArr.map((r, i) => (
+                      <div key={i} className="rounded-lg p-2.5" style={{ background: T.paper }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-bold" style={{ color: T.amber }}>REASON {i + 1}</span>
+                          {reasonsArr.length > 1 && <button onClick={() => removeReason(i)} style={{ color: T.sub }}><Trash2 size={13} /></button>}
+                        </div>
+                        <input value={r.t} onChange={(e) => setReason(i, { t: e.target.value })} placeholder="Reason title" className="w-full p-2 rounded-lg text-sm mb-1.5" style={{ border: `1px solid ${T.line}` }} />
+                        <input value={r.d} onChange={(e) => setReason(i, { d: e.target.value })} placeholder="Short description" className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
+                  <div className="text-[10px] font-bold uppercase tracking-wide mb-2" style={{ color: T.blue }}>Bottom call-to-action band</div>
+                  <Field label="Heading"><input value={b.ctaHeading ?? ""} placeholder={SITE_DEFAULTS.ctaHeading} onChange={(e) => set({ ctaHeading: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+                  <Field label="Sub-line (your phone is added automatically after it)"><input value={b.ctaSub ?? ""} placeholder={SITE_DEFAULTS.ctaSub} onChange={(e) => set({ ctaSub: e.target.value })} className="w-full p-2.5 rounded-lg text-sm mt-2" style={{ border: `1px solid ${T.line}` }} /></Field>
+                </div>
+              </>
+            )}
+          </>
+        )}
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between">

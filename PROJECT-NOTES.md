@@ -151,6 +151,20 @@ Team & dispatch · Fleet · Settings.
     both the per-job and payroll views. **All charging/payouts are simulated** (config only)
     until the payments backend + bank verification are connected (same "goes live" gate as
     messaging). HelpNotes on Team & dispatch, Settings, and the employee portal all detail this.
+- **Editable storefront + site modes (white-label foundation):** the public `Landing` page is a
+  real website + booking system (point a custom domain at the Vercel URL and it's live). **All copy
+  is editable** in Settings → **"Your website (storefront)"** — hero headline (two lines, 2nd is the
+  accent colour), subheadline, trust line, equipment-section heading/sub, the "how it works" steps
+  (add/remove, title+desc; icons fixed by index), the "why choose us" reasons (add/remove), and the
+  bottom CTA. Defaults live in module const `SITE_DEFAULTS` (Ext Professionals' dump-trailer wording),
+  spread into `SEED.business` and merged into existing workspaces on load; `Landing` reads each field
+  as `b.field || SITE_DEFAULTS.field` (helper `g()`), so nothing changes for the owner out of the box
+  and any other business rewrites it for their vertical. **`business.siteMode`** switches the public
+  page: `full` (marketing landing + booking — current), `booking` (hides the how-it-works/why-us
+  marketing, keeps equipment catalog + booking — for businesses whose own website markets and who just
+  want the booking engine to embed a "Book now" link to), `owner` (no public storefront at all —
+  `Landing` early-returns a minimal "call/text to book" card; owner enters bookings from the dashboard).
+  All branch-aware (per-location `set`). Deferred: SEO foundation is task #24.
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
 - **Insights analytics:** fleet ROI, weighted utilization, revenue KPIs; revenue-by-month,
