@@ -496,23 +496,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen" style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
-      {mode === "platform" ? (
-        !superAuthed ? (
-          <PlatformLogin state={state} onBack={() => setMode("landing")}
-            onAuthed={() => { setSuperAuthed(true); try { sessionStorage.setItem("yardhand_platform", "1"); } catch (e) {} }} />
-        ) : (
-          <div className="min-h-screen" style={{ background: T.paper }}>
-            <div className="sticky top-0 z-40" style={{ background: T.steelDk }}>
-              <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2.5"><BrandMark logo={state.business.logo} size={32} /><div className="font-extrabold tracking-tight text-white">Yardhand <span style={{ color: T.amber }}>· Operator</span></div></div>
-                <button onClick={() => { setSuperAuthed(false); try { sessionStorage.removeItem("yardhand_platform"); } catch (e) {} setMode("landing"); }} className="px-2.5 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2", border: "1px solid rgba(255,255,255,0.15)" }}><LogOut size={15} /> <span className="hidden md:inline">Sign out</span></button>
-              </div>
-            </div>
-            <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24"><PlatformAdmin {...{ state, setState, flash, back: () => setMode("owner") }} /></div>
-          </div>
-        )
+      {mode === "platform" && !superAuthed ? (
+        <PlatformLogin state={state} onBack={() => setMode("owner")}
+          onAuthed={() => { setSuperAuthed(true); try { sessionStorage.setItem("yardhand_platform", "1"); } catch (e) {} }} />
       ) : mode === "landing" ? (
-        <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} team={() => setMode("employee")} operator={() => setMode("platform")} />
+        <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} team={() => setMode("employee")} />
       ) : mode === "owner" && !authed ? (
         <OwnerLogin state={state} onBack={() => setMode("landing")}
           onAuthed={() => { setAuthed(true); try { sessionStorage.setItem("yardhand_owner", "1"); } catch (e) {} }} />
@@ -522,9 +510,11 @@ export default function App() {
       ) : (
         <>
           <TopBar state={state} mode={mode} setMode={setMode} locations={locations} locId={locId} switchLoc={switchLoc}
-            signOut={() => { setAuthed(false); setEmployeeId(null); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); }} />
+            signOut={() => { setAuthed(false); setEmployeeId(null); setSuperAuthed(false); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); sessionStorage.removeItem("yardhand_platform"); } catch (e) {} setMode("landing"); }} />
           {mode === "employee" ? (
             <EmployeePortal {...{ state, employeeId, setBooking, update, flash, signOut: () => { setEmployeeId(null); try { sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); } }} />
+          ) : mode === "platform" ? (
+            <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24"><PlatformAdmin {...{ state, setState, flash, back: () => setMode("owner") }} /></div>
           ) : mode === "owner" ? (
             <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24">
               <OwnerNav tab={tab} setTab={setTab} />
@@ -600,7 +590,6 @@ function Landing({ state, typeBySize, go, owner, team, operator }) {
             <div className="flex items-center gap-4">
               {team && <button onClick={team} className="text-xs" style={{ color: "#6C7178" }}>Team sign-in</button>}
               <button onClick={owner} className="text-xs" style={{ color: "#6C7178" }}>Owner login</button>
-              {operator && <button onClick={operator} className="text-xs" style={{ color: "#4A5A63" }}>Operator</button>}
             </div>
           </div>
         </footer>
@@ -747,7 +736,6 @@ function Landing({ state, typeBySize, go, owner, team, operator }) {
           <div className="flex items-center gap-4">
             {team && <button onClick={team} className="text-xs" style={{ color: "#6C7178" }}>Team sign-in</button>}
             <button onClick={owner} className="text-xs" style={{ color: "#6C7178" }}>Owner login</button>
-            {operator && <button onClick={operator} className="text-xs" style={{ color: "#4A5A63" }}>Operator</button>}
           </div>
         </div>
       </footer>
@@ -785,7 +773,7 @@ function TopBar({ state, mode, setMode, signOut, locations, locId, switchLoc }) 
             <button onClick={() => setMode("landing")} className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2" }}>
               <Home size={15} /> <span className="hidden sm:inline">Site</span>
             </button>
-            {[["owner", "Owner", LayoutDashboard], ["employee", "Team", Users], ["customer", "Book a trailer", Truck]].map(([m, label, Icon]) => (
+            {[["owner", "Owner", LayoutDashboard], ["employee", "Team", Users], ["customer", "Book a trailer", Truck], ["platform", "Operator", Building2]].map(([m, label, Icon]) => (
               <button key={m} onClick={() => setMode(m)}
                 className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5 transition"
                 style={mode === m ? { background: T.amber, color: T.steelDk } : { color: "#D8DEE2" }}>
@@ -793,7 +781,7 @@ function TopBar({ state, mode, setMode, signOut, locations, locId, switchLoc }) 
               </button>
             ))}
           </div>
-          {(mode === "owner" || mode === "employee") && signOut && (
+          {(mode === "owner" || mode === "employee" || mode === "platform") && signOut && (
             <button onClick={signOut} title="Sign out" className="px-2.5 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2", border: "1px solid rgba(255,255,255,0.15)" }}>
               <LogOut size={15} /> <span className="hidden md:inline">Sign out</span>
             </button>

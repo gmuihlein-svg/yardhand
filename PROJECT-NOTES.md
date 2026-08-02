@@ -168,13 +168,17 @@ Team & dispatch · Fleet · Settings.
   All branch-aware (per-location `set`). Deferred: SEO foundation is task #24.
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
-- **Platform admin (SaaS super-admin · SIMULATED preview):** `PlatformAdmin` component in a **separate
-  private portal** — `mode "platform"` gated by its OWN operator passcode (`platform.operatorPass`,
-  default "operator", changeable inside), NOT a business tab. `PlatformLogin` screen + `superAuthed`
-  state (sessionStorage `yardhand_platform`). Reached only via a subtle **"Operator"** link in the public
-  landing footer → passcode → portal (its own header + Sign out). This keeps it invisible to subscribing
-  businesses (they never have the passcode); true tenant-invisibility (separate operator subdomain) comes
-  with the multi-tenant backend. It is deliberately NOT in the OwnerNav. This is the software OWNER's control panel over the businesses
+- **Platform admin (SaaS super-admin · SIMULATED preview):** `PlatformAdmin` component reached via an
+  **"Operator" tab in the top-bar mode switcher** (Site · Owner · Team · Book a trailer · Operator) —
+  renders under the normal TopBar so you tab freely between views. Gated by its OWN operator passcode
+  (`platform.operatorPass`, default "operator", changeable inside the portal) asked **once per session**
+  via `PlatformLogin` (`mode "platform" && !superAuthed`), exactly like Owner asks for its password once;
+  `superAuthed` persists in sessionStorage `yardhand_platform`; Sign out clears it. It is NOT in the
+  business OwnerNav (Dashboard/Insights/…). **Visibility model (important):** today this is a single shared
+  instance = you, so the passcode is the lock. TRUE isolation — each subscribing business logs into its own
+  account seeing ONLY its own rental ops, never your ops and never this Operator portal — requires the
+  multi-tenant accounts + per-tenant data isolation backend (task #10); once built, the Operator tab
+  role-renders for the platform-owner account only. Not enforced yet because there's only one account. This is the software OWNER's control panel over the businesses
   that subscribe to Yardhand — distinct from any single business's dashboard. Data in `state.platform`
   (seeded + migrated on load): `trialDays`, `defaultBilling` (autopay/manual), `cardRequired`, `plans[]`
   ({id,name,price,note}), and `tenants[]` (mock subscribing businesses: name/owner/email/signup/plan/
