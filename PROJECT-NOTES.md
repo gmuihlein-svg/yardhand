@@ -178,7 +178,10 @@ Team & dispatch · Fleet · Settings.
   **MRR** = sum of active plan prices, past-due), editable new-signup defaults (trial length, autopay-vs-
   manual, require-card), editable plan tiers, and a tenants list sorted by urgency with trial days-left
   countdowns and **simulated** actions (Convert to paying / +7 days / Mark paid / Cancel / Reactivate)
-  that update the preview and recompute KPIs (verified: convert Pro trial → MRR +$99). **All simulated**
+  that update the preview and recompute KPIs (verified: convert Pro trial → MRR +$99). A **Financials &
+  KPIs** card adds ARR (MRR×12), ARPU (MRR/paying), trial→paid conversion (active/(active+canceled)),
+  churn (canceled/total), new-signups-this-month, revenue-at-risk (past-due $), and a revenue-by-plan
+  bar chart — all derived live from the tenant data. **All simulated**
   until the real accounts + Stripe-Billing backend is connected — tasks #26 (trial + subscription billing)
   and #27 (this dashboard, real). Part of the multi-tenant foundation (#10).
 - **Delivery on/off (`business.offerDelivery`, default true):** Settings → Rental policy toggle

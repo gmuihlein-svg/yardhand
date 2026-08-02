@@ -2765,8 +2765,20 @@ function PlatformAdmin({ state, setState, flash, back }) {
   const trialing = tenants.filter((t) => t.status === "trialing");
   const active = tenants.filter((t) => t.status === "active");
   const pastDue = tenants.filter((t) => t.status === "past_due");
+  const canceled = tenants.filter((t) => t.status === "canceled");
   const mrr = active.reduce((s, t) => s + (planById(t.plan).price || 0), 0);
   const trialPipeline = trialing.reduce((s, t) => s + (planById(t.plan).price || 0), 0);
+  // ── financials / KPIs ──
+  const arr = mrr * 12;                                                        // annual recurring revenue
+  const arpu = active.length ? Math.round(mrr / active.length) : 0;            // avg revenue per paying account
+  const pastDueRev = pastDue.reduce((s, t) => s + (planById(t.plan).price || 0), 0); // MRR at risk
+  const settled = active.length + canceled.length;                            // accounts past the trial decision
+  const conversion = settled ? Math.round((active.length / settled) * 100) : 0; // trial → paid
+  const churnRate = tenants.length ? Math.round((canceled.length / tenants.length) * 100) : 0;
+  const thisMonth = today().slice(0, 7);
+  const newThisMonth = tenants.filter((t) => (t.signup || "").slice(0, 7) === thisMonth).length;
+  const revByPlan = plans.map((pl) => { const n = active.filter((t) => t.plan === pl.id).length; return { pl, n, rev: n * pl.price }; });
+  const maxPlanRev = Math.max(1, ...revByPlan.map((r) => r.rev));
   const STATUS = { trialing: ["In trial", T.amberDk, T.amberSoft], active: ["Paying", T.green, T.greenSoft], past_due: ["Past due", T.red, T.redSoft], canceled: ["Canceled", T.sub, T.graySoft] };
   const order = { past_due: 0, trialing: 1, active: 2, canceled: 3 };
   const sorted = [...tenants].sort((a, b) => (order[a.status] - order[b.status]) || ((daysLeft(a.trialEnds)) - (daysLeft(b.trialEnds))));
@@ -2788,7 +2800,7 @@ function PlatformAdmin({ state, setState, flash, back }) {
 
       <HelpNote>
         <p>This is <b>your</b> control panel as the software owner — separate from any single business's dashboard. It tracks everyone paying you (or trialing) for Yardhand.</p>
-        <p><b>Top row:</b> how many businesses are <b>in a free trial</b>, how many are <b>paying</b>, your <b>monthly recurring revenue (MRR)</b>, and anyone <b>past due</b>. <b>Signup defaults</b> set the free-trial length, whether a card is required up front, and whether new accounts default to autopay (recurring) or manual invoicing — like Jobber/Housecall Pro. <b>Plans</b> are your price tiers. <b>The list</b> shows each business with its plan, status, trial days left, and last activity; use the controls to convert a trial to paying, extend a trial, or cancel.</p>
+        <p><b>Top row:</b> how many businesses are <b>in a free trial</b>, how many are <b>paying</b>, your <b>monthly recurring revenue (MRR)</b>, and anyone <b>past due</b>. <b>Financials &amp; KPIs</b> adds the full picture — <b>ARR</b> (annual recurring revenue), <b>ARPU</b> (average revenue per paying account), your <b>trial→paid conversion</b> rate, <b>churn</b>, <b>new sign-ups this month</b>, <b>revenue at risk</b> (past-due dollars), and a <b>revenue-by-plan</b> breakdown. Everything recalculates live as you change a plan price or a business's status. <b>Signup defaults</b> set the free-trial length, whether a card is required up front, and whether new accounts default to autopay (recurring) or manual invoicing — like Jobber/Housecall Pro. <b>Plans</b> are your price tiers. <b>The list</b> shows each business with its plan, status, trial days left, and last activity; use the controls to convert a trial to paying, extend a trial, or cancel.</p>
       </HelpNote>
 
       {/* KPIs */}
@@ -2806,6 +2818,46 @@ function PlatformAdmin({ state, setState, flash, back }) {
           </Card>
         ))}
       </div>
+
+      {/* financials & KPIs */}
+      <Card className="p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><BarChart3 size={16} style={{ color: T.green }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Financials &amp; KPIs</h3>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            ["ARR", `$${arr.toLocaleString()}`, "annual recurring revenue"],
+            ["ARPU", `$${arpu}`, "avg revenue / paying account"],
+            ["Trial → paid", `${conversion}%`, "of accounts past their trial"],
+            ["Churn", `${churnRate}%`, `${canceled.length} canceled all-time`],
+            ["New this month", newThisMonth, "sign-ups"],
+            ["Revenue at risk", `$${pastDueRev}`, `${pastDue.length} past due`],
+          ].map(([label, val, sub]) => (
+            <div key={label} className="rounded-lg p-3" style={{ background: T.paper }}>
+              <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: T.sub }}>{label}</div>
+              <div className="text-2xl font-extrabold tabular-nums mt-0.5" style={{ color: T.ink }}>{val}</div>
+              <div className="text-[10px] mt-0.5" style={{ color: T.sub }}>{sub}</div>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: T.sub }}>Monthly revenue by plan</div>
+          <div className="space-y-2">
+            {revByPlan.map(({ pl, n, rev }) => (
+              <div key={pl.id} className="flex items-center gap-2">
+                <div className="w-28 shrink-0 text-xs font-semibold truncate">{pl.name} <span style={{ color: T.sub }}>· {n}</span></div>
+                <div className="flex-1 h-5 rounded" style={{ background: T.paper }}>
+                  <div className="h-5 rounded flex items-center justify-end px-2" style={{ width: `${Math.max(6, (rev / maxPlanRev) * 100)}%`, background: T.steel }}>
+                    <span className="text-[10px] font-bold text-white tabular-nums">${rev}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="text-[11px]" style={{ color: T.sub }}>MRR ${mrr}/mo · ARR ${arr.toLocaleString()}/yr from {active.length} paying account{active.length === 1 ? "" : "s"}, plus ${trialPipeline}/mo in trials that could convert. Figures update live as you change plan prices or a business's status above.</p>
+      </Card>
 
       {/* signup defaults */}
       <Card className="p-4 space-y-3">
