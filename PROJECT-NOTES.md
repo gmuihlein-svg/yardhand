@@ -168,9 +168,13 @@ Team & dispatch · Fleet · Settings.
   All branch-aware (per-location `set`). Deferred: SEO foundation is task #24.
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
-- **Platform admin (SaaS super-admin · SIMULATED preview):** `PlatformAdmin` component + `mode "platform"`
-  (auth-gated like owner; reached via a card at the top of Settings → "Platform admin · your SaaS
-  customers"; back returns to owner). This is the software OWNER's control panel over the businesses
+- **Platform admin (SaaS super-admin · SIMULATED preview):** `PlatformAdmin` component in a **separate
+  private portal** — `mode "platform"` gated by its OWN operator passcode (`platform.operatorPass`,
+  default "operator", changeable inside), NOT a business tab. `PlatformLogin` screen + `superAuthed`
+  state (sessionStorage `yardhand_platform`). Reached only via a subtle **"Operator"** link in the public
+  landing footer → passcode → portal (its own header + Sign out). This keeps it invisible to subscribing
+  businesses (they never have the passcode); true tenant-invisibility (separate operator subdomain) comes
+  with the multi-tenant backend. It is deliberately NOT in the OwnerNav. This is the software OWNER's control panel over the businesses
   that subscribe to Yardhand — distinct from any single business's dashboard. Data in `state.platform`
   (seeded + migrated on load): `trialDays`, `defaultBilling` (autopay/manual), `cardRequired`, `plans[]`
   ({id,name,price,note}), and `tenants[]` (mock subscribing businesses: name/owner/email/signup/plan/

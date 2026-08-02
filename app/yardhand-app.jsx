@@ -333,6 +333,7 @@ const SEED = {
   ],
   // ── PLATFORM / SaaS layer (SIMULATED preview) — the businesses subscribing to Yardhand ──
   platform: {
+    operatorPass: "operator",     // separate super-admin passcode — only YOU (the platform owner) know it; tenants never see this portal
     trialDays: 7,                 // new signups get this many days free
     defaultBilling: "autopay",    // autopay (recurring) | manual (you invoice)
     cardRequired: false,          // require a card up front to start the trial?
@@ -385,7 +386,8 @@ function priceExplain(type, days) {
 export default function App() {
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState("owner"); // owner | customer | landing | employee
+  const [mode, setMode] = useState("owner"); // owner | customer | landing | employee | platform
+  const [superAuthed, setSuperAuthed] = useState(false); // platform operator (you) signed in — NOT a business owner
   const [custStart, setCustStart] = useState("book"); // initial customer view
   const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
@@ -417,6 +419,7 @@ export default function App() {
     })();
     try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_owner") === "1") setAuthed(true); } catch (e) { /* ignore */ }
     try { if (typeof window !== "undefined") { const eid = sessionStorage.getItem("yardhand_emp"); if (eid) setEmployeeId(eid); } } catch (e) { /* ignore */ }
+    try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_platform") === "1") setSuperAuthed(true); } catch (e) { /* ignore */ }
     // realtime: pick up changes made on another device (ignore our own echoes)
     return subscribeWorkspace((incoming) => {
       setState((prev) => JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming);
@@ -493,8 +496,23 @@ export default function App() {
 
   return (
     <div className="min-h-screen" style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
-      {mode === "landing" ? (
-        <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} team={() => setMode("employee")} />
+      {mode === "platform" ? (
+        !superAuthed ? (
+          <PlatformLogin state={state} onBack={() => setMode("landing")}
+            onAuthed={() => { setSuperAuthed(true); try { sessionStorage.setItem("yardhand_platform", "1"); } catch (e) {} }} />
+        ) : (
+          <div className="min-h-screen" style={{ background: T.paper }}>
+            <div className="sticky top-0 z-40" style={{ background: T.steelDk }}>
+              <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2.5"><BrandMark logo={state.business.logo} size={32} /><div className="font-extrabold tracking-tight text-white">Yardhand <span style={{ color: T.amber }}>· Operator</span></div></div>
+                <button onClick={() => { setSuperAuthed(false); try { sessionStorage.removeItem("yardhand_platform"); } catch (e) {} setMode("landing"); }} className="px-2.5 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2", border: "1px solid rgba(255,255,255,0.15)" }}><LogOut size={15} /> <span className="hidden md:inline">Sign out</span></button>
+              </div>
+            </div>
+            <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24"><PlatformAdmin {...{ state, setState, flash, back: () => setMode("owner") }} /></div>
+          </div>
+        )
+      ) : mode === "landing" ? (
+        <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} team={() => setMode("employee")} operator={() => setMode("platform")} />
       ) : mode === "owner" && !authed ? (
         <OwnerLogin state={state} onBack={() => setMode("landing")}
           onAuthed={() => { setAuthed(true); try { sessionStorage.setItem("yardhand_owner", "1"); } catch (e) {} }} />
@@ -518,7 +536,6 @@ export default function App() {
               {tab === "team" && <TeamView {...{ state: scoped, locId, setBooking, update, flash, openDetail: setDetail }} />}
               {tab === "fleet" && <FleetView {...{ state: scoped, locId, typeBySize, trailerStatus, currentBooking, update, flash }} />}
               {tab === "settings" && <SettingsView {...{ state, setState, flash, locId, locations, switchLoc }} />}
-              {tab === "platform" && <PlatformAdmin {...{ state, setState, flash, back: () => setTab("dashboard") }} />}
             </div>
           ) : (
             <CustomerArea {...{ state: scoped, typeBySize, countAvail, findUnit, addBooking, setBooking, flash, setMode, initialView: custStart, locations, locId, switchLoc }} />
@@ -546,7 +563,7 @@ export default function App() {
 }
 
 /* ---------------- LANDING (public marketing page) --------------- */
-function Landing({ state, typeBySize, go, owner, team }) {
+function Landing({ state, typeBySize, go, owner, team, operator }) {
   const b = state.business;
   const siteMode = b.siteMode || "full";           // full storefront · booking-only · owner-only
   const smsHref = `sms:${(b.phone || "").replace(/\D/g, "")}`;
@@ -583,6 +600,7 @@ function Landing({ state, typeBySize, go, owner, team }) {
             <div className="flex items-center gap-4">
               {team && <button onClick={team} className="text-xs" style={{ color: "#6C7178" }}>Team sign-in</button>}
               <button onClick={owner} className="text-xs" style={{ color: "#6C7178" }}>Owner login</button>
+              {operator && <button onClick={operator} className="text-xs" style={{ color: "#4A5A63" }}>Operator</button>}
             </div>
           </div>
         </footer>
@@ -729,6 +747,7 @@ function Landing({ state, typeBySize, go, owner, team }) {
           <div className="flex items-center gap-4">
             {team && <button onClick={team} className="text-xs" style={{ color: "#6C7178" }}>Team sign-in</button>}
             <button onClick={owner} className="text-xs" style={{ color: "#6C7178" }}>Owner login</button>
+            {operator && <button onClick={operator} className="text-xs" style={{ color: "#4A5A63" }}>Operator</button>}
           </div>
         </div>
       </footer>
@@ -848,6 +867,34 @@ function EmployeeLogin({ state, onAuthed, onBack }) {
         </div>
         <button onClick={onBack} className="w-full mt-4 text-xs font-semibold" style={{ color: "#B7C0C6" }}>← Back to public site</button>
         <p className="text-[11px] text-center mt-3" style={{ color: "#6C7178" }}>Prototype sign-in. Individual secure logins get wired up when this goes live.</p>
+      </div>
+    </div>
+  );
+}
+
+/* Operator (platform super-admin) login — a SEPARATE portal from any business's owner login.
+   Only the platform owner has this passcode; subscribing businesses never see this screen. */
+function PlatformLogin({ state, onAuthed, onBack }) {
+  const expected = (state.platform && state.platform.operatorPass) || "operator";
+  const [pass, setPass] = useState("");
+  const [err, setErr] = useState(false);
+  const submit = () => { if (pass === expected) onAuthed(); else setErr(true); };
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: T.steelDk }}>
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center text-center mb-6">
+          <BrandMark logo={state.business.logo} size={56} />
+          <div className="mt-3 text-xl font-extrabold text-white">Yardhand · Operator</div>
+          <div className="text-sm" style={{ color: "#B7C0C6" }}>Platform admin — your SaaS customers</div>
+        </div>
+        <div className="rounded-2xl p-5 space-y-3" style={{ background: T.panel }}>
+          <Field label="Operator passcode"><input type="password" value={pass} autoFocus onChange={(e) => { setPass(e.target.value); setErr(false); }} onKeyDown={(e) => { if (e.key === "Enter") submit(); }} placeholder="Only you know this" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${err ? T.red : T.line}` }} /></Field>
+          {err && <div className="text-xs font-semibold" style={{ color: T.red }}>Wrong passcode.</div>}
+          <button onClick={submit} className="w-full py-2.5 rounded-lg font-extrabold" style={{ background: T.amber, color: T.steelDk }}>Enter</button>
+          {expected === "operator" && <div className="text-[11px] p-2 rounded-lg text-center" style={{ background: T.amberSoft, color: T.amberDk }}>Demo · passcode is <b>operator</b> (change it inside). This portal is <b>separate</b> from every business's login — your subscribing customers never see it.</div>}
+        </div>
+        <button onClick={onBack} className="w-full mt-4 text-xs font-semibold" style={{ color: "#B7C0C6" }}>← Back</button>
+        <p className="text-[11px] text-center mt-3" style={{ color: "#6C7178" }}>For the platform owner only. When you go multi-tenant this lives on a separate operator site.</p>
       </div>
     </div>
   );
@@ -1149,7 +1196,6 @@ function OwnerNav({ tab, setTab }) {
     ["team", "Team & dispatch", User],
     ["fleet", "Fleet", Boxes],
     ["settings", "Settings", Settings],
-    ["platform", "Platform", Building2],
   ];
   return (
     <div className="flex gap-1 overflow-x-auto py-4 -mx-1 px-1">
@@ -2877,6 +2923,10 @@ function PlatformAdmin({ state, setState, flash, back }) {
         </div>
         <Toggle label="Require a card to start the trial" sub={p.cardRequired ? "Card on file up front; auto-charges when the trial ends (higher conversion, fewer signups)." : "No card needed to try it (more signups; you collect payment before day 7 ends)."} on={!!p.cardRequired} set={(v) => setP({ cardRequired: v })} />
         <p className="text-[11px]" style={{ color: T.sub }}>New businesses get <b>{p.trialDays ?? 7} days free</b>, then {(p.defaultBilling || "autopay") === "autopay" ? "auto-charge on their plan" : "an invoice you send"}. {p.cardRequired ? "A card is collected at signup." : "No card required to start."}</p>
+        <div className="pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
+          <Field label="Operator passcode (only you — locks this portal)"><input type="text" value={p.operatorPass || ""} onChange={(e) => setP({ operatorPass: e.target.value })} placeholder="Set a private passcode" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+          <p className="text-[11px] mt-1" style={{ color: T.sub }}>This is the code to reach this Operator portal. It's <b>separate</b> from your business's owner login and from every subscribing business — they never see this screen. Keep it private.</p>
+        </div>
       </Card>
 
       {/* plans */}
