@@ -3,6 +3,10 @@
 > **Purpose:** durable memory for this project so any new session (or a new chat)
 > can pick up with full context — independent of any single conversation.
 > The **GitHub repo is the source of truth.** Vercel just deploys what's in GitHub.
+>
+> **▶ See `PLATFORM-PLAN.md`** for the multi-tenant / security / billing / backups build
+> plan (accounts, data isolation, encryption, no-data-loss, and what's simulated vs. live).
+> That plan is the gate for selling Yardhand to other businesses. Tasks: #10, #26, #27, #28, #29.
 
 ---
 
