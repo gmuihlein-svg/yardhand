@@ -168,6 +168,19 @@ Team & dispatch · Fleet · Settings.
   All branch-aware (per-location `set`). Deferred: SEO foundation is task #24.
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
+- **Platform admin (SaaS super-admin · SIMULATED preview):** `PlatformAdmin` component + `mode "platform"`
+  (auth-gated like owner; reached via a card at the top of Settings → "Platform admin · your SaaS
+  customers"; back returns to owner). This is the software OWNER's control panel over the businesses
+  that subscribe to Yardhand — distinct from any single business's dashboard. Data in `state.platform`
+  (seeded + migrated on load): `trialDays`, `defaultBilling` (autopay/manual), `cardRequired`, `plans[]`
+  ({id,name,price,note}), and `tenants[]` (mock subscribing businesses: name/owner/email/signup/plan/
+  status[trialing|active|past_due|canceled]/trialEnds/billing/lastActive). Shows KPIs (in-trial, paying,
+  **MRR** = sum of active plan prices, past-due), editable new-signup defaults (trial length, autopay-vs-
+  manual, require-card), editable plan tiers, and a tenants list sorted by urgency with trial days-left
+  countdowns and **simulated** actions (Convert to paying / +7 days / Mark paid / Cancel / Reactivate)
+  that update the preview and recompute KPIs (verified: convert Pro trial → MRR +$99). **All simulated**
+  until the real accounts + Stripe-Billing backend is connected — tasks #26 (trial + subscription billing)
+  and #27 (this dashboard, real). Part of the multi-tenant foundation (#10).
 - **Delivery on/off (`business.offerDelivery`, default true):** Settings → Rental policy toggle
   "Offer delivery & collection." When off, the customer booking flow hides "Deliver to me" and
   "You pick it up (collect)", leaving only will-call pickup + yard drop-off — for yard-only businesses.

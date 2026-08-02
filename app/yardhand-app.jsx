@@ -331,6 +331,24 @@ const SEED = {
       price: 580, deposit: 500, paid: true, coi: true, signName: "Julio Prieto", signedAt: "2026-07-25T11:20:00Z", notes: "Kitchen gut — weekly rate." },
     ...mkHistory(),
   ],
+  // ── PLATFORM / SaaS layer (SIMULATED preview) — the businesses subscribing to Yardhand ──
+  platform: {
+    trialDays: 7,                 // new signups get this many days free
+    defaultBilling: "autopay",    // autopay (recurring) | manual (you invoice)
+    cardRequired: false,          // require a card up front to start the trial?
+    plans: [
+      { id: "starter", name: "Starter", price: 49, note: "1 location" },
+      { id: "pro", name: "Pro", price: 99, note: "1 location, all features" },
+      { id: "multi", name: "Multi-location", price: 199, note: "unlimited branches" },
+    ],
+    tenants: [
+      { id: "tn1", name: "Queen City Dumpsters", owner: "Marcus Lee", email: "marcus@qcdumpsters.com", signup: "2026-07-28", plan: "pro", status: "trialing", trialEnds: addDays(today(), 2), billing: "autopay", lastActive: today() },
+      { id: "tn2", name: "Piedmont Equipment Rental", owner: "Dana Cruz", email: "dana@piedmontrent.com", signup: "2026-06-15", plan: "multi", status: "active", trialEnds: "2026-06-22", billing: "autopay", lastActive: addDays(today(), -1) },
+      { id: "tn3", name: "Lakeside Party Rentals", owner: "Sam Ortiz", email: "sam@lakesideparty.com", signup: "2026-07-31", plan: "starter", status: "trialing", trialEnds: addDays(today(), 5), billing: "manual", lastActive: today() },
+      { id: "tn4", name: "Foothills Tool Rental", owner: "Robin Vega", email: "robin@foothillstools.com", signup: "2026-05-02", plan: "starter", status: "past_due", trialEnds: "2026-05-09", billing: "autopay", lastActive: addDays(today(), -13) },
+      { id: "tn5", name: "Cabarrus Trailer Co", owner: "Alex Kim", email: "alex@cabarrustrailer.com", signup: "2026-07-10", plan: "pro", status: "canceled", trialEnds: "2026-07-17", billing: "autopay", lastActive: addDays(today(), -8) },
+    ],
+  },
 };
 
 /* ---------------- pricing --------------- */
@@ -391,6 +409,8 @@ export default function App() {
       seeded.locations.forEach((l) => { if (!l.timezone) l.timezone = seeded.business.timezone || "America/New_York"; });
       const defLoc = seeded.locations[0].id;
       ["trailers", "bookings", "contractors"].forEach((k) => { if (Array.isArray(seeded[k])) seeded[k].forEach((x) => { if (!x.locationId) x.locationId = defLoc; }); });
+      // platform/SaaS layer (simulated preview): trial + subscription config and the businesses subscribing to Yardhand
+      if (!seeded.platform) seeded.platform = structuredClone(SEED.platform);
       setState(seeded);
       setLoading(false);
       try { const al = sessionStorage.getItem("yardhand_loc"); setActiveLoc(al && seeded.locations.some((l) => l.id === al) ? al : defLoc); } catch (e) { setActiveLoc(defLoc); }
@@ -475,7 +495,7 @@ export default function App() {
     <div className="min-h-screen" style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
       {mode === "landing" ? (
         <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} team={() => setMode("employee")} />
-      ) : mode === "owner" && !authed ? (
+      ) : (mode === "owner" || mode === "platform") && !authed ? (
         <OwnerLogin state={state} onBack={() => setMode("landing")}
           onAuthed={() => { setAuthed(true); try { sessionStorage.setItem("yardhand_owner", "1"); } catch (e) {} }} />
       ) : mode === "employee" && !employeeId ? (
@@ -487,6 +507,8 @@ export default function App() {
             signOut={() => { setAuthed(false); setEmployeeId(null); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); }} />
           {mode === "employee" ? (
             <EmployeePortal {...{ state, employeeId, setBooking, update, flash, signOut: () => { setEmployeeId(null); try { sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); } }} />
+          ) : mode === "platform" ? (
+            <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24"><PlatformAdmin {...{ state, setState, flash, back: () => setMode("owner") }} /></div>
           ) : mode === "owner" ? (
             <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24">
               <OwnerNav tab={tab} setTab={setTab} />
@@ -497,7 +519,7 @@ export default function App() {
               {tab === "customers" && <CustomersView {...{ state: scoped, openDetail: setDetail }} />}
               {tab === "team" && <TeamView {...{ state: scoped, locId, setBooking, update, flash, openDetail: setDetail }} />}
               {tab === "fleet" && <FleetView {...{ state: scoped, locId, typeBySize, trailerStatus, currentBooking, update, flash }} />}
-              {tab === "settings" && <SettingsView {...{ state, setState, flash, locId, locations, switchLoc }} />}
+              {tab === "settings" && <SettingsView {...{ state, setState, flash, locId, locations, switchLoc, setMode }} />}
             </div>
           ) : (
             <CustomerArea {...{ state: scoped, typeBySize, countAvail, findUnit, addBooking, setBooking, flash, setMode, initialView: custStart, locations, locId, switchLoc }} />
@@ -2729,8 +2751,145 @@ function AddContractorModal({ onClose, onAdd, payBasis, periodWord }) {
   );
 }
 
+/* ---------------- PLATFORM ADMIN (SaaS super-admin over subscribing businesses · simulated preview) --------------- */
+function PlatformAdmin({ state, setState, flash, back }) {
+  const p = state.platform || {};
+  const plans = p.plans || [];
+  const tenants = p.tenants || [];
+  const planById = (id) => plans.find((x) => x.id === id) || { name: id, price: 0 };
+  const daysLeft = (d) => Math.ceil((new Date(d + "T00:00:00") - new Date(today() + "T00:00:00")) / 86400000);
+  const setP = (patch) => setState((s) => ({ ...s, platform: { ...s.platform, ...patch } }));
+  const setPlan = (i, patch) => setState((s) => ({ ...s, platform: { ...s.platform, plans: s.platform.plans.map((pl, j) => j === i ? { ...pl, ...patch } : pl) } }));
+  const setTenant = (id, patch) => setState((s) => ({ ...s, platform: { ...s.platform, tenants: s.platform.tenants.map((t) => t.id === id ? { ...t, ...patch } : t) } }));
+
+  const trialing = tenants.filter((t) => t.status === "trialing");
+  const active = tenants.filter((t) => t.status === "active");
+  const pastDue = tenants.filter((t) => t.status === "past_due");
+  const mrr = active.reduce((s, t) => s + (planById(t.plan).price || 0), 0);
+  const trialPipeline = trialing.reduce((s, t) => s + (planById(t.plan).price || 0), 0);
+  const STATUS = { trialing: ["In trial", T.amberDk, T.amberSoft], active: ["Paying", T.green, T.greenSoft], past_due: ["Past due", T.red, T.redSoft], canceled: ["Canceled", T.sub, T.graySoft] };
+  const order = { past_due: 0, trialing: 1, active: 2, canceled: 3 };
+  const sorted = [...tenants].sort((a, b) => (order[a.status] - order[b.status]) || ((daysLeft(a.trialEnds)) - (daysLeft(b.trialEnds))));
+
+  return (
+    <div className="space-y-6 pt-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: T.amberDk }}>Platform admin</div>
+          <SectionTitle>Your SaaS customers</SectionTitle>
+        </div>
+        <button onClick={back} className="text-xs font-bold flex items-center gap-1 px-3 py-2 rounded-lg" style={{ background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}><ArrowLeft size={14} /> Back to my business</button>
+      </div>
+
+      <div className="rounded-xl p-3 flex items-start gap-2 text-xs" style={{ background: T.blueSoft, color: T.blue }}>
+        <Info size={15} className="shrink-0 mt-0.5" />
+        <span><b>Preview / simulated.</b> This is how you'll track the businesses that subscribe to Yardhand. Real sign-ups, trials, and billing turn on once the accounts + subscription-billing backend (Stripe Billing) are connected — same “goes live” gate as texts and payments. The businesses below are sample data.</span>
+      </div>
+
+      <HelpNote>
+        <p>This is <b>your</b> control panel as the software owner — separate from any single business's dashboard. It tracks everyone paying you (or trialing) for Yardhand.</p>
+        <p><b>Top row:</b> how many businesses are <b>in a free trial</b>, how many are <b>paying</b>, your <b>monthly recurring revenue (MRR)</b>, and anyone <b>past due</b>. <b>Signup defaults</b> set the free-trial length, whether a card is required up front, and whether new accounts default to autopay (recurring) or manual invoicing — like Jobber/Housecall Pro. <b>Plans</b> are your price tiers. <b>The list</b> shows each business with its plan, status, trial days left, and last activity; use the controls to convert a trial to paying, extend a trial, or cancel.</p>
+      </HelpNote>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          ["In free trial", trialing.length, T.amberDk, T.amberSoft, `$${trialPipeline}/mo pipeline`],
+          ["Paying", active.length, T.green, T.greenSoft, `${tenants.length} total accounts`],
+          ["MRR", `$${mrr}`, T.ink, "#fff", "monthly recurring"],
+          ["Past due", pastDue.length, T.red, T.redSoft, "need a nudge"],
+        ].map(([label, val, c, bg, sub]) => (
+          <Card key={label} className="p-4" style={bg !== "#fff" ? { background: bg } : {}}>
+            <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: T.sub }}>{label}</div>
+            <div className="text-3xl font-extrabold tabular-nums mt-0.5" style={{ color: c }}>{val}</div>
+            <div className="text-[11px] mt-0.5" style={{ color: T.sub }}>{sub}</div>
+          </Card>
+        ))}
+      </div>
+
+      {/* signup defaults */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Clock size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">New-signup defaults</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Free trial length (days)"><NumInput v={p.trialDays ?? 7} on={(v) => setP({ trialDays: v })} /></Field>
+          <Field label="New accounts default to">
+            <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+              {[["autopay", "Autopay"], ["manual", "Manual invoice"]].map(([v, l]) => (
+                <button key={v} onClick={() => setP({ defaultBilling: v })} className="flex-1 py-1.5 rounded-md text-xs font-bold" style={(p.defaultBilling || "autopay") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+              ))}
+            </div>
+          </Field>
+        </div>
+        <Toggle label="Require a card to start the trial" sub={p.cardRequired ? "Card on file up front; auto-charges when the trial ends (higher conversion, fewer signups)." : "No card needed to try it (more signups; you collect payment before day 7 ends)."} on={!!p.cardRequired} set={(v) => setP({ cardRequired: v })} />
+        <p className="text-[11px]" style={{ color: T.sub }}>New businesses get <b>{p.trialDays ?? 7} days free</b>, then {(p.defaultBilling || "autopay") === "autopay" ? "auto-charge on their plan" : "an invoice you send"}. {p.cardRequired ? "A card is collected at signup." : "No card required to start."}</p>
+      </Card>
+
+      {/* plans */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><CreditCard size={16} style={{ color: T.green }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Your plans</h3>
+        </div>
+        <div className="space-y-2">
+          {plans.map((pl, i) => (
+            <div key={pl.id} className="grid grid-cols-12 gap-2 items-center">
+              <div className="col-span-5"><input value={pl.name} onChange={(e) => setPlan(i, { name: e.target.value })} className="w-full p-2 rounded-lg text-sm font-bold" style={{ border: `1px solid ${T.line}` }} /></div>
+              <div className="col-span-3 flex items-center gap-1"><span className="text-sm" style={{ color: T.sub }}>$</span><input type="number" value={pl.price} onChange={(e) => setPlan(i, { price: +e.target.value })} className="w-full p-2 rounded-lg text-sm tabular-nums" style={{ border: `1px solid ${T.line}` }} /><span className="text-xs" style={{ color: T.sub }}>/mo</span></div>
+              <div className="col-span-4"><input value={pl.note || ""} onChange={(e) => setPlan(i, { note: e.target.value })} placeholder="what's included" className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} /></div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* tenants list */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><Building2 size={16} style={{ color: T.blue }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Subscribing businesses</h3>
+        </div>
+        <div className="space-y-2">
+          {sorted.map((t) => {
+            const [lbl, c, bg] = STATUS[t.status] || STATUS.canceled;
+            const dl = t.status === "trialing" ? daysLeft(t.trialEnds) : null;
+            const pl = planById(t.plan);
+            return (
+              <div key={t.id} className="rounded-lg p-3" style={{ background: T.paper }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm truncate">{t.name}</div>
+                    <div className="text-xs truncate" style={{ color: T.sub }}>{t.owner} · {t.email}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color: T.sub }}>{pl.name} · ${pl.price}/mo · {t.billing === "manual" ? "manual invoice" : "autopay"} · signed up {fmt(t.signup)}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded" style={{ color: c, background: bg }}>{lbl}</span>
+                    {dl != null && <div className="text-[11px] mt-0.5 font-bold" style={{ color: dl <= 2 ? T.red : T.amberDk }}>{dl > 0 ? `${dl} day${dl === 1 ? "" : "s"} left` : "trial ended"}</div>}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2 pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
+                  {t.status === "trialing" && <>
+                    <button onClick={() => { setTenant(t.id, { status: "active" }); flash(`${t.name} converted to paying — ${pl.name} $${pl.price}/mo.`, true); }} className="text-[11px] font-bold px-2.5 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Convert to paying</button>
+                    <button onClick={() => { setTenant(t.id, { trialEnds: addDays(t.trialEnds, 7) }); flash(`${t.name}'s trial extended 7 days.`, true); }} className="text-[11px] font-bold px-2.5 py-1 rounded" style={{ background: T.paper, color: T.steel, border: `1px solid ${T.line}` }}>+7 days</button>
+                  </>}
+                  {t.status === "past_due" && <button onClick={() => { setTenant(t.id, { status: "active" }); flash(`${t.name} marked paid.`, true); }} className="text-[11px] font-bold px-2.5 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Mark paid</button>}
+                  {(t.status === "trialing" || t.status === "active" || t.status === "past_due") && <button onClick={() => { setTenant(t.id, { status: "canceled" }); flash(`${t.name} canceled.`, true); }} className="text-[11px] font-bold px-2.5 py-1 rounded" style={{ color: T.red }}>Cancel</button>}
+                  {t.status === "canceled" && <button onClick={() => { setTenant(t.id, { status: "active" }); flash(`${t.name} reactivated.`, true); }} className="text-[11px] font-bold px-2.5 py-1 rounded" style={{ background: T.steel, color: "#fff" }}>Reactivate</button>}
+                  <span className="text-[11px] ml-auto self-center" style={{ color: T.sub }}>last active {fmt(t.lastActive)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[11px] mt-3" style={{ color: T.sub }}>Buttons are simulated for now — they update this preview so you can see the flow. When billing is live, “Convert to paying” starts the real subscription and “Cancel” stops it.</p>
+      </Card>
+    </div>
+  );
+}
+
 /* ---------------- SETTINGS --------------- */
-function SettingsView({ state, setState, flash, locId, locations: locsProp, switchLoc }) {
+function SettingsView({ state, setState, flash, locId, locations: locsProp, switchLoc, setMode }) {
   const [addingType, setAddingType] = useState(false);
   const [confirm, setConfirm] = useState(null); // {title, body, confirmLabel, onYes}
   const [newRem, setNewRem] = useState(24); // hours for a new reminder
@@ -2803,6 +2962,12 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         <div className="rounded-xl p-3 flex items-center gap-2 text-sm font-bold" style={{ background: T.amberSoft, color: T.amberDk, border: `1px solid ${T.amber}` }}>
           <MapPin size={16} /> Editing settings for <b>{curLoc.name}</b> — these changes apply to this branch only. Switch branches in the top bar.
         </div>
+      )}
+      {setMode && (
+        <button onClick={() => setMode("platform")} className="w-full rounded-xl p-3 flex items-center justify-between gap-2" style={{ background: T.steelDk }}>
+          <span className="flex items-center gap-2 text-sm font-bold text-white"><Building2 size={16} style={{ color: T.amber }} /> Platform admin · your SaaS customers</span>
+          <span className="text-xs flex items-center gap-1" style={{ color: T.amber }}>Open <ArrowRight size={14} /></span>
+        </button>
       )}
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
