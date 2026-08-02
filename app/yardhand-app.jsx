@@ -450,9 +450,10 @@ export default function App() {
     scoped.bookings.find((b) => b.trailerId === tr.id && (b.status === "out" || (b.status === "reserved" && b.start <= today() && b.end >= today())));
 
   /* find an available physical unit of a size for a date range (within the active location) */
-  const findUnit = (size, start, end) => {
+  const findUnit = (size, start, end, exclude) => {
     const units = scoped.trailers.filter((t) => t.size === size && !t.maint);
     for (const u of units) {
+      if (exclude && exclude.has(u.id)) continue;   // already claimed by another item in this same order
       const clash = scoped.bookings.some(
         (b) => b.trailerId === u.id && b.status !== "returned" && b.status !== "cancelled" && overlaps(start, end, b.start, b.end)
       );
@@ -3721,86 +3722,152 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
   const total = sub + tax;
   const pe = priceExplain(type, form.days);
   const priceProps = { type, days: form.days, base, waiver: form.waiver, waiverAmt, outMethod: form.outMethod, returnMethod: form.returnMethod, outFee, returnFee, tax, total, deposit: b.deposit, pe };
+
+  // ── CART: several pieces of equipment in one order, each with its own dates + delivery/return ──
+  const [cart, setCart] = useState([]);                       // items already added (rental config only)
+  const itemEnd = (it) => addDays(it.start, it.days - 1);
+  const itemInfo = (it) => { const ty = typeBySize(it.size); const bs = priceFor(ty, it.days); const wv = form.waiver ? Math.round(bs * b.waiverRate) : 0; return { ty, bs, wv, sub: bs + wv, end: itemEnd(it) }; };
+  const currentItem = form.size ? { size: form.size, start: form.start, days: form.days, pickupTime: form.pickupTime, outMethod: form.outMethod, returnMethod: form.returnMethod } : null;
+  const orderItems = currentItem ? [...cart, currentItem] : cart;   // everything that will be booked
+  // one leg fee per delivery/collection RUN (grouped by date+method): everything on one day = one fee; split days = a fee each
+  const runFees = (legs) => { const seen = new Set(); let sum = 0; legs.forEach((lg) => { const k = lg.date + "|" + lg.method; if (seen.has(k)) return; seen.add(k); sum += (lg.method === "delivery" || lg.method === "collect") ? b.deliveryFee : b.dropFee; }); return sum; };
+  const orderOutFees = runFees(orderItems.map((it) => ({ date: it.start, method: it.outMethod })));
+  const orderRetFees = runFees(orderItems.map((it) => ({ date: itemEnd(it), method: it.returnMethod })));
+  const orderEquip = orderItems.reduce((s, it) => s + itemInfo(it).sub, 0);
+  const orderSub = orderEquip + orderOutFees + orderRetFees;
+  const orderTax = Math.round(orderSub * b.taxRate);
+  const orderTotal = orderSub + orderTax;
+  const orderDeposit = b.deposit * orderItems.length;
+  const addAnother = () => { if (!currentItem) return; setCart((c) => [...c, currentItem]); set({ size: null }); setStepN(0); flash("Added to your order — pick the next piece of equipment.", true); };
+  const removeCartItem = (i) => setCart((c) => c.filter((_, j) => j !== i));
+  const anyCoiRequired = orderItems.some((it) => coiRequired(typeBySize(it.size), form.ctype));
+
   // repeat customers: reuse a still-valid COI they already have on file (matched by phone/email)
-  const coiOnFile = coiRequired(type, form.ctype) && !form.coiFile ? latestValidCoi(state, form.phone, form.email) : null;
+  const coiOnFile = anyCoiRequired && !form.coiFile ? latestValidCoi(state, form.phone, form.email) : null;
 
   const steps = ["Trailer", "Dates", "Details", "Review"];
 
+  const [orderSummary, setOrderSummary] = useState(null);   // items booked, shown on the confirmation screen
   const submit = () => {
-    const unit = findUnit(form.size, form.start, end);
-    if (!unit) { flash("Sorry — that trailer just got booked. Try other dates."); return; }
+    const items = orderItems;
+    if (items.length === 0) { flash("Add at least one piece of equipment first."); return; }
     const auto = b.dispatchMode === "auto";
     const counterAuto = b.counterMode === "auto" || b.ownerWorks === false; // if the owner never works, yard handoffs must auto-assign to staff
-    const collectWindow = WINDOWS.find((h) => windowCovered(state, end, h)) || WINDOWS[0];
-    const rot = state.bookings.length;
-    // OUT leg: delivery -> driver (auto); will-call -> counter staff (only if counterMode auto, else You)
-    const outBy = form.outMethod === "delivery"
-      ? (auto ? assignRun(state, form.start, form.pickupTime, null, rot) : null)
-      : (counterAuto ? assignRun(state, form.start, form.pickupTime, null, rot) : null);
-    // RETURN leg: collect -> driver (auto); yard-return -> counter staff (only if counterMode auto, else You)
-    const returnBy = form.returnMethod === "collect"
-      ? (auto ? assignRun(state, end, collectWindow, outBy, rot + 1) : null)
-      : (counterAuto ? assignRun(state, end, form.pickupTime, outBy, rot + 1) : null);
-    const newCode = genCode();
-    setLastCode(newCode);
-    addBooking({
-      id: "b" + Date.now(), code: newCode, trailerId: unit.id, size: form.size, name: form.name || "Guest", type: form.ctype,
-      phone: form.phone, email: form.email, address: form.address, start: form.start, end,
-      pickupTime: form.pickupTime, returnTime: form.returnMethod === "collect" ? collectWindow : form.pickupTime,
-      status: "reserved", waiver: form.waiver, outMethod: form.outMethod, returnMethod: form.returnMethod,
-      outBy, outPaid: false, returnBy, returnPaid: false,
-      price: base + legFees, deposit: b.deposit, paid: true,
-      coi: form.coiFile ? form.coi : (coiOnFile ? true : form.coi),
-      coiFile: form.coiFile || (coiOnFile ? coiOnFile.coiFile : ""),
-      coiName: form.coiFile ? form.coiName : (coiOnFile ? coiOnFile.coiName : ""),
-      coiExpiry: form.coiFile ? "" : (coiOnFile ? coiOnFile.coiExpiry : ""),
-      notes: form.notes, dropFee: b.dropFee,
-      signName: form.signName, signedAt: new Date().toISOString(), agreementText: b.agreementText,
-    });
+    const order = genCode();                                  // one confirmation code for the whole order
+    const used = new Set();                                   // units claimed by earlier items in THIS order
+    const outCharged = new Set(), retCharged = new Set();     // charge each shared run's fee to just one booking
+    const at = new Date().toISOString();
+    const rows = [];
+    let rot = state.bookings.length;
+    for (const it of items) {
+      const iEnd = itemEnd(it);
+      const unit = findUnit(it.size, it.start, iEnd, used);
+      if (!unit) { flash(`Sorry — a ${typeBySize(it.size)?.name || it.size} just got booked for ${fmtLong(it.start)}. Adjust that item's dates.`); return; }
+      used.add(unit.id);
+      const collectWindow = WINDOWS.find((h) => windowCovered(state, iEnd, h)) || WINDOWS[0];
+      const outBy = it.outMethod === "delivery"
+        ? (auto ? assignRun(state, it.start, it.pickupTime, null, rot++) : null)
+        : (counterAuto ? assignRun(state, it.start, it.pickupTime, null, rot++) : null);
+      const returnBy = it.returnMethod === "collect"
+        ? (auto ? assignRun(state, iEnd, collectWindow, outBy, rot++) : null)
+        : (counterAuto ? assignRun(state, iEnd, it.pickupTime, outBy, rot++) : null);
+      const info = itemInfo(it);
+      const outKey = it.start + "|" + it.outMethod, retKey = iEnd + "|" + it.returnMethod;
+      const thisOutFee = outCharged.has(outKey) ? 0 : (it.outMethod === "delivery" ? b.deliveryFee : b.dropFee); outCharged.add(outKey);
+      const thisRetFee = retCharged.has(retKey) ? 0 : (it.returnMethod === "collect" ? b.deliveryFee : b.dropFee); retCharged.add(retKey);
+      rows.push({
+        id: "b" + Date.now() + "-" + rows.length, code: order, orderCode: order,
+        trailerId: unit.id, size: it.size, name: form.name || "Guest", type: form.ctype,
+        phone: form.phone, email: form.email, address: form.address, start: it.start, end: iEnd,
+        pickupTime: it.pickupTime, returnTime: it.returnMethod === "collect" ? collectWindow : it.pickupTime,
+        status: "reserved", waiver: form.waiver, outMethod: it.outMethod, returnMethod: it.returnMethod,
+        outBy, outPaid: false, returnBy, returnPaid: false,
+        price: info.bs + thisOutFee + thisRetFee, deposit: b.deposit, paid: true,
+        coi: form.coiFile ? form.coi : (coiOnFile ? true : form.coi),
+        coiFile: form.coiFile || (coiOnFile ? coiOnFile.coiFile : ""),
+        coiName: form.coiFile ? form.coiName : (coiOnFile ? coiOnFile.coiName : ""),
+        coiExpiry: form.coiFile ? "" : (coiOnFile ? coiOnFile.coiExpiry : ""),
+        notes: form.notes, dropFee: b.dropFee,
+        signName: form.signName, signedAt: at, agreementText: b.agreementText,
+      });
+    }
+    rows.forEach(addBooking);
+    setOrderSummary({ items: items.map((it) => ({ ...it, info: itemInfo(it) })), total: orderTotal, deposit: orderDeposit });
+    setLastCode(order);
     setStepN(4);
   };
 
-  if (stepN === 4) {
+  if (stepN === 4 && orderSummary) {
+    const oi = orderSummary.items;
+    const many = oi.length > 1;
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
         <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4" style={{ background: T.greenSoft }}>
           <Check size={32} style={{ color: T.green }} />
         </div>
         <h2 className="text-2xl font-extrabold">You're booked!</h2>
-        <p className="mt-2" style={{ color: T.sub }}>A {type.name} is reserved for {fmtLong(form.start)} at {form.pickupTime}{form.outMethod === "delivery" ? ", delivered to you" : " for pickup"}. We sent your confirmation{b.notifyWaiver !== false ? " and a copy of your signed agreement" : ""} by {channelLabel(b.notifyChannel)}{(b.notifyReminders && b.notifyReminders.length) ? `, and we'll remind you ${b.notifyReminders.slice().sort((x, y) => y - x).map(leadLabel).join(" and ")} before pickup` : ""}.</p>
-        {coiRequired(type, form.ctype) && (form.coiFile || coiOnFile) && (
+        <p className="mt-2" style={{ color: T.sub }}>{many ? `${oi.length} pieces of equipment are reserved.` : `A ${oi[0].info.ty.name} is reserved for ${fmtLong(oi[0].start)} at ${oi[0].pickupTime}${oi[0].outMethod === "delivery" ? ", delivered to you" : " for pickup"}.`} We sent your confirmation{b.notifyWaiver !== false ? " and a copy of your signed agreement" : ""} by {channelLabel(b.notifyChannel)}{(b.notifyReminders && b.notifyReminders.length) ? `, and we'll remind you ${b.notifyReminders.slice().sort((x, y) => y - x).map(leadLabel).join(" and ")} before pickup` : ""}.</p>
+        {anyCoiRequired && (form.coiFile || coiOnFile) && (
           <div className="mt-4 rounded-xl p-3 text-sm text-left flex items-start gap-2" style={{ background: T.greenSoft, color: T.green }}>
             <ShieldCheck size={16} className="shrink-0 mt-0.5" />
             <span><b>Certificate of Insurance:</b> {form.coiFile ? "received — thank you. You're all set." : <>we reused the COI already on your file{coiOnFile && coiOnFile.coiExpiry ? <> (valid through <b>{fmtLong(coiOnFile.coiExpiry)}</b>)</> : ""}. You're all set.</>}</span>
           </div>
         )}
-        {coiRequired(type, form.ctype) && !form.coiFile && !coiOnFile && (
+        {anyCoiRequired && !form.coiFile && !coiOnFile && (
           <div className="mt-4 rounded-xl p-3 text-sm text-left flex items-start gap-2" style={{ background: T.blueSoft, color: T.blue }}>
             <ShieldCheck size={16} className="shrink-0 mt-0.5" />
-            <span><b>Action needed:</b> this rental requires a Certificate of Insurance. Ask your insurance agent for a COI naming <b>{insuredName(b)}</b> as additionally insured, then upload it under <b>“Manage my booking”</b> before pickup. We'll remind you.</span>
+            <span><b>Action needed:</b> one or more items require a Certificate of Insurance. Ask your insurance agent for a COI naming <b>{insuredName(b)}</b> as additionally insured, then upload it under <b>“Manage my booking”</b> before pickup. We'll remind you.</span>
           </div>
         )}
         <div className="mt-5 rounded-xl p-4" style={{ background: T.amberSoft, border: `1px solid ${T.amber}` }}>
-          <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amberDk }}>Your confirmation code</div>
+          <div className="text-xs font-bold uppercase tracking-widest" style={{ color: T.amberDk }}>Your confirmation code{many ? " (whole order)" : ""}</div>
           <div className="text-3xl font-extrabold tabular-nums mt-1" style={{ color: T.ink }}>{lastCode}</div>
           <div className="text-xs mt-1" style={{ color: T.sub }}>Keep this to manage your booking. You'll need it + your phone or email.</div>
         </div>
         <Card className="p-4 mt-4 text-left">
-          <Row l={form.outMethod === "delivery" ? "Delivery" : "Pickup"} r={`${fmtLong(form.start)} · ${form.pickupTime}`} />
-          <Row l="Return by" r={fmtLong(end)} />
-          <Row l="Total paid" r={`$${total}`} bold />
-          <Row l="Deposit hold" r={`$${b.deposit} (released at return)`} />
+          {oi.map((it, i) => (
+            <div key={i} className={i > 0 ? "pt-2 mt-2" : ""} style={i > 0 ? { borderTop: `1px solid ${T.line}` } : {}}>
+              <div className="font-bold text-sm">{it.info.ty.name}</div>
+              <Row l={it.outMethod === "delivery" ? "Delivery" : "Pickup"} r={`${fmtLong(it.start)} · ${it.pickupTime}`} />
+              <Row l="Return by" r={`${fmtLong(it.info.end)}${it.returnMethod === "collect" ? " · we collect" : " · you drop off"}`} />
+            </div>
+          ))}
+          <div className="pt-2 mt-2" style={{ borderTop: `1px solid ${T.line}` }}>
+            <Row l="Total paid" r={`$${orderSummary.total}`} bold />
+            <Row l="Deposit hold" r={`$${orderSummary.deposit} (released at return)`} />
+          </div>
         </Card>
-        <button onClick={() => { setStepN(0); set({ size: null, name: "", phone: "", email: "" }); }} className="mt-6 text-sm font-bold" style={{ color: T.steel }}>Book another →</button>
+        <button onClick={() => { setCart([]); setOrderSummary(null); setStepN(0); set({ size: null, name: "", phone: "", email: "" }); }} className="mt-6 text-sm font-bold" style={{ color: T.steel }}>Start a new order →</button>
         <div className="mt-2"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(back to owner view)</button></div>
       </div>
     );
   }
 
+  const orderBox = (
+    <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
+      <div className="px-3 py-2 text-xs font-bold uppercase tracking-wide" style={{ background: T.steelDk, color: "#fff" }}>Order summary · {orderItems.length} item{orderItems.length !== 1 ? "s" : ""}</div>
+      <div className="p-3 space-y-1.5">
+        {orderItems.map((it, i) => { const info = itemInfo(it); return (
+          <div key={i} className={i > 0 ? "pt-1.5" : ""} style={i > 0 ? { borderTop: `1px solid ${T.line}` } : {}}>
+            <div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold">{info.ty.name}</span><span className="text-sm tabular-nums font-bold">${info.sub}</span></div>
+            <div className="text-[11px]" style={{ color: T.sub }}>{fmt(it.start)} → {fmt(info.end)} · {it.days}d · {it.outMethod === "delivery" ? "delivered" : "you pick up"} / {it.returnMethod === "collect" ? "we collect" : "you drop off"}{form.waiver ? ` · +waiver $${info.wv}` : ""}</div>
+          </div>
+        ); })}
+        <div className="pt-1.5 mt-0.5 space-y-0.5" style={{ borderTop: `1px solid ${T.line}` }}>
+          <Row l="Delivery &amp; pickup runs" r={`$${orderOutFees + orderRetFees}`} />
+          <Row l="Tax" r={`$${orderTax}`} />
+          <Row l="Total" r={`$${orderTotal}`} bold big />
+          <Row l={`Refundable deposit hold${orderItems.length > 1 ? ` · ${orderItems.length} units` : ""}`} r={`$${orderDeposit} (released at return)`} />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="max-w-2xl mx-auto px-4 md:px-6 pb-24">
       <div className="pt-4"><HelpNote title="New here? How booking works">
-        <p>Four quick steps: <b>1)</b> pick your trailer, <b>2)</b> choose dates and whether we deliver or you pick up, <b>3)</b> your details (and upload a Certificate of Insurance if it's required), <b>4)</b> review, e-sign, and pay. Your price updates live as you go.</p>
+        <p>Four quick steps: <b>1)</b> pick your equipment, <b>2)</b> choose dates and whether we deliver or you pick up, <b>3)</b> your details (and upload a Certificate of Insurance if it's required), <b>4)</b> review, e-sign, and pay. Your price updates live as you go.</p>
+        <p><b>Renting more than one piece?</b> After you set a piece's dates, tap <b>“Add another piece of equipment”</b> — each one gets its <b>own dates and delivery/pickup</b> (deliver everything together, or on different days — your choice). You enter your details once, sign once, and pay once for the whole order. You only pay one delivery fee when several pieces go out on the same day.</p>
         <p>Already booked? Use <b>Manage my booking</b> up top to extend, change delivery, or cancel with your confirmation code.</p>
       </HelpNote></div>
       {/* hero */}
@@ -3820,6 +3887,22 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
           </div>
         ))}
       </div>
+
+      {/* running order — items already added to this order */}
+      {cart.length > 0 && (
+        <Card className="p-3 mb-4" style={{ background: T.amberSoft, border: `1px solid ${T.amber}` }}>
+          <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: T.amberDk }}>In your order · {orderItems.length} item{orderItems.length !== 1 ? "s" : ""}</div>
+          <div className="space-y-1.5">
+            {cart.map((it, i) => { const info = itemInfo(it); return (
+              <div key={i} className="flex items-center justify-between gap-2 text-sm p-2 rounded-lg" style={{ background: "#fff" }}>
+                <div className="min-w-0"><div className="font-semibold truncate">{info.ty.name}</div><div className="text-xs" style={{ color: T.sub }}>{fmt(it.start)} → {fmt(info.end)} · {it.outMethod === "delivery" ? "delivered" : "pickup"}</div></div>
+                <button onClick={() => removeCartItem(i)} title="Remove" style={{ color: T.red }}><Trash2 size={15} /></button>
+              </div>
+            ); })}
+            {currentItem && <div className="text-[11px] px-1" style={{ color: T.amberDk }}>+ the piece you're setting up now</div>}
+          </div>
+        </Card>
+      )}
 
       <Card className="p-5 md:p-6">
         {/* step 0: trailer */}
@@ -3943,9 +4026,14 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                 <AlertTriangle size={16} /> No {form.size} free for those dates — try a different day or size.
               </div>
             )}
-            {type && <PriceBreakdown heading="Your price so far" {...priceProps} />}
+            {type && <PriceBreakdown heading="This item's price" {...priceProps} />}
             <NavBtns onBack={() => setStepN(0)} onNext={() => setStepN(2)}
               nextOk={countAvail(form.size, form.start, end) > 0 && outCovers(form.pickupTime) && slotSoonEnough(form.pickupTime)} />
+            <button onClick={addAnother} disabled={!(countAvail(form.size, form.start, end) > 0 && outCovers(form.pickupTime) && slotSoonEnough(form.pickupTime))}
+              className="w-full mt-1 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-40" style={{ background: "#fff", color: T.steel, border: `1px dashed ${T.steel}` }}>
+              <Plus size={15} /> Add another piece of equipment
+            </button>
+            <p className="text-[11px] text-center" style={{ color: T.sub }}>Renting more than one? Add each piece with its own dates &amp; delivery — you'll pay once at the end.</p>
           </div>
         )}
 
@@ -3970,13 +4058,13 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               <input value={form.address} onChange={(e) => set({ address: e.target.value })} placeholder="Street, city, ZIP"
                 className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${(form.outMethod === "delivery" || form.returnMethod === "collect") && !form.address ? T.red : T.line}` }} />
             </Field>
-            {coiRequired(type, form.ctype) && coiOnFile && !form.coiFile && (
+            {anyCoiRequired && coiOnFile && !form.coiFile && (
               <div className="p-3 rounded-lg" style={{ background: T.greenSoft }}>
                 <div className="flex items-center gap-2 text-sm font-bold" style={{ color: T.green }}>
                   <ShieldCheck size={15} /> Certificate of Insurance — already on file
                 </div>
                 <div className="text-xs mt-1" style={{ color: T.green }}>
-                  Welcome back! We still have your Certificate of Insurance{coiOnFile.coiExpiry ? <> on file (valid through <b>{fmtLong(coiOnFile.coiExpiry)}</b>)</> : " on file"}, so you don't need to upload it again. We'll reuse it for this booking.
+                  Welcome back! We still have your Certificate of Insurance{coiOnFile.coiExpiry ? <> on file (valid through <b>{fmtLong(coiOnFile.coiExpiry)}</b>)</> : " on file"}, so you don't need to upload it again. We'll reuse it for this order.
                 </div>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <label className="text-xs font-bold px-2.5 py-1.5 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>
@@ -3987,12 +4075,12 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                 </div>
               </div>
             )}
-            {coiRequired(type, form.ctype) && !(coiOnFile && !form.coiFile) && (
+            {anyCoiRequired && !(coiOnFile && !form.coiFile) && (
               <div className="p-3 rounded-lg" style={{ background: T.blueSoft }}>
                 <div className="flex items-center gap-2 text-sm font-bold" style={{ color: T.blue }}>
                   <ShieldCheck size={15} /> Certificate of Insurance — required
                 </div>
-                <div className="text-xs mt-1" style={{ color: T.blue }}>This {type ? type.name : "rental"} requires a COI. Ask your insurance agent for a Certificate of Insurance naming <b>{insuredName(b)}</b> as additionally insured — most send it the same day. Upload the PDF or a photo now, or add it later under “Manage my booking.”</div>
+                <div className="text-xs mt-1" style={{ color: T.blue }}>{orderItems.length > 1 ? "One or more items in your order require" : `This ${type ? type.name : "rental"} requires`} a COI. Ask your insurance agent for a Certificate of Insurance naming <b>{insuredName(b)}</b> as additionally insured — most send it the same day. Upload the PDF or a photo now, or add it later under “Manage my booking.” One COI covers the whole order.</div>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <label className="text-xs font-bold px-2.5 py-1.5 rounded cursor-pointer" style={{ background: T.steel, color: "#fff" }}>
                     {form.coiFile ? "Replace COI" : "Upload COI"}
@@ -4004,9 +4092,9 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                 </div>
               </div>
             )}
-            <Toggle label="Add damage waiver" sub={`Caps your cost if something goes wrong · $${Math.round(base * b.waiverRate)}`} on={form.waiver} set={(v) => set({ waiver: v })} />
+            <Toggle label="Add damage waiver" sub={`Caps your cost if something goes wrong · covers your whole order · $${orderItems.reduce((s, it) => s + Math.round(itemInfo(it).bs * b.waiverRate), 0)}`} on={form.waiver} set={(v) => set({ waiver: v })} />
             <Field label="Anything we should know? (optional)"><textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} placeholder="Job type, what you're hauling…" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
-            {type && <PriceBreakdown heading="Your price so far" {...priceProps} />}
+            {orderItems.length > 0 && orderBox}
             <NavBtns onBack={() => setStepN(1)} onNext={() => setStepN(3)} nextOk={form.name && form.phone && (!(form.outMethod === "delivery" || form.returnMethod === "collect") || form.address)} />
           </div>
         )}
@@ -4015,13 +4103,16 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
         {stepN === 3 && (
           <div className="space-y-4">
             <StepHead icon={CreditCard} title="Review & pay" sub="Card holds your deposit; you're charged the rental now." />
-            <PriceBreakdown heading="Order summary" {...priceProps} />
-            {type?.tow && (
-              <div className="flex items-start gap-2 p-3 rounded-lg text-xs" style={{ background: T.blueSoft, color: T.blue }}>
+            {orderBox}
+            <button onClick={addAnother} className="w-full py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5" style={{ background: "#fff", color: T.steel, border: `1px dashed ${T.steel}` }}>
+              <Plus size={15} /> Add another piece of equipment
+            </button>
+            {[...new Map(orderItems.map((it) => [it.size, itemInfo(it).ty])).values()].filter((ty) => ty?.tow).map((ty) => (
+              <div key={ty.size} className="flex items-start gap-2 p-3 rounded-lg text-xs" style={{ background: T.blueSoft, color: T.blue }}>
                 <Info size={14} className="shrink-0 mt-0.5" />
-                <span><b>{type.reqLabel || "Before you rent"} — {type.name}:</b> {type.tow} By signing below you confirm you can meet these requirements.</span>
+                <span><b>{ty.reqLabel || "Before you rent"} — {ty.name}:</b> {ty.tow} By signing below you confirm you can meet these requirements.</span>
               </div>
-            )}
+            ))}
             {/* SIGN the agreement & waiver */}
             <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
               <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: T.steelDk }}>
@@ -4052,7 +4143,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
             </div>
             <button onClick={submit} disabled={!form.signName || !form.agree}
               className="w-full py-3 rounded-xl font-extrabold text-lg flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: T.amber, color: T.steelDk }}>
-              {!form.signName || !form.agree ? "Sign above to continue" : `Pay $${total} & reserve`}
+              {!form.signName || !form.agree ? "Sign above to continue" : `Pay $${orderTotal} & reserve${orderItems.length > 1 ? ` (${orderItems.length} items)` : ""}`}
             </button>
             <button onClick={() => setStepN(2)} className="w-full text-sm font-bold" style={{ color: T.sub }}>← back</button>
           </div>

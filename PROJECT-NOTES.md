@@ -168,6 +168,22 @@ Team & dispatch · Fleet · Settings.
   All branch-aware (per-location `set`). Deferred: SEO foundation is task #24.
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
+- **Multi-equipment cart (per-item dates):** a customer can book several pieces in ONE checkout.
+  On the Dates step, **"Add another piece of equipment"** saves the current item to `cart` (state in
+  `CustomerBooking`) and returns to the size picker; **each item keeps its own dates + delivery/return
+  method/time** (deliver everything the same day, or different equipment on different days — any mix).
+  Customer details, damage waiver, COI, and the signed agreement are entered **once for the whole
+  order**. Pricing: each item's equipment+waiver, plus **one delivery/collection fee per run**
+  (`runFees` dedupes by `date|method` → same-day = one fee, split days = a fee each), plus tax; deposit
+  = per-unit × item count. A **running "In your order" panel** (with remove) shows above the steps once
+  items are added, and an **`orderBox`** order summary renders on Details + Review. **Submit creates N
+  independent bookings** (one per item) sharing an `orderCode` (also used as each booking's `code` so
+  the customer has one confirmation code); `findUnit(size, start, end, exclude)` gained an exclusion set
+  so two items can't grab the same unit in one order; run fees are attributed to one booking per run so
+  `sum(booking.price)` stays consistent. Confirmation lists every item with its own dates + combined
+  total. Verified: a 2-item order (7×14 Aug 3–5, 5×8 Aug 13–15) → $1006, and **2 separate bookings** in
+  the owner list. Deferred: "Manage my booking" is still per-booking (looks up one code); grouping the
+  owner's Bookings/Calendar views by `orderCode` is a later polish.
 - **Insights analytics:** fleet ROI, weighted utilization, revenue KPIs; revenue-by-month,
   revenue-by-type, fleet-value donut, top performers, lowest-ROI table. Computed from
   bookings; seeded with ~12 months of sample history. (AI "plain-English chart builder"
