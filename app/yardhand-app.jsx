@@ -495,7 +495,7 @@ export default function App() {
     <div className="min-h-screen" style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
       {mode === "landing" ? (
         <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} team={() => setMode("employee")} />
-      ) : (mode === "owner" || mode === "platform") && !authed ? (
+      ) : mode === "owner" && !authed ? (
         <OwnerLogin state={state} onBack={() => setMode("landing")}
           onAuthed={() => { setAuthed(true); try { sessionStorage.setItem("yardhand_owner", "1"); } catch (e) {} }} />
       ) : mode === "employee" && !employeeId ? (
@@ -507,8 +507,6 @@ export default function App() {
             signOut={() => { setAuthed(false); setEmployeeId(null); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); }} />
           {mode === "employee" ? (
             <EmployeePortal {...{ state, employeeId, setBooking, update, flash, signOut: () => { setEmployeeId(null); try { sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); } }} />
-          ) : mode === "platform" ? (
-            <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24"><PlatformAdmin {...{ state, setState, flash, back: () => setMode("owner") }} /></div>
           ) : mode === "owner" ? (
             <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24">
               <OwnerNav tab={tab} setTab={setTab} />
@@ -519,7 +517,8 @@ export default function App() {
               {tab === "customers" && <CustomersView {...{ state: scoped, openDetail: setDetail }} />}
               {tab === "team" && <TeamView {...{ state: scoped, locId, setBooking, update, flash, openDetail: setDetail }} />}
               {tab === "fleet" && <FleetView {...{ state: scoped, locId, typeBySize, trailerStatus, currentBooking, update, flash }} />}
-              {tab === "settings" && <SettingsView {...{ state, setState, flash, locId, locations, switchLoc, setMode }} />}
+              {tab === "settings" && <SettingsView {...{ state, setState, flash, locId, locations, switchLoc }} />}
+              {tab === "platform" && <PlatformAdmin {...{ state, setState, flash, back: () => setTab("dashboard") }} />}
             </div>
           ) : (
             <CustomerArea {...{ state: scoped, typeBySize, countAvail, findUnit, addBooking, setBooking, flash, setMode, initialView: custStart, locations, locId, switchLoc }} />
@@ -1150,6 +1149,7 @@ function OwnerNav({ tab, setTab }) {
     ["team", "Team & dispatch", User],
     ["fleet", "Fleet", Boxes],
     ["settings", "Settings", Settings],
+    ["platform", "Platform", Building2],
   ];
   return (
     <div className="flex gap-1 overflow-x-auto py-4 -mx-1 px-1">
@@ -1249,12 +1249,12 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
   const dailyChecks = [
     // ── urgent (red) ──
     conflictCount > 0 && { level: "red", text: `Fix ${conflictCount} double-booking${plural(conflictCount)}`, hint: "see the red box just below" },
-    overdue.length > 0 && { level: "red", text: `${overdue.length} trailer${plural(overdue.length)} overdue`, hint: "chase the customer, then mark returned when it's back" },
+    overdue.length > 0 && { level: "red", text: `${overdue.length} unit${plural(overdue.length)} overdue`, hint: "chase the customer, then mark returned when it's back" },
     coiExpiredBookings.length > 0 && { level: "red", text: `COI expired · ${listNames(coiExpiredBookings.map((x) => x.name))}`, hint: "get a current certificate before that trailer goes out" },
     unsignedActive.length > 0 && { level: "red", text: `Agreement not signed · ${listNames(unsignedActive.map((x) => x.name))}`, hint: "get the rental agreement signed before the trailer leaves the yard" },
     // ── today (amber) ──
-    pickupsToday.length > 0 && { level: "amber", text: `${pickupsToday.length} trailer${plural(pickupsToday.length)} going out today`, hint: "mark “Picked up / Delivered” when they leave (in Pickups & returns below)" },
-    dueToday.length > 0 && { level: "amber", text: `${dueToday.length} trailer${plural(dueToday.length)} due back today`, hint: "mark “Returned / Collected” when it arrives (below)" },
+    pickupsToday.length > 0 && { level: "amber", text: `${pickupsToday.length} unit${plural(pickupsToday.length)} going out today`, hint: "mark “Picked up / Delivered” when they leave (in Pickups & returns below)" },
+    dueToday.length > 0 && { level: "amber", text: `${dueToday.length} unit${plural(dueToday.length)} due back today`, hint: "mark “Returned / Collected” when it arrives (below)" },
     coiNeededBookings.length > 0 && { level: "amber", text: `COI not uploaded · ${listNames(coiNeededBookings.map((x) => x.name))}`, hint: "chase the certificate — customer uploads in “Manage my booking,” or add it in the booking's COI section" },
     coiExpiringBookings.length > 0 && { level: "amber", text: `COI expiring soon · ${listNames(coiExpiringBookings.map((x) => x.name))}`, hint: "ask the repeat customer for a fresh certificate before it lapses (within 2 weeks)" },
     needDriver > 0 && { level: "amber", text: `${needDriver} job${plural(needDriver)} still needs a driver`, hint: "assign someone in Team & dispatch" },
@@ -1263,7 +1263,7 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
     payBasis === "perjob" && toPay > 0 && { level: "blue", text: `${toPay} finished job${plural(toPay)} to pay`, hint: "pay your crew, then mark paid in Team & dispatch → To pay" },
     hoursDuePeople.length > 0 && { level: "blue", text: `Pay ${listNames(hoursDuePeople.map(firstName))} for clocked hours`, hint: "see the hours & pay them in Team & dispatch → Payroll" },
     salaryDuePeople.length > 0 && { level: "blue", text: `Payday — pay ${listNames(salaryDuePeople.map(firstName))}`, hint: `salary due (every ${state.business.flatPeriod === "biweekly" ? "2 weeks" : "week"}); pay in Team & dispatch → Payroll` },
-    maintCount > 0 && { level: "blue", text: `${maintCount} trailer${plural(maintCount)} in maintenance`, hint: "flip it back to available in Fleet when it's ready to rent again" },
+    maintCount > 0 && { level: "blue", text: `${maintCount} unit${plural(maintCount)} in maintenance`, hint: "flip it back to available in Fleet when it's ready to rent again" },
   ].filter(Boolean);
 
   return (
@@ -1276,7 +1276,7 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
           </h2>
         </div>
         <div className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full" style={{ background: T.greenSoft, color: T.green }}>
-          <span className="w-2 h-2 rounded-full" style={{ background: T.green }} /> {stats.available} of {state.trailers.length} trailers free
+          <span className="w-2 h-2 rounded-full" style={{ background: T.green }} /> {stats.available} of {state.trailers.length} equipment free
         </div>
       </div>
 
@@ -3014,12 +3014,6 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         <div className="rounded-xl p-3 flex items-center gap-2 text-sm font-bold" style={{ background: T.amberSoft, color: T.amberDk, border: `1px solid ${T.amber}` }}>
           <MapPin size={16} /> Editing settings for <b>{curLoc.name}</b> — these changes apply to this branch only. Switch branches in the top bar.
         </div>
-      )}
-      {setMode && (
-        <button onClick={() => setMode("platform")} className="w-full rounded-xl p-3 flex items-center justify-between gap-2" style={{ background: T.steelDk }}>
-          <span className="flex items-center gap-2 text-sm font-bold text-white"><Building2 size={16} style={{ color: T.amber }} /> Platform admin · your SaaS customers</span>
-          <span className="text-xs flex items-center gap-1" style={{ color: T.amber }}>Open <ArrowRight size={14} /></span>
-        </button>
       )}
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
