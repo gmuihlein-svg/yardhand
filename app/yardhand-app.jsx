@@ -271,7 +271,7 @@ const SEED = {
     pickupHours: WINDOWS,
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
-    dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, rr: 0,
+    dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, rr: 0, offerDelivery: true,
     workerModel: "contractor", payBasis: "perjob", flatPeriod: "weekly", paymentProcessor: "stripe", paymentAccount: "", payoutMethod: "manual",
     leadDeliveryHours: 12, leadCounterHours: 2,
     bufferMins: 30, firstJobDriveMins: 30,
@@ -2793,7 +2793,7 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
       <HelpNote>
-        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, booking notice and buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
+        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, <b>whether you offer delivery</b> (Rental policy → turn off if you're yard-only), booking notice and buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
         <p><b>Your website (storefront)</b> is your public page — a real website + booking system you can point your own domain at. Every word is editable (headline, subheadline, trust line, the equipment heading, the “how it works” steps, the “why choose us” reasons, and the bottom call-to-action), and you can upload your own <b>hero image</b> (a photo of your equipment or a job) in place of the built-in illustration — so it fits any business, not just dump trailers. The <b>Customer-facing site</b> switch has three settings: <b>Full site</b> (hosted landing page + online booking), <b>Booking only</b> (skips the marketing sections and shows just your equipment + booking — put a “Book now” link to it on your own website), or <b>Owner-only</b> (no public page; visitors see a “call/text to book” card and you enter bookings yourself).</p>
         <p><b>How you pay your team</b> is two separate choices: their <b>tax status</b> (1099 contractors vs W2 employees — just paperwork wording) and <b>how you pay them</b> — <b>per job</b>, <b>by the hour</b>, or a <b>salary</b> (a fixed amount weekly or every 2 weeks). Any mix works — a 1099 contractor paid hourly, a W2 on salary, etc. Per-job shows a "who you owe" list; by-the-hour shows a payroll list of clocked hours × rate (crew clock in/out from their portal); salary shows a payroll list of each person's fixed amount with a Pay button. You set each person's rate/salary on their card in Team &amp; dispatch.</p>
         <p><b>Payments</b> is how money moves: pick how you <b>collect from customers</b> (Stripe, Square, PayPal/Venmo, Authorize.net, or manual cash/check), and how you <b>pay your team</b> — <b>through the platform</b> (a one-tap "Pay $X" button sends their payout) or <b>yourself</b> (you pay them your own way and just tap "Mark paid"). Real charging and payouts turn on when the payments backend is connected; for now they're set up and simulated.</p>
@@ -3096,6 +3096,9 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
           <Field label="Sales tax (%)"><NumInput v={Math.round(b.taxRate * 100)} on={(v) => set({ taxRate: v / 100 })} /></Field>
         </div>
         <p className="text-xs" style={{ color: T.sub }}>These feed the customer booking summary. Sales tax is shown to the customer and remitted to NCDOR — it isn't your revenue.</p>
+        <div className="pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
+          <Toggle label="Offer delivery & collection" sub={b.offerDelivery !== false ? "Customers can choose to have you deliver and/or pick up. Turn off if you're yard-only (customers always come to you)." : "Off — customers only see “I'll pick up” and “I'll drop off.” No delivery/collection option on your site."} on={b.offerDelivery !== false} set={(v) => set({ offerDelivery: v })} />
+        </div>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -3974,8 +3977,10 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               <div className="text-xs text-center mt-1" style={{ color: T.sub }}>Rent for {form.days} day{form.days > 1 ? "s" : ""} · return by {fmtLong(end)}</div>
             </Field>
             <Field label="How do you want to get it?">
-              <div className="grid grid-cols-2 gap-2">
-                {[["willcall", "I'll pick up", `+$${b.dropFee} · at the yard`], ["delivery", "Deliver to me", `+$${b.deliveryFee} · we bring it`]].map(([v, l, s]) => (
+              <div className={b.offerDelivery !== false ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
+                {[["willcall", "I'll pick up", `+$${b.dropFee} · at the yard`], ["delivery", "Deliver to me", `+$${b.deliveryFee} · we bring it`]]
+                  .filter(([v]) => v === "willcall" || b.offerDelivery !== false)
+                  .map(([v, l, s]) => (
                   <button key={v} onClick={() => set({ outMethod: v })} className="p-2.5 rounded-lg text-left"
                     style={form.outMethod === v ? { background: T.amberSoft, border: `2px solid ${T.amber}` } : { background: T.paper, border: `1px solid ${T.line}` }}>
                     <div className="text-sm font-bold">{l}</div><div className="text-xs" style={{ color: T.sub }}>{s}</div>
@@ -4011,8 +4016,10 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               })()}
             </Field>
             <Field label="How do you want to return it?">
-              <div className="grid grid-cols-2 gap-2">
-                {[["yard", "I'll drop it off", `+$${b.dropFee} · back to the yard`], ["collect", "You pick it up", `+$${b.deliveryFee} · we come get it`]].map(([v, l, s]) => (
+              <div className={b.offerDelivery !== false ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
+                {[["yard", "I'll drop it off", `+$${b.dropFee} · back to the yard`], ["collect", "You pick it up", `+$${b.deliveryFee} · we come get it`]]
+                  .filter(([v]) => v === "yard" || b.offerDelivery !== false)
+                  .map(([v, l, s]) => (
                   <button key={v} onClick={() => set({ returnMethod: v })} className="p-2.5 rounded-lg text-left"
                     style={form.returnMethod === v ? { background: T.amberSoft, border: `2px solid ${T.amber}` } : { background: T.paper, border: `1px solid ${T.line}` }}>
                     <div className="text-sm font-bold">{l}</div><div className="text-xs" style={{ color: T.sub }}>{s}</div>

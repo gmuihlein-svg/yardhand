@@ -168,6 +168,9 @@ Team & dispatch · Fleet · Settings.
   All branch-aware (per-location `set`). Deferred: SEO foundation is task #24.
 - **Customer booking flow** (4 steps: Trailer → Dates → Details → Review) with a **live,
   itemized price panel on every step** (shows tier applied + savings vs daily).
+- **Delivery on/off (`business.offerDelivery`, default true):** Settings → Rental policy toggle
+  "Offer delivery & collection." When off, the customer booking flow hides "Deliver to me" and
+  "You pick it up (collect)", leaving only will-call pickup + yard drop-off — for yard-only businesses.
 - **Multi-equipment cart (per-item dates):** a customer can book several pieces in ONE checkout.
   On the Dates step, **"Add another piece of equipment"** saves the current item to `cart` (state in
   `CustomerBooking`) and returns to the size picker; **each item keeps its own dates + delivery/return
