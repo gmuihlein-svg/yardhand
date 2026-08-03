@@ -308,9 +308,12 @@ Team & dispatch · Fleet · Settings.
 - **In-app SEO helper (`business.seoTitle/seoDescription/seoKeywords`):** Settings → "Get found on Google
   (SEO)" card — editable page title / meta description / keywords (with smart placeholders from name+city)
   plus a plain-English "get-found checklist" (Google Business Profile, reviews, city+service wording, own
-  domain, local directories). Captured now; wiring the edited values into the LIVE page tags is the
-  per-tenant `generateMetadata` step at launch (#24). The technical baseline (metadata/JSON-LD/robots/
-  sitemap) is already live for the primary site.
+  domain, local directories). **Now LIVE:** `app/site-data.js` (`getBusiness()` — server-side REST read of
+  the workspace, revalidate 60) feeds `generateMetadata()` in `app/layout.js` and dynamic JSON-LD in
+  `app/page.js`, so the edited seoTitle/seoDescription/seoKeywords + name/city drive the real page
+  `<title>`/description/keywords/LocalBusiness tags (verified in SSR HTML; falls back to defaults when a
+  field is blank or the cloud is unreachable). Remaining for full SaaS: per-tenant lookup BY DOMAIN (today
+  it reads the single "default" workspace) + each business's own custom domain — the multi-tenant step (#10/#24).
 - **Embeddable / linkable booking page (`/book`, `App({embed})`):** `app/book/page.js` renders
   `<YardHandApp embed />` (noindex). In embed mode `App` returns ONLY `<CustomerArea embed>` (no top bar,
   no owner chrome) after computing the same derived helpers — reusing all booking logic, no duplication.
