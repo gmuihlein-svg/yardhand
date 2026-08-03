@@ -8,7 +8,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://yardhand.vercel.ap
 // seoDescription, seoKeywords) plus their name/city — so each business controls its own listing.
 // Falls back to sensible defaults when a value is blank or the cloud isn't reachable.
 // NOTE (multi-tenant): today this reads the single "default" workspace; per-tenant lookup (by domain)
-// is the multi-tenant step — see YARDHAND-HANDBOOK.md (Part D).
+// is the multi-tenant step — see the Yardhand Handbook (Part D).
 export async function generateMetadata() {
   const biz = await getBusiness();
   const name = (biz && biz.name) || "Ext Professionals";
