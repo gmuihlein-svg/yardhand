@@ -281,6 +281,7 @@ const SEED = {
     ownerNotify: true, ownerNotifyChannel: "both", ownerAlertEmail: "", ownerAlertPhone: "",
     ownerAlertNewBooking: true, ownerAlertCancel: true, ownerAlertTextToBook: true, ownerAlertScheduleChange: false, ownerAlertHandoff: true,
     textToBookAutoReply: true, bookingLink: "", textToBookMessage: "Thanks for reaching out! You can book your trailer online in about a minute here:", textToBookNotifyChannel: "both",
+    marketingRebook: false, marketingRebookMessage: "Hi! It's been a while since your last rental — need a dump trailer again? You can book online in about a minute:", marketingRebookDays: 90, marketingRebookChannel: "text", marketingOptOut: [], marketingPrefs: {},
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
   types: [
@@ -522,13 +523,13 @@ export default function App() {
               {tab === "insights" && <InsightsView {...{ state: scoped }} />}
               {tab === "calendar" && <CalendarBoard {...{ state: scoped, trailerStatus, openDetail: setDetail }} />}
               {tab === "bookings" && <BookingsView {...{ state: scoped, typeBySize, setBooking, flash, openDetail: setDetail, openExtend: setExtend }} />}
-              {tab === "customers" && <CustomersView {...{ state: scoped, openDetail: setDetail }} />}
+              {tab === "customers" && <CustomersView {...{ state: scoped, openDetail: setDetail, update }} />}
               {tab === "team" && <TeamView {...{ state: scoped, locId, setBooking, update, flash, openDetail: setDetail }} />}
               {tab === "fleet" && <FleetView {...{ state: scoped, locId, typeBySize, trailerStatus, currentBooking, update, flash }} />}
               {tab === "settings" && <SettingsView {...{ state, setState, flash, locId, locations, switchLoc }} />}
             </div>
           ) : (
-            <CustomerArea {...{ state: scoped, typeBySize, countAvail, findUnit, addBooking, setBooking, flash, setMode, initialView: custStart, locations, locId, switchLoc }} />
+            <CustomerArea {...{ state: scoped, typeBySize, countAvail, findUnit, addBooking, setBooking, update, flash, setMode, initialView: custStart, locations, locId, switchLoc }} />
           )}
         </>
       )}
@@ -2221,7 +2222,7 @@ function StatusPill({ b }) {
   const [label, c, bg] = STATUS_PILL[k] || ["—", T.sub, T.graySoft];
   return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: c, background: bg }}>{label}</span>;
 }
-function CustomersView({ state, openDetail }) {
+function CustomersView({ state, openDetail, update }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(null);
   const customers = useMemo(() => computeCustomers(state), [state]);
@@ -2274,6 +2275,16 @@ function CustomersView({ state, openDetail }) {
                   <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.greenSoft, color: T.green }}>{c.waiverCount} signed waiver{c.waiverCount !== 1 ? "s" : ""}</span>
                   <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: c.coiCount ? T.blueSoft : T.graySoft, color: c.coiCount ? T.blue : T.sub }}>{c.coiCount} COI{c.coiCount !== 1 ? "s" : ""} on file</span>
                 </div>
+                {state.business.marketingRebook && update && (() => {
+                  const off = (state.business.marketingOptOut || []).includes(c.key);
+                  return (
+                    <div className="flex items-center justify-between p-2.5 rounded-lg" style={{ background: T.paper }}>
+                      <div className="text-xs"><b>Rebooking texts:</b> <span style={{ color: off ? T.red : T.green }}>{off ? "off for this customer" : "on"}</span></div>
+                      <button onClick={() => update((n) => { const s = new Set(n.business.marketingOptOut || []); off ? s.delete(c.key) : s.add(c.key); n.business.marketingOptOut = [...s]; })}
+                        className="text-[11px] font-bold px-2.5 py-1.5 rounded" style={off ? { background: T.steel, color: "#fff" } : { background: T.redSoft, color: T.red }}>{off ? "Turn on" : "Turn off for this customer"}</button>
+                    </div>
+                  );
+                })()}
                 <div className="text-[11px] font-bold uppercase tracking-wide pt-1" style={{ color: T.sub }}>Rental history</div>
                 {c.bookings.map((b) => (
                   <button key={b.id} onClick={() => openDetail(b)} className="w-full text-left flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
@@ -3042,7 +3053,7 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
       <HelpNote>
-        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, <b>whether you offer delivery</b> (Rental policy → turn off if you're yard-only), booking notice and buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, cancellation policy, and your rental agreement.</p>
+        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, <b>whether you offer delivery</b> (Rental policy → turn off if you're yard-only), booking notice and buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, <b>marketing win-back texts</b> (rebooking reminders to past customers — customers pick their own frequency or opt out, and you can turn it off per customer), cancellation policy, and your rental agreement.</p>
         <p><b>Your website (storefront)</b> is your public page — a real website + booking system you can point your own domain at. Every word is editable (headline, subheadline, trust line, the equipment heading, the “how it works” steps, the “why choose us” reasons, and the bottom call-to-action), and you can upload your own <b>hero image</b> (a photo of your equipment or a job) in place of the built-in illustration — so it fits any business, not just dump trailers. The <b>Customer-facing site</b> switch has three settings: <b>Full site</b> (hosted landing page + online booking), <b>Booking only</b> (skips the marketing sections and shows just your equipment + booking — put a “Book now” link to it on your own website), or <b>Owner-only</b> (no public page; visitors see a “call/text to book” card and you enter bookings yourself).</p>
         <p><b>How you pay your team</b> is two separate choices: their <b>tax status</b> (1099 contractors vs W2 employees — just paperwork wording) and <b>how you pay them</b> — <b>per job</b>, <b>by the hour</b>, or a <b>salary</b> (a fixed amount weekly or every 2 weeks). Any mix works — a 1099 contractor paid hourly, a W2 on salary, etc. Per-job shows a "who you owe" list; by-the-hour shows a payroll list of clocked hours × rate (crew clock in/out from their portal); salary shows a payroll list of each person's fixed amount with a Pay button. You set each person's rate/salary on their card in Team &amp; dispatch.</p>
         <p><b>Payments</b> is how money moves: pick how you <b>collect from customers</b> (Stripe, Square, PayPal/Venmo, Authorize.net, or manual cash/check), and how you <b>pay your team</b> — <b>through the platform</b> (a one-tap "Pay $X" button sends their payout) or <b>yourself</b> (you pay them your own way and just tap "Mark paid"). Real charging and payouts turn on when the payments backend is connected; for now they're set up and simulated.</p>
@@ -3567,6 +3578,35 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Mail size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Marketing · win-back texts</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Automatically remind <b>past customers</b> to book again — a simple, effective way to bring back repeat business.</p>
+        <Toggle label="Send rebooking reminders to past customers" sub={b.marketingRebook ? "On — customers who haven't rented in a while get a friendly nudge to book again." : "Off — no marketing texts go out."} on={!!b.marketingRebook} set={(v) => set({ marketingRebook: v })} />
+        {b.marketingRebook && (
+          <>
+            <Field label="How often (default)">
+              <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+                {[[30, "Monthly"], [90, "Every 3 mo"], [180, "Every 6 mo"], [365, "Yearly"]].map(([d, l]) => (
+                  <button key={d} onClick={() => set({ marketingRebookDays: d })} className="flex-1 py-1.5 rounded-md text-xs font-bold" style={(b.marketingRebookDays || 90) === d ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Send by">
+              <div className="flex gap-1 p-1 rounded-lg w-full" style={{ background: T.paper }}>
+                {[["text", "Text"], ["email", "Email"], ["both", "Both"]].map(([v, l]) => (
+                  <button key={v} onClick={() => set({ marketingRebookChannel: v })} className="flex-1 py-1.5 rounded-md text-xs font-bold" style={(b.marketingRebookChannel || "text") === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Message"><textarea value={b.marketingRebookMessage || ""} onChange={(e) => set({ marketingRebookMessage: e.target.value })} rows={3} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+            <div className="text-xs p-2.5 rounded-lg" style={{ background: T.paper, color: T.sub }}><b>Preview:</b> {b.marketingRebookMessage} {b.bookingLink || "[your booking link]"}</div>
+            <p className="text-[11px]" style={{ color: T.sub }}>Goes to customers who haven't rented in about <b>{Math.round((b.marketingRebookDays || 90) / 30)} month{(b.marketingRebookDays || 90) >= 60 ? "s" : ""}</b>, by {channelLabel(b.marketingRebookChannel || "text")}. <b>You can turn it off for any individual customer</b> in the Customers tab, and <b>customers can choose their own frequency or opt out</b> under “Manage my booking.” You never text someone who opted out. <b>Prototype note:</b> real sends turn on in the messaging phase — this sets it all up now. Follow texting rules (a clear opt-out like “Reply STOP” is added automatically when live).</p>
+          </>
+        )}
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><RotateCcw size={16} style={{ color: T.blue }} /></span>
           <h3 className="font-bold text-sm uppercase tracking-wide">Cancellation & refund policy</h3>
         </div>
@@ -3660,7 +3700,7 @@ function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
 }
 
 /* ---------------- CUSTOMER AREA (book + manage sub-nav) --------------- */
-function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, setBooking, flash, setMode, initialView, locations, locId, switchLoc }) {
+function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, setBooking, update, flash, setMode, initialView, locations, locId, switchLoc }) {
   const [view, setView] = useState(initialView || "book"); // book | manage
   const locs = locations || [];
   const cur = locs.find((l) => l.id === locId);
@@ -3687,13 +3727,13 @@ function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, set
       </div>
       {view === "book"
         ? <CustomerBooking {...{ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode }} />
-        : <CustomerManage {...{ state, typeBySize, findUnit, setBooking, flash, setMode }} />}
+        : <CustomerManage {...{ state, typeBySize, findUnit, setBooking, update, flash, setMode }} />}
     </div>
   );
 }
 
 /* ---------------- CUSTOMER MANAGE (self-service dashboard) --------------- */
-function CustomerManage({ state, typeBySize, findUnit, setBooking, flash, setMode }) {
+function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash, setMode }) {
   const b0 = state.business;
   const [code, setCode] = useState("");
   const [contact, setContact] = useState("");
@@ -3829,6 +3869,33 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, flash, setMod
           );
         })()}
       </Card>
+
+      {/* customer's own text-reminder preference — choose frequency or opt out */}
+      {b0.marketingRebook && update && (() => {
+        const custKey = (b.name || "").trim().toLowerCase();
+        const off = (b0.marketingOptOut || []).includes(custKey);
+        const cur = off ? "off" : (b0.marketingPrefs && b0.marketingPrefs[custKey]) || (b0.marketingRebookDays || 90);
+        const setPref = (val) => update((n) => {
+          const s = new Set(n.business.marketingOptOut || []);
+          const prefs = { ...(n.business.marketingPrefs || {}) };
+          if (val === "off") { s.add(custKey); delete prefs[custKey]; }
+          else { s.delete(custKey); prefs[custKey] = val; }
+          n.business.marketingOptOut = [...s]; n.business.marketingPrefs = prefs;
+        });
+        return (
+          <Card className="p-4 mt-3">
+            <div className="text-sm font-bold">Reminders to book again</div>
+            <div className="text-xs mt-0.5 mb-2.5" style={{ color: T.sub }}>Want an occasional text when it's time to rent again? Choose how often — or turn it off. You're in control.</div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {[[30, "Monthly"], [90, "Every 3 mo"], [180, "Every 6 mo"], ["off", "No thanks"]].map(([v, l]) => (
+                <button key={v} onClick={() => { setPref(v); flash(v === "off" ? "Reminders turned off." : "Reminder preference saved.", true); }}
+                  className="py-2 rounded-lg text-[11px] font-bold" style={cur === v ? { background: v === "off" ? T.red : T.steel, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>{l}</button>
+              ))}
+            </div>
+          </Card>
+        );
+      })()}
+
       <p className="text-xs text-center mt-3" style={{ color: T.sub }}>Changes update your reservation instantly and adjust the charge on your card on file.</p>
       <div className="text-center mt-2"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>
     </div>

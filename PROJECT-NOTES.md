@@ -196,6 +196,20 @@ Team & dispatch · Fleet · Settings.
   bar chart — all derived live from the tenant data. **All simulated**
   until the real accounts + Stripe-Billing backend is connected — tasks #26 (trial + subscription billing)
   and #27 (this dashboard, real). Part of the multi-tenant foundation (#10).
+- **SEO (technical foundation):** `app/layout.js` metadata (title template, description, keywords,
+  Open Graph + Twitter, canonical, robots) tuned for "dump trailer rental Charlotte NC"; `app/page.js`
+  injects **LocalBusiness JSON-LD** (name, phone, area served, address, per-equipment offers);
+  `app/robots.js` + `app/sitemap.js` generate `/robots.txt` and `/sitemap.xml`. `SITE_URL` from
+  `NEXT_PUBLIC_SITE_URL` (defaults to Vercel URL). Static/single-business today; per-tenant dynamic SEO
+  via `generateMetadata` and a Yardhand-product marketing site (for SaaS-customer acquisition) are
+  follow-ons (task #24, multi-tenant #10). Off-page (Google Business Profile, reviews) stays the owner's.
+- **Marketing · win-back texts (`business.marketing*`, simulated):** Settings → Marketing card — master
+  toggle `marketingRebook`, default cadence `marketingRebookDays` (30/90/180/365), channel, and message.
+  Reminds **past customers** to rebook. **Per-customer off:** owner toggles a customer off in Customers
+  (`marketingOptOut[]`, keyed by customer name-key). **Customer-chosen frequency:** in "Manage my
+  booking" the customer picks Monthly / Every 3 mo / Every 6 mo / No-thanks (`marketingPrefs{}` +
+  opt-out). Never texts an opted-out customer; STOP-compliance note; real sends gate on the messaging
+  backend (Phase 6 of PLATFORM-PLAN). `CustomersView` and `CustomerManage` now receive `update`.
 - **Delivery on/off (`business.offerDelivery`, default true):** Settings → Rental policy toggle
   "Offer delivery & collection." When off, the customer booking flow hides "Deliver to me" and
   "You pick it up (collect)", leaving only will-call pickup + yard drop-off — for yard-only businesses.
