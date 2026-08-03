@@ -305,6 +305,15 @@ Team & dispatch · Fleet · Settings.
   employee mode. A person can only open their own view — verified live (wrong PIN blocked, own PIN in,
   coworker's PIN blocked). NOTE: prototype-level UI gating — true isolation (can't read another person's
   data even via the API) needs the real Supabase Auth + RLS layer in PLATFORM-PLAN Phases 1–2.
+- **Embeddable / linkable booking page (`/book`, `App({embed})`):** `app/book/page.js` renders
+  `<YardHandApp embed />` (noindex). In embed mode `App` returns ONLY `<CustomerArea embed>` (no top bar,
+  no owner chrome) after computing the same derived helpers — reusing all booking logic, no duplication.
+  `embed` threads to CustomerArea → CustomerBooking/CustomerManage to hide the "(owner view)" shortcuts.
+  Brand-themed via the usual `applyTheme` (accent/dark/logo). Settings → storefront card gains a **"Put
+  booking on your own website — two ways"** block: (1) LINK = `${origin}/book` with Copy + Open, (2) EMBED
+  = `<iframe src="${origin}/book" …>` with Copy. `origin` from `window.location.origin` (falls back to
+  NEXT_PUBLIC_SITE_URL). Verified: /book shows the booking flow, 0 owner links. Per-tenant embeds (each
+  SaaS business pointing at its own data) ride on multi-tenant (#10).
 - **Multi-equipment cart (per-item dates):** a customer can book several pieces in ONE checkout.
   On the Dates step, **"Add another piece of equipment"** saves the current item to `cart` (state in
   `CustomerBooking`) and returns to the size picker; **each item keeps its own dates + delivery/return

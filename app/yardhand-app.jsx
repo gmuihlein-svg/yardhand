@@ -443,10 +443,10 @@ function priceExplain(type, days) {
 /* =====================================================================
    APP
 ===================================================================== */
-export default function App() {
+export default function App({ embed = false }) {
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState("owner"); // owner | customer | landing | employee
+  const [mode, setMode] = useState(embed ? "customer" : "owner"); // owner | customer | landing | employee
   const [custStart, setCustStart] = useState("book"); // initial customer view
   const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
@@ -551,6 +551,21 @@ export default function App() {
   const update = (fn) => setState((s) => { const n = structuredClone(s); fn(n); return n; });
   const addBooking = (bk) => { update((n) => n.bookings.push({ ...bk, locationId: bk.locationId || locId })); };
   const setBooking = (id, patch) => update((n) => { const b = n.bookings.find((x) => x.id === id); Object.assign(b, patch); });
+
+  // EMBED / standalone booking page (/book): just the booking flow, no owner chrome, brand-themed —
+  // for pasting into another website (iframe) or linking as a "Book now" page.
+  if (embed) {
+    return (
+      <div style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
+        <CustomerArea {...{ state: scoped, typeBySize, countAvail, findUnit, addBooking, setBooking, update, flash, setMode: () => {}, initialView: "book", locations, locId, switchLoc, embed: true }} />
+        {toast && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3" style={{ background: T.steelDk, color: "#fff" }}>
+            <Check size={16} style={{ color: T.amber }} /> <span className="text-sm font-medium">{toast.m}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
@@ -3470,6 +3485,33 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
             : "Owner-only: no public page at all. Visitors see a simple “call/text to book” card; you enter every booking yourself from the dashboard. Best if you only want the back-office."}
         </p>
 
+        {/* ── Share your booking: link OR embed ── */}
+        {(() => {
+          const origin = (typeof window !== "undefined" && window.location && window.location.origin) || (process.env.NEXT_PUBLIC_SITE_URL || "https://yardhand.vercel.app");
+          const link = `${origin}/book`;
+          const embedCode = `<iframe src="${link}" title="Book online" width="100%" height="900" style="border:0;max-width:560px;"></iframe>`;
+          const copy = (text, what) => { try { navigator.clipboard.writeText(text); flash(`${what} copied.`); } catch (e) { flash("Press Ctrl/Cmd+C to copy."); } };
+          return (
+            <div className="rounded-xl p-3 space-y-3" style={{ background: T.paper, border: `1px solid ${T.line}` }}>
+              <div className="text-xs font-bold uppercase tracking-wide" style={{ color: T.steel }}>Put booking on your own website — two ways</div>
+              <div>
+                <div className="text-[11px] font-bold mb-1" style={{ color: T.sub }}>1 · LINK — add a “Book now” button that opens this page</div>
+                <div className="flex gap-2">
+                  <input readOnly value={link} onFocus={(e) => e.target.select()} className="flex-1 px-2.5 py-2 rounded-lg text-xs tabular-nums" style={{ border: `1px solid ${T.line}`, background: "#fff" }} />
+                  <button onClick={() => copy(link, "Link")} className="px-3 py-2 rounded-lg text-xs font-bold shrink-0" style={{ background: T.steel, color: "#fff" }}>Copy</button>
+                  <a href={link} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-lg text-xs font-bold shrink-0" style={{ background: T.paper, color: T.steel, border: `1px solid ${T.line}` }}>Open</a>
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold mb-1" style={{ color: T.sub }}>2 · EMBED — paste this so booking shows up right inside your page</div>
+                <textarea readOnly value={embedCode} onFocus={(e) => e.target.select()} rows={2} className="w-full px-2.5 py-2 rounded-lg text-[11px] font-mono" style={{ border: `1px solid ${T.line}`, background: "#fff", resize: "none" }} />
+                <button onClick={() => copy(embedCode, "Embed code")} className="mt-1.5 px-3 py-2 rounded-lg text-xs font-bold" style={{ background: T.steel, color: "#fff" }}>Copy embed code</button>
+              </div>
+              <p className="text-[11px]" style={{ color: T.sub }}>Both open the same booking flow — <b>brand-themed to your logo &amp; colors</b> (set below in Branding). Use the <b>link</b> if you just want a button; use the <b>embed</b> to keep customers on your own page. Either way, bookings land in your dashboard.</p>
+            </div>
+          );
+        })()}
+
         {(b.siteMode || "full") !== "owner" && (
           <>
             <div className="pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
@@ -4153,7 +4195,7 @@ function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
 }
 
 /* ---------------- CUSTOMER AREA (book + manage sub-nav) --------------- */
-function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, setBooking, update, flash, setMode, initialView, locations, locId, switchLoc }) {
+function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, setBooking, update, flash, setMode, initialView, locations, locId, switchLoc, embed = false }) {
   const [view, setView] = useState(initialView || "book"); // book | manage
   const locs = locations || [];
   const cur = locs.find((l) => l.id === locId);
@@ -4179,14 +4221,14 @@ function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, set
         </div>
       </div>
       {view === "book"
-        ? <CustomerBooking {...{ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode }} />
-        : <CustomerManage {...{ state, typeBySize, findUnit, setBooking, update, flash, setMode }} />}
+        ? <CustomerBooking {...{ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode, embed }} />
+        : <CustomerManage {...{ state, typeBySize, findUnit, setBooking, update, flash, setMode, embed }} />}
     </div>
   );
 }
 
 /* ---------------- CUSTOMER MANAGE (self-service dashboard) --------------- */
-function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash, setMode }) {
+function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash, setMode, embed = false }) {
   const b0 = state.business;
   const [code, setCode] = useState("");
   const [contact, setContact] = useState("");
@@ -4238,7 +4280,7 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash
             You only reach your own reservation — the code plus a matching phone or email is required, so no one can open someone else's. Demo: try <b>WY-1001</b> with <b>704-555-0142</b>.
           </div>
         </Card>
-        <div className="text-center mt-4"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>
+        {!embed && <div className="text-center mt-4"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>}
       </div>
     );
   }
@@ -4350,7 +4392,7 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash
       })()}
 
       <p className="text-xs text-center mt-3" style={{ color: T.sub }}>Changes update your reservation instantly and adjust the charge on your card on file.</p>
-      <div className="text-center mt-2"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>
+      {!embed && <div className="text-center mt-2"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>}
     </div>
   );
 }
@@ -4459,7 +4501,7 @@ function PriceBreakdown({ type, days, base, waiver, waiverAmt, outMethod, return
   );
 }
 
-function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode }) {
+function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode, embed = false }) {
   const [stepN, setStepN] = useState(0);
   const [lastCode, setLastCode] = useState("");
   const b = state.business;
@@ -4631,7 +4673,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
           </div>
         </Card>
         <button onClick={() => { setCart([]); setOrderSummary(null); setStepN(0); set({ size: null, name: "", phone: "", email: "" }); }} className="mt-6 text-sm font-bold" style={{ color: T.steel }}>Start a new order →</button>
-        <div className="mt-2"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(back to owner view)</button></div>
+        {!embed && <div className="mt-2"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(back to owner view)</button></div>}
       </div>
     );
   }
@@ -4949,7 +4991,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
           </div>
         )}
       </Card>
-      <div className="text-center mt-4"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>
+      {!embed && <div className="text-center mt-4"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>}
     </div>
   );
 }
