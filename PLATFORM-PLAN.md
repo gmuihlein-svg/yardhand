@@ -47,9 +47,53 @@ convention. That is the heart of Phases 1–2.
 
 ---
 
+## 1b. Cross-cutting workstreams — FIRST-CLASS, not afterthoughts
+
+Two things decide whether a *competitive product* becomes a *business people switch
+to*. They are **not** a final polish pass — they run **alongside every phase** below,
+and **both gate launch**. Treat them as standing requirements, not tickets at the end.
+
+### A. Reliability & data-safety  *(task #29 — the trust bar)*
+Businesses put their livelihood in this — bookings, money, customer records. "Mostly
+works" is a failing grade the moment real data is inside.
+- **Never lose data:** automated backups + point-in-time recovery; soft-deletes with a
+  recovery window; version history on bookings/agreements/settings; per-business export.
+  (Cloud is source of truth; localStorage is cache only — already true.)
+- **Guarded writes:** no single bad save can clobber a workspace (a benefit of the
+  per-tenant row model); validate before write; optimistic-concurrency / last-writer
+  checks so two devices don't stomp each other.
+- **Resilience:** graceful failure + clear retry on network/cloud errors (no silent data
+  loss); health checks; uptime monitoring & alerting; tested restore (a backup you've
+  never restored is a hope, not a backup).
+- **Definition of done for launch:** a full restore has been rehearsed; a killed write
+  mid-save never corrupts a workspace; every business can export their own data.
+
+### B. Mobile experience  *(new task #30 — where the work actually happens)*
+Owners run the business from a phone; crew mark jobs done in the field, in gloves,
+outside. Desktop-only loses in this market.
+- **Crew portal, phone-first:** big tap targets, one-thumb job flow (directions →
+  photos → mark done → clock in/out), works on spotty signal; consider offline-tolerant
+  actions that sync when back online.
+- **Owner on mobile:** dashboard "Start here", assign/reassign, mark out/back, and take
+  a booking must all be comfortable on a phone, not just shrunk-down desktop.
+- **Customer booking on mobile:** the storefront + booking flow (and the /book embed)
+  must feel native on a phone — that's where most customers book.
+- **Add-to-home-screen / PWA:** installable, app-like, push-capable later — cheap way to
+  feel like "an app" without app-store overhead.
+- **Definition of done for launch:** every primary task (crew job completion, owner
+  daily loop, customer booking) is verified smooth on a real phone screen.
+
+> Sequencing: fold these into each phase's work — e.g. when Phase 2 lands the per-tenant
+> row model, that same change enables guarded writes and per-business export (A); when
+> any customer- or crew-facing screen is touched, it ships phone-first (B). Don't batch
+> them for the end.
+
+---
+
 ## 2. Phased build
 
-Phases build on each other; order matters.
+Phases build on each other; order matters. **Reliability/data-safety (1b-A) and mobile
+(1b-B) run across all of them and gate launch.**
 
 ### Phase 1 — Accounts & authentication  *(foundation)*
 - Replace prototype password gates with **Supabase Auth**: real sign-up / login,
