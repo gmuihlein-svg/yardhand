@@ -249,6 +249,18 @@ Team & dispatch · Fleet · Settings.
   will-call is covered whenever the owner works the counter, else needs staff). Sample staff availability
   (`mkAvail`) projects 100 days so a 2-month+ window has demo coverage. Fully-automatic far-out staffing
   (set recurring weekly hours once) is the natural follow-on — task #11 (standing weekly schedule).
+  **Return leg & long rentals:** booking is gated on the day equipment goes OUT (must be staffed now).
+  The RETURN is separate — self drop-off ("yard") needs nobody; "collect" (we get it) needs a driver on
+  the return day only when that day is INSIDE the window (`returnBlocked` → steer to drop-off, honoring
+  "no booking unless someone's working"). A collect whose return falls BEYOND the window is accepted and
+  scheduled closer to the date (`returnDeferred` → blue note), so long rentals aren't blocked by not
+  knowing who's working months out. Gates: `nextOk`/`addAnother` also require `!returnBlocked`.
+- **Who sets work hours (`business.scheduleControl`, default "both"):** Settings card lets each business
+  choose schedule control — **worker** (crew set their own hours in their portal), **owner** (only the
+  owner sets hours; the crew "My hours" tab is read-only), or **both** (default; either can). Enforced in
+  `EmployeePortal` — the hours grid is editable buttons when `!== "owner"`, static cells otherwise. Only
+  gates who can EDIT; the owner always sees the schedule and assigns jobs. Per-business (each SaaS tenant
+  picks their own once multi-tenant lands).
 - **Multi-equipment cart (per-item dates):** a customer can book several pieces in ONE checkout.
   On the Dates step, **"Add another piece of equipment"** saves the current item to `cart` (state in
   `CustomerBooking`) and returns to the size picker; **each item keeps its own dates + delivery/return

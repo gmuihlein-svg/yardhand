@@ -272,7 +272,7 @@ const SEED = {
     pickupHours: WINDOWS,
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
-    dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, rr: 0, offerDelivery: true,
+    dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, scheduleControl: "both", rr: 0, offerDelivery: true,
     workerModel: "contractor", payBasis: "perjob", flatPeriod: "weekly", paymentProcessor: "stripe", paymentAccount: "", payoutMethod: "manual",
     leadDeliveryHours: 12, leadCounterHours: 2,
     bufferMins: 30, firstJobDriveMins: 30,
@@ -1159,7 +1159,7 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
 
       <HelpNote title="How your portal works">
         <p><b>My jobs</b> — your assigned deliveries, pickups, and returns. Tap <b>Call</b> or <b>Directions</b> to reach the customer, <b>Add photos</b> to snap checkout/return pics, and the big button to mark a job <b>delivered / handed over / collected / received</b> when it's done (your manager sees it instantly).</p>
-        <p><b>My hours</b> — tap any day to set the hours you can work as a range; you'll only be booked for times you mark free.</p>
+        <p><b>My hours</b> — {(state.business.scheduleControl || "both") !== "owner" ? <>tap any day to set the hours you can work as a range; you'll only be booked for times you mark free.</> : <>your manager sets your schedule — this tab shows the hours you're expected to work (read-only).</>}</p>
         {hourly
           ? <p><b>Time &amp; pay</b> — you're paid by the hour, so <b>Clock in</b> when you start work and <b>Clock out</b> when you're done. Two ways to clock in: the big button here starts a <b>general shift</b>, or open a job under <b>My jobs</b> and tap <b>Clock in for this job</b> to tie your time to that customer (it shows on your shift list so your manager can see what you worked on). Your hours add up here and your manager pays you for them — you'll see what you've earned and what's already been paid.</p>
           : flat
@@ -1186,26 +1186,35 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
         </div>
       )}
 
-      {tab === "hours" && (
+      {tab === "hours" && (() => {
+        const crewSetsHours = (state.business.scheduleControl || "both") !== "owner"; // "owner" = manager sets it; crew view is read-only
+        return (
         <Card className="p-4">
-          <div className="text-sm font-bold">Set when you can work</div>
-          <div className="text-xs mt-1 mb-3" style={{ color: T.sub }}>Tap a day to choose your hours. You can only be booked for times you mark free. <b style={{ color: T.green }}>Green</b> = free, blank = off. This updates the schedule your manager sees instantly.</div>
+          <div className="text-sm font-bold">{crewSetsHours ? "Set when you can work" : "Your work schedule"}</div>
+          <div className="text-xs mt-1 mb-3" style={{ color: T.sub }}>
+            {crewSetsHours
+              ? <>Tap a day to choose your hours. You can only be booked for times you mark free. <b style={{ color: T.green }}>Green</b> = free, blank = off. This updates the schedule your manager sees instantly.</>
+              : <>Your manager sets your schedule. <b style={{ color: T.green }}>Green</b> = you're scheduled to work, blank = off. Check here for the hours you're expected in — talk to your manager to change them.</>}
+          </div>
           <div className="grid grid-cols-7 gap-1.5">
             {days.map((d) => {
               const wins = (me.avail && me.avail[d]) || [];
               const cover = wins.length;
               const dd = new Date(d + "T00:00:00");
-              return (
-                <button key={d} onClick={() => setEditAvail({ driverId: me.id, date: d })} className="rounded-lg p-1.5 text-center" style={{ background: cover === 0 ? T.paper : cover >= 4 ? T.green : cover >= 2 ? "#8FBF6F" : T.amber, border: `1px solid ${T.line}` }}>
-                  <div className="text-[9px] font-bold uppercase" style={{ color: cover ? "#fff" : T.sub }}>{dd.toLocaleDateString("en-US", { weekday: "short" })}</div>
-                  <div className="text-xs font-bold tabular-nums" style={{ color: cover ? "#fff" : T.ink }}>{dd.getDate()}</div>
-                  <div className="text-[8px]" style={{ color: cover ? "rgba(255,255,255,0.85)" : T.sub }}>{cover ? `${cover}h` : "—"}</div>
-                </button>
-              );
+              const cellStyle = { background: cover === 0 ? T.paper : cover >= 4 ? T.green : cover >= 2 ? "#8FBF6F" : T.amber, border: `1px solid ${T.line}` };
+              const inner = (<>
+                <div className="text-[9px] font-bold uppercase" style={{ color: cover ? "#fff" : T.sub }}>{dd.toLocaleDateString("en-US", { weekday: "short" })}</div>
+                <div className="text-xs font-bold tabular-nums" style={{ color: cover ? "#fff" : T.ink }}>{dd.getDate()}</div>
+                <div className="text-[8px]" style={{ color: cover ? "rgba(255,255,255,0.85)" : T.sub }}>{cover ? `${cover}h` : "—"}</div>
+              </>);
+              return crewSetsHours
+                ? <button key={d} onClick={() => setEditAvail({ driverId: me.id, date: d })} className="rounded-lg p-1.5 text-center" style={cellStyle}>{inner}</button>
+                : <div key={d} className="rounded-lg p-1.5 text-center" style={cellStyle}>{inner}</div>;
             })}
           </div>
         </Card>
-      )}
+        );
+      })()}
 
       {tab === "pay" && hourly && (
         <div className="space-y-4">
@@ -3258,7 +3267,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
       <SectionTitle>Settings</SectionTitle>
       <HelpNote>
         <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, <b>whether you offer delivery</b> (Rental policy → turn off if you're yard-only), booking notice, <b>how far ahead you take bookings</b>, buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, <b>marketing win-back texts</b> (rebooking reminders to past customers — customers pick their own frequency or opt out, and you can turn it off per customer), cancellation policy, and your rental agreement.</p>
-        <p><b>How far ahead you take bookings</b> (in the booking-timing cards) sets a single window that does two jobs at once: it's how far out you schedule your crew's work hours <b>and</b> the furthest ahead a customer can book — because a customer can only reserve a day when someone's actually working. Choose 2 weeks up to 6 months (most rental businesses use 1–2 months). Your crew's dispatch board and each worker's calendar run this same window. A day with nobody scheduled can't be booked; deliveries always need a scheduled driver that day, while will-call stays open whenever you cover the counter yourself.</p>
+        <p><b>How far ahead you take bookings</b> (in the booking-timing cards) sets a single window that does two jobs at once: it's how far out you schedule your crew's work hours <b>and</b> the furthest ahead a customer can book — because a customer can only reserve a day when someone's actually working. Choose 2 weeks up to 6 months (most rental businesses use 1–2 months). Your crew's dispatch board and each worker's calendar run this same window. A day with nobody scheduled can't be booked; deliveries always need a scheduled driver that day, while will-call stays open whenever you cover the counter yourself. <b>Long rentals are fine</b> even if they return past your window — the equipment just needs someone working the day it goes <i>out</i>; if you're collecting it back, that pickup gets scheduled closer to the return date, when you know who's working.</p>
+        <p><b>Who sets work hours</b> lets each business pick how the crew's schedule is controlled: <b>Workers set their own</b> (crew choose their hours in their portal — good for contractors), <b>You set it for them</b> (only you schedule; the crew portal is read-only — good for W2 shifts), or <b>Either</b> (both can; the default). It only changes who can edit hours — you can always see the schedule and assign jobs.</p>
         <p><b>Your website (storefront)</b> is your public page — a real website + booking system you can point your own domain at. Every word is editable (headline, subheadline, trust line, the equipment heading, the “how it works” steps, the “why choose us” reasons, and the bottom call-to-action), and you can upload your own <b>hero image</b> (a photo of your equipment or a job) in place of the built-in illustration — so it fits any business, not just dump trailers. The <b>Customer-facing site</b> switch has three settings: <b>Full site</b> (hosted landing page + online booking), <b>Booking only</b> (skips the marketing sections and shows just your equipment + booking — put a “Book now” link to it on your own website), or <b>Owner-only</b> (no public page; visitors see a “call/text to book” card and you enter bookings yourself).</p>
         <p><b>How you pay your team</b> is two separate choices: their <b>tax status</b> (1099 contractors vs W2 employees — just paperwork wording) and <b>how you pay them</b> — <b>per job</b>, <b>by the hour</b>, or a <b>salary</b> (a fixed amount weekly or every 2 weeks). Any mix works — a 1099 contractor paid hourly, a W2 on salary, etc. Per-job shows a "who you owe" list; by-the-hour shows a payroll list of clocked hours × rate (crew clock in/out from their portal); salary shows a payroll list of each person's fixed amount with a Pay button. You set each person's rate/salary on their card in Team &amp; dispatch.</p>
         <p><b>Payments</b> is how money moves: pick how you <b>collect from customers</b> (Stripe, Square, PayPal/Venmo, Authorize.net, or manual cash/check), and how you <b>pay your team</b> — <b>through the platform</b> (a one-tap "Pay $X" button sends their payout) or <b>yourself</b> (you pay them your own way and just tap "Mark paid"). Real charging and payouts turn on when the payments backend is connected; for now they're set up and simulated.</p>
@@ -3594,6 +3604,26 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
           </select>
         </Field>
         <p className="text-[11px]" style={{ color: T.sub }}>Currently customers can book up to <b>{b.bookHorizonDays || 30} days</b> out. Your crew dispatch board and each worker's calendar run this same window. <b>A day with nobody scheduled can't be booked</b> — set your team's hours in <b>Team &amp; dispatch → The hours</b> (or keep covering the counter yourself for will-call). Deliveries always need a scheduled driver that day.</p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><Users size={16} style={{ color: T.blue }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Who sets work hours</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Every business runs differently — choose who controls the crew's schedule. This only changes who can <b>edit</b> the hours; you can always see and assign jobs either way.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {[["worker", "Workers set their own", "Crew set their available hours in their portal. Good for 1099 contractors and flexible crews."],
+            ["owner", "You set it for them", "Only you set hours (on the dispatch grid). The crew portal shows their schedule read-only. Good for W2 shifts."],
+            ["both", "Either — both can", "Crew can set their hours and you can adjust anytime. The most flexible (default)."]]
+            .map(([v, l, s]) => (
+            <button key={v} onClick={() => set({ scheduleControl: v })} className="p-3 rounded-lg text-left"
+              style={(b.scheduleControl || "both") === v ? { background: T.amberSoft, border: `2px solid ${T.amber}` } : { background: T.paper, border: `1px solid ${T.line}` }}>
+              <div className="text-sm font-bold">{l}</div>
+              <div className="text-[11px] mt-0.5" style={{ color: T.sub }}>{s}</div>
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px]" style={{ color: T.sub }}>Currently: {(b.scheduleControl || "both") === "owner" ? <><b>you</b> set the crew's hours — they see their schedule but can't change it.</> : (b.scheduleControl || "both") === "worker" ? <>your <b>crew set their own</b> hours; you can still adjust on the dispatch grid.</> : <><b>either</b> — crew set their hours and you can adjust anytime.</>}</p>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -4252,6 +4282,15 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
     return (b.counterMode === "self" && b.ownerWorks !== false) ? true : windowCovered(state, form.start, h);
   };
   const slotSoonEnough = (h) => slotDateTime(form.start, h).getTime() >= Date.now() + outLeadHours * 3600000;
+  // Return leg: self drop-off ("yard") needs nobody. "Collect" (we come get it) needs a driver on the
+  // return day — but only enforce that when the return falls INSIDE your scheduling window. Beyond the
+  // window you haven't scheduled anyone yet, so the collection is booked as a job you assign closer to
+  // the date. This honors "no booking unless someone's working that day" without blocking long rentals.
+  const returnWithinWindow = end <= addDays(today(), b.bookHorizonDays || 30);
+  const returnNeedsDriver = form.returnMethod === "collect";
+  const returnDayStaffed = (b.pickupHours || []).some((h) => windowCovered(state, end, h));
+  const returnBlocked = returnNeedsDriver && returnWithinWindow && !returnDayStaffed; // near collect with no one free → steer to drop-off
+  const returnDeferred = returnNeedsDriver && !returnWithinWindow;                    // far-out collect → scheduled later
   const type = form.size ? typeBySize(form.size) : null;
   const base = type ? priceFor(type, form.days) : 0;
   const waiverAmt = form.waiver ? Math.round(base * b.waiverRate) : 0;
@@ -4566,7 +4605,9 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                   </button>
                 ))}
               </div>
-              {form.returnMethod === "collect" && <div className="text-[11px] mt-1.5" style={{ color: T.sub }}>We'll schedule a driver to collect it on your return date ({fmtLong(end)}).</div>}
+              {returnNeedsDriver && !returnBlocked && !returnDeferred && <div className="text-[11px] mt-1.5" style={{ color: T.sub }}>We'll schedule a driver to collect it on your return date ({fmtLong(end)}).</div>}
+              {returnDeferred && <div className="text-[11px] mt-1.5 p-2 rounded-lg flex items-start gap-1.5" style={{ background: T.blueSoft, color: T.blue }}><Info size={13} className="shrink-0 mt-0.5" /> Your return ({fmtLong(end)}) is further out than our current schedule — that's fine, we'll assign a driver to collect it closer to the date.</div>}
+              {returnBlocked && <div className="p-3 rounded-lg text-sm mt-1.5 flex items-start gap-2" style={{ background: T.redSoft, color: T.red }}><AlertTriangle size={16} className="shrink-0 mt-0.5" /> No driver's available to collect on your return date ({fmtLong(end)}). Choose <b>“I'll drop it off”</b> instead, or change your dates.</div>}
             </Field>
             {countAvail(form.size, form.start, end) === 0 && (
               <div className="p-3 rounded-lg text-sm flex items-center gap-2" style={{ background: T.redSoft, color: T.red }}>
@@ -4575,8 +4616,8 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
             )}
             {type && <PriceBreakdown heading="This item's price" {...priceProps} />}
             <NavBtns onBack={() => setStepN(0)} onNext={() => setStepN(2)}
-              nextOk={countAvail(form.size, form.start, end) > 0 && outCovers(form.pickupTime) && slotSoonEnough(form.pickupTime)} />
-            <button onClick={addAnother} disabled={!(countAvail(form.size, form.start, end) > 0 && outCovers(form.pickupTime) && slotSoonEnough(form.pickupTime))}
+              nextOk={countAvail(form.size, form.start, end) > 0 && outCovers(form.pickupTime) && slotSoonEnough(form.pickupTime) && !returnBlocked} />
+            <button onClick={addAnother} disabled={!(countAvail(form.size, form.start, end) > 0 && outCovers(form.pickupTime) && slotSoonEnough(form.pickupTime) && !returnBlocked)}
               className="w-full mt-1 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-40" style={{ background: "#fff", color: T.steel, border: `1px dashed ${T.steel}` }}>
               <Plus size={15} /> Add another piece of equipment
             </button>
