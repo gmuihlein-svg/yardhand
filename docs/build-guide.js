@@ -244,8 +244,43 @@ body.push(callout("The deposit is the part customers misunderstand most", [
   [T("It is a ", {}), T("hold", { bold: true }), T(", like a hotel does — the money isn't taken, it's just reserved on the card and released the moment the trailer is back in good shape. Say it that way and you'll avoid most of the phone calls.")],
 ], "EAF1F4", STEEL2));
 
-/* --- 11. Glossary --- */
-body.push(H1("11. Plain-English glossary"));
+/* --- 11. Crew: roles, hours, sign-ins --- */
+body.push(H1("11. Your crew — positions, hours & private sign-ins"));
+body.push(P([T("Everything about who works, when, and what they're allowed to see.")]));
+
+body.push(H2("Positions (roles)"));
+body.push(P([T("In Settings → Job roles you make your own positions and set what each can do: "), T("Delivery", { bold: true }), T(" (drives deliveries & collections) and/or "), T("Yard", { bold: true }), T(" (will-call pickups & yard returns). A role with neither — a Mechanic or Manager — is never handed a delivery or yard job, but is still a normal scheduled, paid employee. Set each person's position on their card in Team & dispatch, or when you add them.")]));
+
+body.push(H2("Hours & the repeating week"));
+body.push(P([T("Tap a person's name in Team & dispatch (section 4) to set their "), T("repeating week", { bold: true }), T(" once — e.g. Mon–Fri 7–4 — and it fills every week automatically, so you're not entering hours day by day. Tap any single day to override it for a day off or a late start. In Settings → “Who sets work hours,” choose whether "), T("workers set their own", { bold: true }), T(", "), T("you set it for them", { bold: true }), T(", or "), T("either", { bold: true }), T(".")]));
+
+body.push(H2("Only book when someone's working"));
+body.push(P([T("Customers can only pick a delivery or pickup time when a qualified person is actually scheduled. In Settings → “When customers can book delivery & pickup,” pick how strict to be: "), T("Only when we're staffed", { bold: true }), T(", "), T("Strict up close, flexible further out", { bold: true }), T(" (the default — near jobs must be staffed; far-out ones can still book and get assigned as the date nears), or "), T("Take it now, staff it later", { bold: true }), T(". Self drop-off never needs anyone. “How far ahead you take bookings” sets the furthest out a customer can book.")]));
+
+body.push(H2("Assigning — automatic or by hand"));
+body.push(P([T("Jobs auto-assign to an available, qualified person the moment one is scheduled (or press “Auto-assign all”). You can always reassign by hand. If someone's out, “sick today” hands off their day's jobs; anything coming up within 3 days with nobody on it turns "), T("red on your dashboard", { bold: true }), T(", named, so it never slips through.")]));
+
+body.push(H2("Each person sees only their own info"));
+body.push(P([T("Every crew member signs in on your public site (Team sign-in) with their phone/email and their "), T("own personal PIN", { bold: true }), T(" — which you set on their card. They see only "), T("their", { bold: true }), T(" jobs, hours, and pay — never your dashboard, another person's schedule, your customers, or the money. Give each person their own PIN so no one can open anyone else's view.")]));
+
+/* --- 12. Website & SEO --- */
+body.push(H1("12. Your website & getting found on Google"));
+body.push(H2("Your site, three ways"));
+body.push(P([T("In Settings → Your website, choose "), T("Full site", { bold: true }), T(" (a complete hosted page — hero, your equipment, how-it-works, why-us, plus booking), "), T("Booking only", { bold: true }), T(" (just equipment + booking, to link from your own site), or "), T("Owner-only", { bold: true }), T(" (no public page — you take bookings yourself). Every word and the hero image are editable, and the whole thing wears your logo and colors.")]));
+
+body.push(H2("Put booking on your own site — link or embed"));
+body.push(P([T("The same card gives you two copy-paste options: a "), T("link", { bold: true }), T(" (a “Book now” button that opens your booking page) or an "), T("embed", { bold: true }), T(" (paste a snippet so booking shows up right inside your own website). Either way it's brand-themed and every booking lands in your dashboard.")]));
+
+body.push(H2("Get found on Google (SEO)"));
+body.push(P([T("Your site already has the technical SEO built in. In Settings → “Get found on Google,” fill in three boxes in your own words — page title, description, keywords (each pre-filled with a smart suggestion) — and they become your real Google listing. Then work this checklist, which is what actually ranks a local business:")]));
+body.push(bullet([T("Set up a free Google Business Profile ", { bold: true }), T("at google.com/business — the #1 thing for showing up on Google Maps and local results.")]));
+body.push(bullet([T("Ask every happy customer for a Google review. ", { bold: true }), T("Reviews are the biggest lever for the map results.")]));
+body.push(bullet([T("Use your city + what you rent ", { bold: true }), T("in your title, description, and homepage headline.")]));
+body.push(bullet([T("Connect your own domain name ", { bold: true }), T("(e.g. yourbusiness.com) — looks legit and helps ranking.")]));
+body.push(bullet([T("List your business in a few local directories ", { bold: true }), T("(Yelp, Bing Places, your chamber) with the same name/address/phone everywhere.")]));
+
+/* --- 13. Glossary --- */
+body.push(H1("13. Plain-English glossary"));
 const gloss = [
   ["Will-call", "The customer comes to your yard to pick up the trailer themselves. The cheaper out option."],
   ["Yard return", "The customer brings the trailer back to your yard themselves. The cheaper return option."],
@@ -263,17 +298,18 @@ const gloss = [
 ];
 gloss.forEach(([term, def]) => body.push(bullet([new TextRun({ text: term + " — ", bold: true, color: AMBER, size: 21 }), T(def)])));
 
-/* --- 12. Good to know now --- */
-body.push(H1("12. Good to know right now"));
+/* --- 14. Good to know now --- */
+body.push(H1("14. Good to know right now"));
 body.push(P([T("An honest picture of where the platform stands today, so nothing surprises you:")]));
-body.push(bullet([T("It's live and real. ", { bold: true }), T("The app is deployed and working — you can use it from any browser, now behind an owner password.")]));
-body.push(bullet([T("Sample data is loaded. ", { bold: true }), T("The trailers, drivers, and bookings you see now are realistic examples so the screens aren't empty. Your real data replaces them as you go.")]));
-body.push(bullet([T("Browser-only for the moment. ", { bold: true }), T("Right now the app remembers everything in the browser you use — including your logo and settings. Sharing one live set of data across phones and laptops (and never losing it) is the next big step (“Phase 2 — the shared database”).")]));
-body.push(bullet([T("Sign-in is a simple gate for now. ", { bold: true }), T("One shared owner password protects the dashboard. Individual staff accounts, roles, and secure passwords come with the database phase.")]));
-body.push(bullet([T("Payments and messages are staged. ", { bold: true }), T("Real card charges, booking confirmations, and driver notifications are planned phases — the workflows are built and waiting to be switched on.")]));
+body.push(bullet([T("It's live and real. ", { bold: true }), T("The app is deployed and working from any browser, behind your owner password.")]));
+body.push(bullet([T("Your data is in the cloud. ", { bold: true }), T("Everything — bookings, settings, logo, crew — saves to a cloud database and syncs across your devices and your crew's. The browser keeps an offline copy as backup.")]));
+body.push(bullet([T("Sample data is loaded. ", { bold: true }), T("The trailers, drivers, and bookings you see are realistic examples so the screens aren't empty. Your real data replaces them as you go.")]));
+body.push(bullet([T("Crew have their own private sign-ins. ", { bold: true }), T("Each person signs in with their own PIN and sees only their own jobs, hours, and pay. Your owner dashboard stays behind your password.")]));
+body.push(bullet([T("Payments and messages are staged. ", { bold: true }), T("Real card charges, booking confirmations, reminders, and driver notifications are built and waiting to be switched on — they run as realistic previews until the payment and texting services are connected.")]));
+body.push(bullet([T("Selling it to other businesses is the next chapter. ", { bold: true }), T("The software is built to become a product other rental companies pay for. Before that, it needs real separate accounts so each business's data is walled off, plus live payments and billing — the plan for that is written down (see the build plan).")]));
 body.push(spacer(120));
 body.push(callout("Bottom line", [
-  [T("What you're holding is a working, professional rental platform. ", { bold: true }), T("The rest is turning on the plumbing — shared data, logins, real payments, and automatic messages — one phase at a time.")],
+  [T("What you're holding is a working, professional rental platform. ", { bold: true }), T("The rest is turning on the plumbing — real payments, automatic messages, and separate accounts for selling it on — one step at a time.")],
 ]));
 body.push(new Paragraph({ spacing: { before: 300 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: "—  Keep this handy for training. Update it as the platform grows.  —", italics: true, size: 19, color: SUB })] }));
 
@@ -298,7 +334,7 @@ const doc = new Document({
 });
 
 Packer.toBuffer(doc).then((buf) => {
-  const out = "/tmp/claude-0/-home-user-yardhand/34493c9a-ac6d-5f0b-af34-1bc782bea07a/scratchpad/Ext-Professionals-Operators-Guide.docx";
+  const out = require("path").join(__dirname, "Ext-Professionals-Operators-Guide.docx");
   fs.writeFileSync(out, buf);
   console.log("wrote", out, buf.length, "bytes");
 });

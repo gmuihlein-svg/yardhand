@@ -10,21 +10,58 @@
 
 ---
 
-## 🔴 NEXT SESSION — START HERE (owner's standing request)
+## 🔴 NEXT SESSION — START HERE (cold-start summary — paste this file to resume)
 
-**Remaining: create the customer-management (multi-tenant) admin guide.** Status:
+**Yardhand = a rental-ops app for a dump-trailer/equipment business (Ext Professionals),
+being built toward a white-label SaaS for other rental businesses. NOT launched yet.**
+**Working branch:** `claude/nextjs-setup-local-render-8xb2u7` — develop & push here.
 
-1. ✅ **DONE** — Operator's Guide updated (Insights, equipment photos/descriptions,
-   Add equipment vs Add unit, branding, owner login/sign-out, transparent pricing,
-   workforce email).
-2. ⬜ **TODO** — **Create a new "Managing Customers" / Platform-Admin guide** — for the
-   platform owner (not end businesses): how to onboard a new business, customize
-   per-customer via settings + feature flags, keep others on defaults, and roll out safe
-   platform-wide updates. Base it on the "Multi-tenant principles" section below.
-3. ✅ **DONE** — Partnership Pitch refreshed with new capabilities (analytics, branding,
-   logins, transparent pricing).
+**Built & working (owner-facing unless noted):**
+- Owner app: dashboard with a named **"Start here"** checklist + **at-risk alerts** (a
+  staffed delivery/collection within 3 days with nobody assigned goes red & named),
+  calendar, bookings, customers, crew & dispatch, fleet, insights; **multi-location** branches.
+- **Customer storefront** (editable copy/hero/brand, 3 site modes: full / booking-only /
+  owner-only) + **online booking** (multi-equipment cart, delivery/will-call, COI upload,
+  e-sign) + **embeddable/linkable booking page** at **`/book`** (link + iframe snippet in Settings).
+- **Scheduling engine:** standing **weekly schedule** + per-day overrides (`availOn`); auto/manual
+  dispatch; sick-day auto-reassign.
+- **Booking availability modes** (`business.bookingMode`: strict / flexible / hybrid) — customers
+  can only book when someone's working; **"how far ahead you take bookings"** window
+  (`bookHorizonDays`).
+- **Custom job roles/positions** (`business.roles[]` drive/yard caps; `contractor.roleId`) gate
+  dispatch — a Mechanic-type role is never dispatched but is still a scheduled/paid employee.
+- **Per-employee PIN logins** (`contractor.pin`) — each crew member sees ONLY their own jobs/hours/pay.
+- **"Who sets work hours"** (`scheduleControl`: worker / owner / both).
+- **Flexible pay:** 1099/W2 × per-job/hourly/salary; payroll views (payouts simulated).
+- **Marketing win-back texts** (config; simulated send).
+- **SEO:** technical + **owner-editable + LIVE** — Settings → "Get found on Google"
+  (seoTitle/seoDescription/seoKeywords) feeds `generateMetadata` (layout.js) + JSON-LD (page.js)
+  via `app/site-data.js`. Verified in SSR HTML.
+- **Separate SaaS side:** **`/operator`** (passcode) + **`/portal`** chooser; simulated **Platform
+  Admin** (subscribers, MRR/ARR/KPIs, editable Yardhand marketing site). Clean two-door split from
+  the rental app; `/operator`, `/portal`, `/book` are noindex.
+- **Cloud:** Supabase JSONB workspace (`id=default`) + localStorage fallback. **Sandbox CANNOT reach
+  Supabase/Vercel/Stripe/Twilio** — cloud/live paths verify at deploy.
 
-_(This note exists because the owner asked to be reminded next time — surface it.)_
+**⚠️ SIMULATED / NOT REAL YET — these are the gates to selling (see PLATFORM-PLAN.md):**
+- Real **auth + multi-tenant data isolation** (one shared workspace today) — Phases 1–2, tasks #10/#28.
+- **Payments** (Stripe) — simulated (#23 partial). **Messaging** (SMS/email) — simulated
+  (#7/#12/#13/#17/#19/#20). **SaaS subscription billing** (Stripe Billing) — simulated (#26/#27).
+- **Reliability & data-safety** (#29) and **Mobile experience** (#30) are **FIRST-CLASS, launch-gating**
+  cross-cutting workstreams — PLATFORM-PLAN.md §1b. Don't defer to the end.
+
+**Honest positioning:** strong, well-modeled prototype; a genuinely competitive product for the small
+equipment/trailer-rental niche **once the backend (auth/multi-tenant/payments/messaging/billing) is
+real** + reliability + mobile. Won't out-feature Jobber/Housecall on breadth; wins the niche on fit,
+price, and the integrated storefront+booking+SEO. Highest-leverage next build = **Phase 1–2**.
+
+**Standing owner requests:** (1) any new feature must be added to the in-app "How this page works"
+notes, detailed. (2) Keep these docs current: PROJECT-NOTES.md (this), the Operator's Guide
+(`docs/build-guide.js`→.docx), and the Pitch (`docs/build-pitch.js`→.docx).
+
+**Build/run:** `timeout 300 npm run build`; dev PORT 3112 (`fuser -k 3112/tcp` first). Commit footer:
+`Co-Authored-By: Claude Opus 4.8` + `Claude-Session:` line. Never put the model ID in commits/PRs.
+Playwright: `/opt/node22/lib/node_modules/playwright`, chromium `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`.
 
 ---
 

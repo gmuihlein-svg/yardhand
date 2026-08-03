@@ -90,6 +90,10 @@ body.push(H2("Fleet, counter & money — handled"));
 body.push(P([T("Track every unit and its status, run will-call handoffs at the yard, and keep the money straight: tiered pricing, refundable deposit holds, optional damage waiver, tax, cancellation rules, and a running tally of what each driver is owed.")]));
 body.push(H2("Know your numbers"));
 body.push(P([T("A built-in analytics view turns your bookings into decisions: revenue by month and by category, how hard each unit is working (utilization), and return on what you paid (ROI) — with your best and worst performers ranked, so you know exactly what to buy more of, push harder, or sell. The stuff most operators only find out at tax time, you see any morning.")]));
+body.push(H2("Your crew, organized and private"));
+body.push(P([T("Build your own "), T("positions", { bold: true }), T(" — Driver, Yard, Mechanic, whatever fits — and each one decides which jobs a person can be handed, so a mechanic never lands on a delivery. Set each person's normal week once and it repeats automatically; customers can only book times someone's actually scheduled to work. And every crew member gets a "), T("private personal sign-in", { bold: true }), T(" — they see only their own jobs, hours, and pay, never your books or each other's.")]));
+body.push(H2("A real website — and found on Google"));
+body.push(P([T("Your public page is a real, brandable website with booking built in — or drop a booking "), T("link or embed", { bold: true }), T(" onto a site you already have. Either way it wears your logo and colors. And the technical SEO is built in: fill in a few plain-English boxes and a get-found checklist, and your site is set up to show up on Google and Maps — no web developer required.")]));
 body.push(H2("Your brand, not ours"));
 body.push(P([T("Upload your logo and pick your colors, and the whole platform — public site and dashboard — becomes yours. Add a photo and description to every piece of equipment so customers know exactly what they're renting. And your dashboard sits behind a private owner sign-in.")]));
 
@@ -129,7 +133,7 @@ body.push(table([3000, 6360],
 ));
 body.push(spacer(120));
 body.push(H2("Walled off and private"));
-body.push(P([T("Each business on Yardhand is its own island. Your bookings, customers, pricing, and crew are yours alone — no other operator can see them, and you never see theirs. Same platform underneath; completely separate operations on top.")]));
+body.push(P([T("Yardhand is built so each business is its own island — your bookings, customers, pricing, and crew are yours alone, and you never see another operator's. Fully separating every account at the database level is the "), T("top near-term item", { bold: true }), T(" before multiple companies run on it (see “Where it is today”). We onboard pilot partners deliberately, one at a time, so your data is handled right from day one.")]));
 body.push(H2("It's not just dump trailers"));
 body.push(P([T("Yardhand's core idea — a unit goes out, comes back, and someone has to move it each way — fits almost anything you rent and retrieve:")]));
 body.push(bullet([T("Equipment & tool rental", { bold: true }), T(" — skid steers, lifts, compressors, generators.")]));
@@ -143,12 +147,16 @@ body.push(P([T("Straight answer: Yardhand is "), T("live and in active developme
 body.push(table([4680, 4680],
   ["Working today", "On the near-term roadmap"],
   [
-    ["Full customer booking flow with transparent pricing", "One shared account & data across all your devices"],
-    ["Owner dashboard behind a private sign-in", "Individual staff logins with roles"],
-    ["Two-leg dispatch & driver assignment", "Live card payments and deposit captures"],
-    ["Built-in analytics (revenue, utilization, ROI)", "Automatic booking confirmations to customers"],
-    ["Your branding — logo, colors, equipment photos", "Job alerts texted/emailed to your drivers"],
-    ["Configurable pricing, fees, policies & yard counter", "Standing weekly staff schedules"],
+    ["Full customer booking flow with transparent pricing", "Separate, walled-off accounts per business (to safely run many companies on it)"],
+    ["Cloud data synced across your devices and your crew's", "Live card payments and deposit captures"],
+    ["Owner dashboard behind a private sign-in", "Automatic booking confirmations & reminders to customers"],
+    ["Individual staff sign-ins (personal PINs) — each sees only their own work", "Job alerts texted/emailed to your drivers"],
+    ["Custom positions/roles that decide who gets which jobs", "Subscription billing & free trials for signing up businesses"],
+    ["Standing weekly schedules + only-book-when-staffed", "Rock-solid backups & a polished phone experience (both first-class before launch)"],
+    ["Two-leg dispatch, auto or manual assignment", ""],
+    ["Built-in analytics (revenue, utilization, ROI)", ""],
+    ["Your branding, a real website, embeddable booking & built-in SEO", ""],
+    ["Configurable pricing, fees, policies & yard counter", ""],
   ]
 ));
 body.push(spacer(120));
@@ -185,7 +193,7 @@ const doc = new Document({
 });
 
 Packer.toBuffer(doc).then((buf) => {
-  const out = "/tmp/claude-0/-home-user-yardhand/34493c9a-ac6d-5f0b-af34-1bc782bea07a/scratchpad/Yardhand-Partnership-Pitch.docx";
+  const out = require("path").join(__dirname, "Yardhand-Partnership-Pitch.docx");
   fs.writeFileSync(out, buf);
   console.log("wrote", out, buf.length, "bytes");
 });
