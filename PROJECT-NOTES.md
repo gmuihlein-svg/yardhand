@@ -261,6 +261,26 @@ Team & dispatch · Fleet · Settings.
   `EmployeePortal` — the hours grid is editable buttons when `!== "owner"`, static cells otherwise. Only
   gates who can EDIT; the owner always sees the schedule and assigns jobs. Per-business (each SaaS tenant
   picks their own once multi-tenant lands).
+- **Availability engine + standing weekly schedule (`contractor.weekly`, task #11 DONE):** top-level
+  `availOn(c, date)` resolves a worker's hours from two layers — an explicit per-date override
+  (`c.avail[date]`, incl. `[]` = day off exception) wins; otherwise the repeating weekly pattern
+  (`c.weekly` = `{dayOfWeek: [fromIdx,toIdx]}`) applies, projecting forward forever. All availability reads
+  (`availableDrivers`, EmployeePortal grid, TeamView grid, AvailabilityEditor) go through `availOn`.
+  **`WeeklyEditor`** modal: owner opens it by tapping a person's name in Team → section 4 (or the worker
+  taps "Set my repeating week" in their portal when `scheduleControl` allows); presets Mon–Fri / +Sat AM /
+  clear. **`AvailabilityEditor`** now overrides a single day (with "reset to weekly" + explicit day-off).
+  This is what makes far-out days staffed without hand-entering each date. Sample `mkAvail` still projects
+  100 days of explicit avail for the demo.
+- **Booking-availability mode (`business.bookingMode`, default "hybrid"; `hybridNearDays` default 14):**
+  Settings card "When customers can book delivery & pickup" — **strict** (staffed legs offered only when
+  someone's scheduled that day), **flexible** (offered any day in the window; created unassigned and
+  auto-assigned later), **hybrid** (strict within `hybridNearDays`, flexible beyond — the default). Wired
+  in `CustomerBooking` via `policyAllows(date, staffed)` used by `outCovers` (delivery/will-call out leg)
+  and the return leg (`returnBlocked` / `returnDeferred`). Self drop-off always open. Auto-assign engine
+  unchanged — it fills whenever a matching scheduled worker exists.
+- **At-risk dashboard alert:** Dashboard `atRisk` — a we-deliver or we-collect leg coming up within 3 days
+  with NOBODY assigned surfaces RED + named on the Start-here list. The safety net for far-out bookings
+  taken under flexible/hybrid mode, so nothing slips through uncovered.
 - **Multi-equipment cart (per-item dates):** a customer can book several pieces in ONE checkout.
   On the Dates step, **"Add another piece of equipment"** saves the current item to `cart` (state in
   `CustomerBooking`) and returns to the size picker; **each item keeps its own dates + delivery/return

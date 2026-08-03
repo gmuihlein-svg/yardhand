@@ -138,7 +138,7 @@ function availableDrivers(state, date, window, excludeId) {
   };
   return (state.contractors || []).filter((c) =>
     c.active && c.id !== excludeId &&
-    ((c.avail && c.avail[date]) || []).includes(window) &&
+    availOn(c, date).includes(window) &&
     !runs.some((r) => r.by === c.id && r.date === date && tooClose(r.time))
   );
 }
@@ -173,6 +173,30 @@ function cancelRefund(b, biz) {
 }
 
 const WINDOWS = ["8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM"];
+
+/* ── Availability engine ──────────────────────────────────────────────────────
+   A worker's hours on a date come from two layers:
+     • a STANDING WEEKLY schedule (c.weekly) — a repeating week set once: dayOfWeek(0=Sun..6=Sat)
+       -> [fromIdx, toIdx] into WINDOWS (or absent = off that weekday). Projects forward forever.
+     • a per-DATE override (c.avail[date]) — an exception for one specific day: an array of window
+       labels, or [] to explicitly take that day off (overrides the weekly pattern for that date).
+   availOn() resolves the two: an explicit override for the date wins; otherwise the weekly pattern
+   is used. This is what lets far-out days be "staffed" without hand-entering every day. */
+const rangeWindows = (range) => {
+  if (!range || !Array.isArray(range)) return [];
+  const [f, t] = range;
+  if (f == null || t == null || t < f) return [];
+  return WINDOWS.slice(f, t + 1);
+};
+const weeklyOn = (c, dateISO) => {
+  if (!c || !c.weekly) return [];
+  const dow = new Date(dateISO + "T00:00:00").getDay();
+  return rangeWindows(c.weekly[dow]);
+};
+const availOn = (c, dateISO) => {
+  if (c && c.avail && Object.prototype.hasOwnProperty.call(c.avail, dateISO)) return c.avail[dateISO] || [];
+  return weeklyOn(c, dateISO);
+};
 /* turn a window label ("8:00 AM") on an ISO date into a Date, for lead-time checks */
 const slotDateTime = (dateISO, label) => {
   const d = new Date(dateISO + "T00:00:00");
@@ -272,7 +296,7 @@ const SEED = {
     pickupHours: WINDOWS,
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
-    dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, scheduleControl: "both", rr: 0, offerDelivery: true,
+    dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, scheduleControl: "both", bookingMode: "hybrid", hybridNearDays: 14, rr: 0, offerDelivery: true,
     workerModel: "contractor", payBasis: "perjob", flatPeriod: "weekly", paymentProcessor: "stripe", paymentAccount: "", payoutMethod: "manual",
     leadDeliveryHours: 12, leadCounterHours: 2,
     bufferMins: 30, firstJobDriveMins: 30,
@@ -1022,6 +1046,7 @@ function PlatformLogin({ state, onAuthed, onBack }) {
 function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut }) {
   const me = (state.contractors || []).find((c) => c.id === employeeId);
   const [editAvail, setEditAvail] = useState(null);
+  const [weeklyFor, setWeeklyFor] = useState(false); // repeating weekly schedule (self)
   const [tab, setTab] = useState("jobs"); // jobs | hours | pay
   if (!me) {
     return (
@@ -1193,12 +1218,13 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
           <div className="text-sm font-bold">{crewSetsHours ? "Set when you can work" : "Your work schedule"}</div>
           <div className="text-xs mt-1 mb-3" style={{ color: T.sub }}>
             {crewSetsHours
-              ? <>Tap a day to choose your hours. You can only be booked for times you mark free. <b style={{ color: T.green }}>Green</b> = free, blank = off. This updates the schedule your manager sees instantly.</>
+              ? <>Set your <b>repeating week</b> once (below) and it fills every week automatically — then tap any single day to override it. You can only be booked for times you mark free. <b style={{ color: T.green }}>Green</b> = free, blank = off. Your manager sees this instantly.</>
               : <>Your manager sets your schedule. <b style={{ color: T.green }}>Green</b> = you're scheduled to work, blank = off. Check here for the hours you're expected in — talk to your manager to change them.</>}
           </div>
+          {crewSetsHours && <button onClick={() => setWeeklyFor(true)} className="w-full mb-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5" style={{ background: T.steel, color: "#fff" }}><CalendarClock size={15} /> Set my repeating week</button>}
           <div className="grid grid-cols-7 gap-1.5">
             {days.map((d) => {
-              const wins = (me.avail && me.avail[d]) || [];
+              const wins = availOn(me, d);
               const cover = wins.length;
               const dd = new Date(d + "T00:00:00");
               const cellStyle = { background: cover === 0 ? T.paper : cover >= 4 ? T.green : cover >= 2 ? "#8FBF6F" : T.amber, border: `1px solid ${T.line}` };
@@ -1309,6 +1335,7 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
       </div>
 
       {editAvail && <AvailabilityEditor {...editAvail} state={state} update={update} onClose={() => setEditAvail(null)} />}
+      {weeklyFor && <WeeklyEditor driverId={me.id} selfName="Your" state={state} update={update} onClose={() => setWeeklyFor(false)} />}
     </div>
   );
 }
@@ -1399,6 +1426,16 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
   // unsigned rental agreement on a booking that's out or due to go out today/earlier (liability risk)
   const unsignedActive = state.bookings.filter((b) => !b.signName && b.status !== "cancelled" && b.status !== "returned" && (b.status === "out" || b.start <= today()));
   const maintCount = state.trailers.filter((t) => trailerStatus(t) === "maintenance").length;
+  // ── AT-RISK: a staffed leg (we-deliver / we-collect) coming up within 3 days with NOBODY assigned.
+  //    This is the safety net for far-out bookings taken under flexible/hybrid mode — as the date nears
+  //    and it's still uncovered, it surfaces red & named so it never slips. ──
+  const riskSoon = addDays(today(), 3);
+  const atRisk = [];
+  (state.bookings || []).forEach((bk) => {
+    if (bk.status === "cancelled" || bk.status === "returned") return;
+    if (bk.outMethod === "delivery" && !bk.outBy && bk.status === "reserved" && bk.start >= today() && bk.start <= riskSoon) atRisk.push(`${bk.name} (deliver ${fmt(bk.start)})`);
+    if (bk.returnMethod === "collect" && !bk.returnBy && bk.status !== "returned" && bk.end >= today() && bk.end <= riskSoon) atRisk.push(`${bk.name} (collect ${fmt(bk.end)})`);
+  });
   const plural = (n) => (n === 1 ? "" : "s");
   // name one/two people or "X & N more" for a checklist line
   const listNames = (labels) => labels.length === 1 ? labels[0] : labels.length === 2 ? `${labels[0]} & ${labels[1]}` : `${labels[0]} & ${labels.length - 1} more`;
@@ -1426,6 +1463,7 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
     overdue.length > 0 && { level: "red", text: `${overdue.length} unit${plural(overdue.length)} overdue`, hint: "chase the customer, then mark returned when it's back" },
     coiExpiredBookings.length > 0 && { level: "red", text: `COI expired · ${listNames(coiExpiredBookings.map((x) => x.name))}`, hint: "get a current certificate before that trailer goes out" },
     unsignedActive.length > 0 && { level: "red", text: `Agreement not signed · ${listNames(unsignedActive.map((x) => x.name))}`, hint: "get the rental agreement signed before the trailer leaves the yard" },
+    atRisk.length > 0 && { level: "red", text: `No one assigned yet · ${listNames(atRisk)}`, hint: "this delivery/collection is within 3 days and still has no driver — assign someone in Team & dispatch, or cover it yourself" },
     // ── today (amber) ──
     pickupsToday.length > 0 && { level: "amber", text: `${pickupsToday.length} unit${plural(pickupsToday.length)} going out today`, hint: "mark “Picked up / Delivered” when they leave (in Pickups & returns below)" },
     dueToday.length > 0 && { level: "amber", text: `${dueToday.length} unit${plural(dueToday.length)} due back today`, hint: "mark “Returned / Collected” when it arrives (below)" },
@@ -1456,7 +1494,7 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
 
       <HelpNote title="How to use your dashboard">
         <p>This is your home base — <b>open it first each day</b>. The <b>Start here</b> box below is your catch-all so nothing slips through the cracks. It's colour-ranked — <b style={{ color: T.red }}>red</b> = urgent, <b style={{ color: T.amberDk }}>amber</b> = today, <b style={{ color: T.blue }}>blue</b> = money & housekeeping — and it names the customer or crew member so you know exactly who to chase. It surfaces:</p>
-        <p><b>Urgent:</b> double-bookings · overdue trailers · a Certificate of Insurance that's <b>expired</b> · a rental <b>agreement not signed</b> on a trailer that's out or going out. <b>Today:</b> trailers going out · trailers due back · a <b>COI not uploaded</b> yet by the customer · a COI <b>expiring within 2 weeks</b> · jobs still needing a driver · <b>customer payments to collect</b> (take payment, then Mark paid on the booking). <b>Money & housekeeping:</b> paying your crew (per-job / hourly / salary, named) · trailers sitting in <b>maintenance</b> to put back in service.</p>
+        <p><b>Urgent:</b> double-bookings · overdue trailers · a Certificate of Insurance that's <b>expired</b> · a rental <b>agreement not signed</b> on a trailer that's out or going out · a <b>delivery or collection within 3 days with no one assigned</b> (your safety net — so a booking taken far in advance never slips through uncovered). <b>Today:</b> trailers going out · trailers due back · a <b>COI not uploaded</b> yet by the customer · a COI <b>expiring within 2 weeks</b> · jobs still needing a driver · <b>customer payments to collect</b> (take payment, then Mark paid on the booking). <b>Money & housekeeping:</b> paying your crew (per-job / hourly / salary, named) · trailers sitting in <b>maintenance</b> to put back in service.</p>
         <p>It only shows on screen here — <b>no email or text</b>. Clear the list and you're on top of the day.</p>
         <p>The four <b>tiles</b> (Out on rent, Available, Due back today, Overdue) are tappable — they open the matching list. <b>Pickups &amp; returns today</b> has one-tap buttons to mark trailers out or back. Everything updates live across your devices and your crew's.</p>
         <p>Use the tabs up top for the rest: Calendar, Bookings, Customers, Team &amp; dispatch, Fleet, Insights, and Settings — each has its own “How this page works” note.</p>
@@ -2455,6 +2493,7 @@ function CustomersView({ state, openDetail, update }) {
 function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
   const [adding, setAdding] = useState(false);
   const [editAvail, setEditAvail] = useState(null); // {driverId, date}
+  const [weeklyFor, setWeeklyFor] = useState(null); // {driverId} — repeating weekly schedule
   const runs = legRuns(state);
   const fee = state.business.contractorFee;
   const yardFee = state.business.counterFee;
@@ -2766,7 +2805,7 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
         <div className="px-1 mb-3">
           <div className="text-sm font-bold">4 · When each person works — next {horizon} days</div>
           <div className="text-xs mt-1 leading-snug" style={{ color: T.sub }}>
-            Each row is a person; each column is a day. The color shows how much of that day they can work — <b style={{ color: T.green }}>green</b> = free most of the day, <b style={{ color: T.amberDk }}>amber</b> = only an hour or two, <b>blank</b> = not working. A number in a square means that many jobs are already booked on them that day. <b>Tap any square to set that person's hours.</b> Customers can only pick a delivery or pickup time when someone is marked free — so keep this current.
+            Each row is a person; each column is a day. The color shows how much of that day they can work — <b style={{ color: T.green }}>green</b> = free most of the day, <b style={{ color: T.amberDk }}>amber</b> = only an hour or two, <b>blank</b> = not working. A number in a square means that many jobs are already booked on them that day. <b>Tap a person's name to set their repeating weekly hours</b> (the fast way — it fills every week automatically), or <b>tap any square to override one day</b>. Customers can only pick a delivery or pickup time when someone is marked free — so keep this current.
           </div>
         </div>
         <div style={{ minWidth: 60 + horizon * 30 }}>
@@ -2781,9 +2820,9 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
           </div>
           {state.contractors.map((c) => (
             <div key={c.id} className="grid items-center" style={{ gridTemplateColumns: `110px repeat(${horizon}, 1fr)`, height: 34 }}>
-              <div className="text-xs font-bold truncate pr-2">{c.name.split(" ")[0]} {!c.active && <span style={{ color: T.sub }}>·off</span>}</div>
+              <button onClick={() => setWeeklyFor({ driverId: c.id })} title="Set repeating weekly hours" className="text-xs font-bold truncate pr-2 text-left flex items-center gap-1" style={{ color: T.steel }}><CalendarClock size={12} className="shrink-0" style={{ color: T.sub }} /> <span className="truncate">{c.name.split(" ")[0]}</span> {!c.active && <span style={{ color: T.sub }}>·off</span>}</button>
               {days.map((d) => {
-                const wins = (c.avail && c.avail[d]) || [];
+                const wins = availOn(c, d);
                 const dayRuns = [...runs, ...events].filter((r) => r.by === c.id && r.date === d);
                 const cover = wins.length;
                 return (
@@ -2842,13 +2881,16 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
       {adding && <AddContractorModal payBasis={state.business.payBasis} periodWord={periodWord} onClose={() => setAdding(false)}
         onAdd={(c) => { update((n) => n.contractors.push({ ...c, locationId: locId })); setAdding(false); flash(`Added ${c.name}.`, true); }} />}
       {editAvail && <AvailabilityEditor {...editAvail} state={state} update={update} onClose={() => setEditAvail(null)} />}
+      {weeklyFor && <WeeklyEditor driverId={weeklyFor.driverId} state={state} update={update} onClose={() => setWeeklyFor(null)} />}
     </div>
   );
 }
 
 function AvailabilityEditor({ driverId, date, state, update, onClose }) {
   const c = state.contractors.find((x) => x.id === driverId);
-  const wins = (c.avail && c.avail[date]) || [];
+  const wins = availOn(c, date);                   // effective hours (weekly pattern unless overridden)
+  const hasOverride = !!(c.avail && Object.prototype.hasOwnProperty.call(c.avail, date)); // a one-day exception is set
+  const fromWeekly = !hasOverride && wins.length > 0; // hours are coming from the repeating week
   const idxs = wins.map((w) => WINDOWS.indexOf(w)).filter((i) => i >= 0).sort((a, b) => a - b);
   const from = idxs.length ? idxs[0] : null;      // start-of-shift window index (null = off)
   const to = idxs.length ? idxs[idxs.length - 1] : null;
@@ -2856,20 +2898,23 @@ function AvailabilityEditor({ driverId, date, state, update, onClose }) {
   const setRange = (f, t) => update((n) => {
     const d = n.contractors.find((x) => x.id === driverId);
     if (!d.avail) d.avail = {};
-    if (f == null || t == null || t < f) { delete d.avail[date]; return; }
+    if (f == null || t == null || t < f) { d.avail[date] = []; return; } // explicit day off (exception)
     d.avail[date] = WINDOWS.slice(f, t + 1); // a continuous range of hours they can work
   });
-  const clearDay = () => update((n) => { const d = n.contractors.find((x) => x.id === driverId); if (d.avail) delete d.avail[date]; });
+  const setOff = () => update((n) => { const d = n.contractors.find((x) => x.id === driverId); if (!d.avail) d.avail = {}; d.avail[date] = []; }); // off just this day
+  const resetWeekly = () => update((n) => { const d = n.contractors.find((x) => x.id === driverId); if (d.avail) delete d.avail[date]; }); // fall back to the repeating week
   const noon = WINDOWS.indexOf("12:00 PM");
   const presets = [["Morning", 0, noon], ["Afternoon", noon, WINDOWS.length - 1], ["All day", 0, WINDOWS.length - 1]];
   const jobs = [...legRuns(state), ...yardEvents(state)].filter((r) => r.by === driverId && r.date === date).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
   return (
     <Modal onClose={onClose} title={`${c.name.split(" ")[0]} · ${fmtLong(date)}`}>
-      <p className="text-sm mb-3" style={{ color: T.ink }}>Set the hours {c.name.split(" ")[0]} can work this day as a <b>range</b>. Customers then book a single start time inside these hours.</p>
+      <p className="text-sm mb-3" style={{ color: T.ink }}>Set the hours {c.name.split(" ")[0]} can work this day as a <b>range</b>. Customers then book a single start time inside these hours. This is a <b>one-day change</b> — it overrides their repeating weekly hours just for {fmtLong(date)}.</p>
+      {fromWeekly && <div className="text-xs mb-3 p-2 rounded-lg flex items-center gap-1.5" style={{ background: T.blueSoft, color: T.blue }}><CalendarClock size={13} /> These hours come from {c.name.split(" ")[0]}'s <b>repeating week</b>. Change below to override just this day.</div>}
       <div className="flex gap-2 mb-3">
         <button onClick={() => { if (!working) setRange(0, WINDOWS.length - 1); }} className="flex-1 py-2 rounded-lg text-sm font-bold" style={working ? { background: T.green, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>Working this day</button>
-        <button onClick={clearDay} className="flex-1 py-2 rounded-lg text-sm font-bold" style={!working ? { background: T.steel, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>Off</button>
+        <button onClick={setOff} className="flex-1 py-2 rounded-lg text-sm font-bold" style={!working ? { background: T.steel, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>Off</button>
       </div>
+      {hasOverride && <button onClick={resetWeekly} className="w-full mb-3 text-xs font-bold py-1.5 rounded-lg" style={{ color: T.blue, background: T.blueSoft }}>↺ Reset to their repeating weekly hours</button>}
       {working && (
         <>
           <div className="grid grid-cols-2 gap-3">
@@ -2900,6 +2945,54 @@ function AvailabilityEditor({ driverId, date, state, update, onClose }) {
           {jobs.map((r) => <div key={r.key} className="text-sm py-0.5">{r.label} · {r.name}{r.time ? ` · ${r.time}` : ""}</div>)}
         </div>
       )}
+    </Modal>
+  );
+}
+
+/* Standing weekly schedule — set a person's NORMAL week once; it repeats across the whole booking
+   window (so far-out days are staffed without hand-entering each date). One-off changes are done by
+   tapping a specific day (AvailabilityEditor), which overrides the weekly pattern just for that date. */
+function WeeklyEditor({ driverId, state, update, onClose, selfName }) {
+  const c = state.contractors.find((x) => x.id === driverId);
+  if (!c) return null;
+  const weekly = c.weekly || {};
+  const who = selfName ? "you" : c.name.split(" ")[0];
+  const DOW = [["1", "Mon"], ["2", "Tue"], ["3", "Wed"], ["4", "Thu"], ["5", "Fri"], ["6", "Sat"], ["0", "Sun"]];
+  const noon = WINDOWS.indexOf("12:00 PM");
+  const setDay = (dow, range) => update((n) => {
+    const d = n.contractors.find((x) => x.id === driverId);
+    if (!d.weekly) d.weekly = {};
+    if (!range) delete d.weekly[dow]; else d.weekly[dow] = range;
+  });
+  const applyPreset = (obj) => update((n) => { const d = n.contractors.find((x) => x.id === driverId); d.weekly = obj; });
+  const wd = { 1: [0, WINDOWS.length - 1], 2: [0, WINDOWS.length - 1], 3: [0, WINDOWS.length - 1], 4: [0, WINDOWS.length - 1], 5: [0, WINDOWS.length - 1] };
+  return (
+    <Modal onClose={onClose} title={`${selfName || c.name.split(" ")[0]} · repeating week`}>
+      <p className="text-sm mb-3" style={{ color: T.ink }}>Set the hours {who} <b>normally</b> work each week. These repeat automatically across your whole booking window — so customers can book delivery and pickup times far ahead without anyone scheduling every day by hand. Need a one-off change (a day off, a late start)? Tap that specific day on the calendar to override just that date.</p>
+      <div className="flex gap-2 mb-3 flex-wrap">
+        <button onClick={() => applyPreset({ ...wd })} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.paper, color: T.steel, border: `1px solid ${T.line}` }}>Mon–Fri, all day</button>
+        <button onClick={() => applyPreset({ ...wd, 6: [0, noon] })} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.paper, color: T.steel, border: `1px solid ${T.line}` }}>Mon–Fri + Sat AM</button>
+        <button onClick={() => applyPreset({})} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: T.paper, color: T.red, border: `1px solid ${T.line}` }}>Clear all</button>
+      </div>
+      <div className="space-y-1.5">
+        {DOW.map(([k, label]) => {
+          const r = weekly[k];
+          const on = Array.isArray(r) && r.length === 2;
+          const f = on ? r[0] : 0, t = on ? r[1] : WINDOWS.length - 1;
+          return (
+            <div key={k} className="flex items-center gap-2">
+              <button onClick={() => setDay(k, on ? null : [0, WINDOWS.length - 1])} className="w-16 py-1.5 rounded-lg text-xs font-bold shrink-0" style={on ? { background: T.green, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>{label}</button>
+              {on ? (
+                <div className="flex items-center gap-1 text-xs">
+                  <select value={f} onChange={(e) => setDay(k, [+e.target.value, Math.max(t, +e.target.value)])} className="p-1.5 rounded-lg" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>{WINDOWS.map((w, i) => <option key={w} value={i}>{w}</option>)}</select>
+                  <span style={{ color: T.sub }}>–</span>
+                  <select value={t} onChange={(e) => setDay(k, [Math.min(f, +e.target.value), +e.target.value])} className="p-1.5 rounded-lg" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>{WINDOWS.map((w, i) => <option key={w} value={i}>{w}</option>)}</select>
+                </div>
+              ) : <span className="text-xs" style={{ color: T.sub }}>Off</span>}
+            </div>
+          );
+        })}
+      </div>
     </Modal>
   );
 }
@@ -3607,6 +3700,26 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><CalendarClock size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">When customers can book delivery &amp; pickup</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Delivery, will-call, and “you collect it” all need someone working. Choose how strict to be about that — every business runs differently. (Self drop-off never needs anyone, so it's always available.)</p>
+        <div className="space-y-2">
+          {[["strict", "Only when we're staffed", "A delivery or pickup time is offered ONLY on days someone's actually scheduled. Never promises what you can't cover. Nothing bookable past where you've set hours."],
+            ["hybrid", "Strict up close, flexible further out", "Within the next " + (b.hybridNearDays || 14) + " days it must be staffed. Beyond that, customers can still book it and it auto-assigns as the date gets close. Best of both — recommended."],
+            ["flexible", "Take it now, staff it later", "Customers can book any day in your window even before anyone's scheduled. The job waits and auto-assigns the moment someone's set for that day. For businesses confident they'll staff to demand."]]
+            .map(([v, l, s]) => (
+            <button key={v} onClick={() => set({ bookingMode: v })} className="w-full p-3 rounded-lg text-left"
+              style={(b.bookingMode || "hybrid") === v ? { background: T.amberSoft, border: `2px solid ${T.amber}` } : { background: T.paper, border: `1px solid ${T.line}` }}>
+              <div className="text-sm font-bold">{l}{v === "hybrid" && (b.bookingMode || "hybrid") !== "hybrid" ? "" : ""}</div>
+              <div className="text-[11px] mt-0.5" style={{ color: T.sub }}>{s}</div>
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px]" style={{ color: T.sub }}>However far out someone books, <b>you never lose track</b>: any staffed job coming up with nobody assigned shows red on your dashboard, and if a worker drops off a job it re-assigns or flags for you. Set repeating hours in <b>Team &amp; dispatch</b> so far-out days fill themselves.</p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><Users size={16} style={{ color: T.blue }} /></span>
           <h3 className="font-bold text-sm uppercase tracking-wide">Who sets work hours</h3>
         </div>
@@ -4273,24 +4386,36 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
   // minimum booking notice (lead time) before your crew can be booked for the out leg
   const outLeadHours = form.outMethod === "delivery" ? (b.leadDeliveryHours || 0) : (b.leadCounterHours || 0);
   const firstJobWindows = Math.ceil((b.firstJobDriveMins || 0) / 60); // reserve the day's earliest slots so the crew can drive out to the first delivery
+  // ── Booking-availability policy (per business) ──────────────────────────────
+  //   strict   — a staffed leg (delivery / we-collect / staffed will-call) is offered ONLY on days
+  //              someone is actually scheduled. Never promises what isn't staffed.
+  //   flexible — offered on any day in the window; the job is created unassigned and auto-assigns the
+  //              moment someone's scheduled (or you assign it). "Take it now, staff it later."
+  //   hybrid   — strict for the near term (within hybridNearDays), flexible beyond it. The default.
+  const bookMode = b.bookingMode || "hybrid";
+  const nearDays = b.hybridNearDays || 14;
+  const daysOut = (dateISO) => Math.round((new Date(dateISO + "T00:00:00") - new Date(today() + "T00:00:00")) / 86400000);
+  const isFarOut = (dateISO) => daysOut(dateISO) > nearDays;
+  // Apply the policy: return true if a staffed leg may be OFFERED even when `staffed` is false.
+  const policyAllows = (dateISO, staffed) => staffed || bookMode === "flexible" || (bookMode === "hybrid" && isFarOut(dateISO));
   const outCovers = (h) => {
     if (form.outMethod === "delivery") {
       if (WINDOWS.indexOf(h) < firstJobWindows) return false; // too early — no time to reach them
-      return windowCovered(state, form.start, h);
+      return policyAllows(form.start, windowCovered(state, form.start, h));
     }
-    // owner covers the counter only if they work jobs; otherwise a staff member must be free
-    return (b.counterMode === "self" && b.ownerWorks !== false) ? true : windowCovered(state, form.start, h);
+    // owner covers the counter only if they work jobs; otherwise a staff member must be free (subject to policy)
+    if (b.counterMode === "self" && b.ownerWorks !== false) return true;
+    return policyAllows(form.start, windowCovered(state, form.start, h));
   };
   const slotSoonEnough = (h) => slotDateTime(form.start, h).getTime() >= Date.now() + outLeadHours * 3600000;
   // Return leg: self drop-off ("yard") needs nobody. "Collect" (we come get it) needs a driver on the
-  // return day — but only enforce that when the return falls INSIDE your scheduling window. Beyond the
-  // window you haven't scheduled anyone yet, so the collection is booked as a job you assign closer to
-  // the date. This honors "no booking unless someone's working that day" without blocking long rentals.
-  const returnWithinWindow = end <= addDays(today(), b.bookHorizonDays || 30);
+  // return day — gated by the SAME booking-availability policy above. Strict: must be staffed or it's
+  // blocked (steer to drop-off). Flexible / hybrid-far: accepted now, assigned closer to the date.
   const returnNeedsDriver = form.returnMethod === "collect";
   const returnDayStaffed = (b.pickupHours || []).some((h) => windowCovered(state, end, h));
-  const returnBlocked = returnNeedsDriver && returnWithinWindow && !returnDayStaffed; // near collect with no one free → steer to drop-off
-  const returnDeferred = returnNeedsDriver && !returnWithinWindow;                    // far-out collect → scheduled later
+  const returnAllowed = policyAllows(end, returnDayStaffed);
+  const returnBlocked = returnNeedsDriver && !returnAllowed;                 // policy won't allow an unstaffed collect → drop-off
+  const returnDeferred = returnNeedsDriver && returnAllowed && !returnDayStaffed; // accepted, will be assigned closer to the date
   const type = form.size ? typeBySize(form.size) : null;
   const base = type ? priceFor(type, form.days) : 0;
   const waiverAmt = form.waiver ? Math.round(base * b.waiverRate) : 0;
