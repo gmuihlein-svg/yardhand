@@ -296,6 +296,15 @@ Team & dispatch · Fleet · Settings.
   comes from dispatch jobs, so non-dispatch roles fit hourly/salary). Verified live: no driver-capable
   person → delivery slots = 0 & "no driver available"; driver present → 8 slots. Company-wide (edited on
   `state.business.roles`, not per-branch overrides). Extends toward capability/permission layers later.
+- **Per-employee sign-in / self-only access (`contractor.pin`):** each crew member signs in on the public
+  site (Team sign-in) with their phone/email + their OWN **personal PIN**, instead of one shared team code.
+  `EmployeeLogin` matches the person by phone/email, then requires `me.pin` (falls back to the shared
+  `teamPass` only for people without a PIN yet — migration). Owner sets each PIN on the Team card and in
+  the Add-employee modal (seeded: Marcus 1234, Tanya 5678). The crew portal already shows ONLY the
+  signed-in person's jobs/hours/pay (filtered by `employeeId`); the top-bar "Owner" tab is hidden in
+  employee mode. A person can only open their own view — verified live (wrong PIN blocked, own PIN in,
+  coworker's PIN blocked). NOTE: prototype-level UI gating — true isolation (can't read another person's
+  data even via the API) needs the real Supabase Auth + RLS layer in PLATFORM-PLAN Phases 1–2.
 - **Multi-equipment cart (per-item dates):** a customer can book several pieces in ONE checkout.
   On the Dates step, **"Add another piece of equipment"** saves the current item to `cart` (state in
   `CustomerBooking`) and returns to the size picker; **each item keeps its own dates + delivery/return

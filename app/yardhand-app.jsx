@@ -343,9 +343,9 @@ const SEED = {
       reqLabel: "You'll need to tow this", tow: "Tows behind most ½-ton trucks and larger SUVs. 2\" ball on a Class III hitch rated ~5,000 lb, a 7-pin connector, and a trailer-brake controller." },
   ],
   contractors: [
-    { id: "c1", name: "Marcus Reed", phone: "704-555-0301", email: "marcus@extpro.com", vehicle: "F-250", active: true, roleId: "both",
+    { id: "c1", name: "Marcus Reed", phone: "704-555-0301", email: "marcus@extpro.com", vehicle: "F-250", active: true, roleId: "both", pin: "1234",
       avail: mkAvail((dow) => dow === 0 ? null : WINDOWS) },          // Mon–Sat, all windows
-    { id: "c2", name: "Tanya Brooks", phone: "704-555-0302", email: "tanya@extpro.com", vehicle: "Ram 2500", active: true, roleId: "driver",
+    { id: "c2", name: "Tanya Brooks", phone: "704-555-0302", email: "tanya@extpro.com", vehicle: "Ram 2500", active: true, roleId: "driver", pin: "5678",
       avail: mkAvail((dow) => (dow >= 1 && dow <= 5) ? ["10:00 AM", "12:00 PM", "2:00 PM"] : null) }, // weekdays midday
   ],
   trailers: [
@@ -949,7 +949,9 @@ function TopBar({ state, mode, setMode, signOut, locations, locId, switchLoc }) 
             <button onClick={() => setMode("landing")} className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2" }}>
               <Home size={15} /> <span className="hidden sm:inline">Site</span>
             </button>
-            {[["owner", "Owner", LayoutDashboard], ["employee", "Team", Users], ["customer", "Book a trailer", Truck]].map(([m, label, Icon]) => (
+            {[["owner", "Owner", LayoutDashboard], ["employee", "Team", Users], ["customer", "Book a trailer", Truck]]
+              .filter(([m]) => !(mode === "employee" && m === "owner")) // crew portal doesn't advertise the owner dashboard
+              .map(([m, label, Icon]) => (
               <button key={m} onClick={() => setMode(m)}
                 className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5 transition"
                 style={mode === m ? { background: T.amber, color: T.steelDk } : { color: "#D8DEE2" }}>
@@ -1006,13 +1008,16 @@ function EmployeeLogin({ state, onAuthed, onBack }) {
   const [id, setId] = useState("");
   const [code, setCode] = useState("");
   const [err, setErr] = useState(false);
-  const expected = b.teamPass || "team";
+  const teamFallback = b.teamPass || "team";
   const digits = (s) => (s || "").replace(/\D/g, "");
   const submit = () => {
     const q = id.trim().toLowerCase();
-    if (!q || !code.trim() || code.trim() !== expected) { setErr(true); return; }
+    if (!q || !code.trim()) { setErr(true); return; }
     const me = (state.contractors || []).find((c) => c.active && ((c.email || "").toLowerCase() === q || (digits(c.phone) && digits(c.phone) === digits(q))));
-    if (!me) { setErr(true); return; }
+    // Each person signs in with their OWN PIN — so they can only ever reach their own info.
+    // Until a PIN is set for someone, the shared team code still works for them (migration).
+    const ok = me && (me.pin ? code.trim() === me.pin : code.trim() === teamFallback);
+    if (!ok) { setErr(true); return; }
     onAuthed(me.id);
   };
   return (
@@ -1025,10 +1030,10 @@ function EmployeeLogin({ state, onAuthed, onBack }) {
         </div>
         <div className="rounded-2xl p-5 space-y-3" style={{ background: T.panel }}>
           <Field label="Your phone or email"><input value={id} autoFocus onChange={(e) => { setId(e.target.value); setErr(false); }} onKeyDown={(e) => { if (e.key === "Enter") submit(); }} placeholder="704-555-0301 or you@company.com" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${err ? T.red : T.line}` }} /></Field>
-          <Field label="Team code"><input value={code} onChange={(e) => { setCode(e.target.value); setErr(false); }} onKeyDown={(e) => { if (e.key === "Enter") submit(); }} placeholder="Ask your manager" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${err ? T.red : T.line}` }} /></Field>
-          {err && <div className="text-xs font-semibold" style={{ color: T.red }}>Check your phone/email and the team code, then try again.</div>}
+          <Field label="Your PIN"><input value={code} onChange={(e) => { setCode(e.target.value); setErr(false); }} onKeyDown={(e) => { if (e.key === "Enter") submit(); }} placeholder="Your personal code from your manager" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${err ? T.red : T.line}` }} /></Field>
+          {err && <div className="text-xs font-semibold" style={{ color: T.red }}>Check your phone/email and your PIN, then try again.</div>}
           <button onClick={submit} className="w-full py-2.5 rounded-lg font-extrabold" style={{ background: T.amber, color: T.steelDk }}>Sign in</button>
-          {expected === "team" && <div className="text-[11px] p-2 rounded-lg text-center" style={{ background: T.amberSoft, color: T.amberDk }}>Demo · team code is <b>team</b> (owner sets it in Settings). Try <b>704-555-0301</b>.</div>}
+          <div className="text-[11px] p-2 rounded-lg text-center" style={{ background: T.amberSoft, color: T.amberDk }}>You'll only ever see <b>your own</b> jobs, hours &amp; pay. Demo · try <b>704-555-0301</b> with PIN <b>1234</b>.</div>
         </div>
         <button onClick={onBack} className="w-full mt-4 text-xs font-semibold" style={{ color: "#B7C0C6" }}>← Back to public site</button>
         <p className="text-[11px] text-center mt-3" style={{ color: "#6C7178" }}>Prototype sign-in. Individual secure logins get wired up when this goes live.</p>
@@ -1205,6 +1210,7 @@ function EmployeePortal({ state, employeeId, setBooking, update, flash, signOut 
       </div>
 
       <HelpNote title="How your portal works">
+        <p>This is <b>your</b> portal — you only ever see <b>your own</b> jobs, hours, and pay. You sign in with your phone/email and your <b>personal PIN</b>, so no one else can open your view and you can't see anyone else's. You won't see the owner's dashboard, other people's schedules, customers, or the business's money.</p>
         <p><b>My jobs</b> — your assigned deliveries, pickups, and returns. Tap <b>Call</b> or <b>Directions</b> to reach the customer, <b>Add photos</b> to snap checkout/return pics, and the big button to mark a job <b>delivered / handed over / collected / received</b> when it's done (your manager sees it instantly).</p>
         <p><b>My hours</b> — {(state.business.scheduleControl || "both") !== "owner" ? <>tap any day to set the hours you can work as a range; you'll only be booked for times you mark free.</> : <>your manager sets your schedule — this tab shows the hours you're expected to work (read-only).</>}</p>
         {hourly
@@ -2643,7 +2649,8 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
       </div>
       <HelpNote>
         <p>One crew, two kinds of work: <b>delivery/collection runs</b> (someone drives) and <b>will-call/yard handoffs</b> (someone staffs the yard). Each person has a <b>role</b> that decides which they can do — set it on their card in section 3 (a little <b>D</b>/<b>Y</b>/<b>DY</b> badge shows it on the schedule below). Only qualified people are offered a job: a Yard-only person is never put on a delivery, a Mechanic is never dispatched at all. Make and name your own roles in <b>Settings → Job roles</b>.</p>
-        <p>Read it top to bottom: <b>1)</b> upcoming jobs and who's covering each (assign with the dropdown; unassigned road runs are highlighted), <b>2)</b> {hourly ? "payroll — clocked hours × each person's rate, with a Pay button" : flat ? `payroll — each person's fixed ${periodWord === "2 weeks" ? "bi-weekly" : "weekly"} salary, with a Pay button` : "who you owe for finished jobs, one line each, with a Pay/Mark-paid button"}, <b>3)</b> your people (add/pause, sick-day{hourly ? ", and set each one's hourly rate" : flat ? ", and set each one's salary" : ""}), <b>4)</b> each person's working hours — tap a day to set a range, <b>5)</b> auto-assign settings.</p>
+        <p>Read it top to bottom: <b>1)</b> upcoming jobs and who's covering each (assign with the dropdown; unassigned road runs are highlighted), <b>2)</b> {hourly ? "payroll — clocked hours × each person's rate, with a Pay button" : flat ? `payroll — each person's fixed ${periodWord === "2 weeks" ? "bi-weekly" : "weekly"} salary, with a Pay button` : "who you owe for finished jobs, one line each, with a Pay/Mark-paid button"}, <b>3)</b> your people (add/pause, sick-day, set each one's <b>role</b> and <b>personal sign-in PIN</b>{hourly ? ", and their hourly rate" : flat ? ", and their salary" : ""}), <b>4)</b> each person's working hours — tap a day to set a range, <b>5)</b> auto-assign settings.</p>
+        <p><b>Each employee sees only their own info.</b> They sign in on your public site (Team sign-in) with their phone/email + the <b>personal PIN</b> you set on their card — so they only ever see their own jobs, hours, and pay, never the owner dashboard, another person's schedule, your customers, or the money. Give each person their own PIN (not a shared one) so no one can open anyone else's view.</p>
         <p><b>How you pay your team</b> is set in Settings → "How you pay your team" (two separate choices: their tax status — {state.business.workerModel === "employee" ? "W2 employees" : "1099 contractors"} — and how you pay them). {hourly
           ? <>You're paying <b>by the hour</b>: your crew <b>clock in/out</b> from their portal, and section 2 above adds up each person's hours × rate so you can pay them hourly. Set each person's rate on their card in section 3. (Hourly works whether they're 1099 or W2.)</>
           : flat
@@ -2792,11 +2799,13 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
                   <div className="min-w-0">
                     <div className="font-bold text-sm truncate">{c.name} {!c.active && <span className="text-xs font-normal" style={{ color: T.sub }}>· inactive</span>}</div>
                     <div className="text-xs truncate" style={{ color: T.sub }}>{c.vehicle} · {c.phone}</div>
-                    <div className="flex items-center gap-1 mt-1">
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
                       <span className="text-[11px]" style={{ color: T.sub }}>Role</span>
                       <select value={c.roleId || "both"} onChange={(e) => { const rid = e.target.value; update((n) => { const d = n.contractors.find((x) => x.id === c.id); d.roleId = rid; }); flash(`${c.name.split(" ")[0]} is now ${(roleOf(state.business, { roleId: rid }) || {}).name || rid}.`, true); }} className="px-1.5 py-0.5 rounded text-[11px] font-semibold" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
                         {(state.business.roles || []).map((r) => <option key={r.id} value={r.id}>{r.name}{!r.drive && !r.yard ? " (no dispatch)" : ""}</option>)}
                       </select>
+                      <span className="text-[11px] ml-1" style={{ color: T.sub }}>PIN</span>
+                      <input defaultValue={c.pin || ""} onBlur={(e) => { const v = e.target.value.trim(); if (v !== (c.pin || "")) { update((n) => { const d = n.contractors.find((x) => x.id === c.id); d.pin = v; }); flash(v ? `Set ${c.name.split(" ")[0]}'s sign-in PIN.` : `Cleared ${c.name.split(" ")[0]}'s PIN.`, true); } }} placeholder="set code" className="w-20 px-1.5 py-0.5 rounded text-[11px] tabular-nums" style={{ border: `1px solid ${T.line}` }} />
                     </div>
                     {hourly && (
                       <div className="flex items-center gap-1 mt-1">
@@ -3031,7 +3040,7 @@ function WeeklyEditor({ driverId, state, update, onClose, selfName }) {
 }
 
 function AddContractorModal({ onClose, onAdd, payBasis, periodWord, roles = [] }) {
-  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); const [vehicle, setVehicle] = useState(""); const [rate, setRate] = useState("");
+  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); const [vehicle, setVehicle] = useState(""); const [rate, setRate] = useState(""); const [pin, setPin] = useState("");
   const [role, setRole] = useState(roles.some((r) => r.id === "both") ? "both" : (roles[0] && roles[0].id) || "both");
   const hourly = payBasis === "hourly", flat = payBasis === "flat";
   const rateLabel = hourly ? "Hourly pay rate ($/hr)" : flat ? `Salary ($/${periodWord})` : "Hourly pay rate ($/hr) — optional";
@@ -3045,6 +3054,7 @@ function AddContractorModal({ onClose, onAdd, payBasis, periodWord, roles = [] }
           <Field label="Tow vehicle (if they drive)"><input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. F-250 · leave blank for yard-only" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         </div>
         <Field label="Email (for job alerts & their portal login)"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@yourcompany.com" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label="Personal sign-in PIN"><input value={pin} onChange={(e) => setPin(e.target.value)} placeholder="e.g. 4827 — only this person knows it" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /><p className="text-[11px] mt-1" style={{ color: T.sub }}>They sign in with their phone/email + this PIN, and only ever see their own jobs, hours &amp; pay. You can change it anytime on their card.</p></Field>
         {roles.length > 0 && (
           <Field label="Position (what they can be assigned)">
             <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full p-2.5 rounded-lg text-sm font-semibold" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
@@ -3066,7 +3076,7 @@ function AddContractorModal({ onClose, onAdd, payBasis, periodWord, roles = [] }
         : flat
         ? <>You pay a salary, so this person gets ${rate || "—"} every {periodWord} regardless of jobs or hours — you'll see them on the payroll list in Team &amp; dispatch with a Pay button. You can change the amount anytime on their card. At launch, collect the right paperwork first (W-4 for W2, or W-9 for 1099) — see the guide.</>
         : <>The same person can drive delivery/collection runs and staff yard handoffs — assign them to either from Team &amp; dispatch. At launch, collect a signed agreement and the right tax form (W-9 for 1099, W-4 for W2) and a COI before their first job (see the guide). An hourly rate is optional here since you pay per job.</>}</p>
-      <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, email, vehicle: vehicle || "—", active: true, roleId: role, hourlyRate: (hourly || !flat) ? (Number(rate) || 0) : 0, flatRate: flat ? (Number(rate) || 0) : 0, shifts: [] })}
+      <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, email, vehicle: vehicle || "—", active: true, roleId: role, pin: pin.trim(), hourlyRate: (hourly || !flat) ? (Number(rate) || 0) : 0, flatRate: flat ? (Number(rate) || 0) : 0, shifts: [] })}
         className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add employee</button>
     </Modal>
   );
