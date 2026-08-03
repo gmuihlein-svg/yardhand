@@ -182,10 +182,11 @@ const slotDateTime = (dateISO, label) => {
 };
 /* friendly lead-time label: 24 -> "1 day", 2 -> "2 hours" */
 const leadLabel = (h) => (h > 0 && h % 24 === 0) ? `${h / 24} day${h / 24 > 1 ? "s" : ""}` : `${h} hour${h === 1 ? "" : "s"}`;
-// build a driver's 14-day availability: pattern(dayOfWeek) -> array of windows (or null)
+// build a driver's rolling availability: pattern(dayOfWeek) -> array of windows (or null).
+// Projected ~3 months out so it covers the longest booking window an owner can pick.
 const mkAvail = (pattern) => {
   const o = {};
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 100; i++) {
     const d = addDays(today(), i);
     const dow = new Date(d + "T00:00:00").getDay();
     const wins = pattern(dow);
@@ -2582,6 +2583,7 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
           ? <>Your <b>Pay</b> buttons send pay <b>through the platform</b> (set in Settings → Payments) — one tap clears what's owed. Payouts are simulated until your payout account is connected.</>
           : <>You pay your crew your own way, then tap <b>Mark paid</b> here to clear it. Switch to pay-through-the-platform in Settings → Payments if you'd rather send it with one tap.</>}</p>
         <p>Your crew can set their own hours{hourly ? ", clock in/out (either a general shift or against a specific job, which tags those hours to that customer)," : ""} and mark jobs done from their <b>Team sign-in</b> on your public site. You can also set anyone's hours yourself on the grid in section 4.</p>
+        <p>This board and the hours grid run as far ahead as your <b>booking window</b> ({state.business.bookHorizonDays || 30} days) — set in Settings → "How far ahead you take bookings." That same window is the furthest a customer can book, and <b>customers can only book days someone's scheduled to work</b>, so scheduling hours out here is what opens up those days for booking.</p>
       </HelpNote>
 
       {/* ─────────── 1) COVERAGE — upcoming jobs & who's on each ─────────── */}
@@ -3255,7 +3257,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
       <HelpNote>
-        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, <b>whether you offer delivery</b> (Rental policy → turn off if you're yard-only), booking notice and buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, <b>marketing win-back texts</b> (rebooking reminders to past customers — customers pick their own frequency or opt out, and you can turn it off per customer), cancellation policy, and your rental agreement.</p>
+        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, <b>whether you offer delivery</b> (Rental policy → turn off if you're yard-only), booking notice, <b>how far ahead you take bookings</b>, buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, <b>marketing win-back texts</b> (rebooking reminders to past customers — customers pick their own frequency or opt out, and you can turn it off per customer), cancellation policy, and your rental agreement.</p>
+        <p><b>How far ahead you take bookings</b> (in the booking-timing cards) sets a single window that does two jobs at once: it's how far out you schedule your crew's work hours <b>and</b> the furthest ahead a customer can book — because a customer can only reserve a day when someone's actually working. Choose 2 weeks up to 6 months (most rental businesses use 1–2 months). Your crew's dispatch board and each worker's calendar run this same window. A day with nobody scheduled can't be booked; deliveries always need a scheduled driver that day, while will-call stays open whenever you cover the counter yourself.</p>
         <p><b>Your website (storefront)</b> is your public page — a real website + booking system you can point your own domain at. Every word is editable (headline, subheadline, trust line, the equipment heading, the “how it works” steps, the “why choose us” reasons, and the bottom call-to-action), and you can upload your own <b>hero image</b> (a photo of your equipment or a job) in place of the built-in illustration — so it fits any business, not just dump trailers. The <b>Customer-facing site</b> switch has three settings: <b>Full site</b> (hosted landing page + online booking), <b>Booking only</b> (skips the marketing sections and shows just your equipment + booking — put a “Book now” link to it on your own website), or <b>Owner-only</b> (no public page; visitors see a “call/text to book” card and you enter bookings yourself).</p>
         <p><b>How you pay your team</b> is two separate choices: their <b>tax status</b> (1099 contractors vs W2 employees — just paperwork wording) and <b>how you pay them</b> — <b>per job</b>, <b>by the hour</b>, or a <b>salary</b> (a fixed amount weekly or every 2 weeks). Any mix works — a 1099 contractor paid hourly, a W2 on salary, etc. Per-job shows a "who you owe" list; by-the-hour shows a payroll list of clocked hours × rate (crew clock in/out from their portal); salary shows a payroll list of each person's fixed amount with a Pay button. You set each person's rate/salary on their card in Team &amp; dispatch.</p>
         <p><b>Payments</b> is how money moves: pick how you <b>collect from customers</b> (Stripe, Square, PayPal/Venmo, Authorize.net, or manual cash/check), and how you <b>pay your team</b> — <b>through the platform</b> (a one-tap "Pay $X" button sends their payout) or <b>yourself</b> (you pay them your own way and just tap "Mark paid"). Real charging and payouts turn on when the payments backend is connected; for now they're set up and simulated.</p>
@@ -3573,6 +3576,24 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
           <Field label="Will-call / yard notice (hours)"><NumInput v={b.leadCounterHours ?? 2} on={(v) => set({ leadCounterHours: v })} /></Field>
         </div>
         <p className="text-[11px]" style={{ color: T.sub }}>Deliveries usually need more notice (load the trailer + drive) than a will-call, where the customer comes to your yard. Currently: deliveries need {leadLabel(b.leadDeliveryHours ?? 12)}, will-call/yard need {leadLabel(b.leadCounterHours ?? 2)}.</p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><CalendarDays size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">How far ahead you take bookings</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>This is how far out you schedule work hours — and because a customer can only book when someone's working, it's also <b>the furthest ahead a customer can book</b>. Pick a longer window and you take reservations further out; pick a shorter one and the calendar stays close-in. Most rental businesses run about <b>1–2 months</b>.</p>
+        <Field label="Schedule staff & accept bookings up to">
+          <select value={b.bookHorizonDays || 30} onChange={(e) => set({ bookHorizonDays: +e.target.value })}
+            className="w-full p-2.5 rounded-lg text-sm font-semibold" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+            <option value={14}>2 weeks ahead</option>
+            <option value={30}>1 month ahead</option>
+            <option value={60}>2 months ahead</option>
+            <option value={90}>3 months ahead</option>
+            <option value={180}>6 months ahead</option>
+          </select>
+        </Field>
+        <p className="text-[11px]" style={{ color: T.sub }}>Currently customers can book up to <b>{b.bookHorizonDays || 30} days</b> out. Your crew dispatch board and each worker's calendar run this same window. <b>A day with nobody scheduled can't be booked</b> — set your team's hours in <b>Team &amp; dispatch → The hours</b> (or keep covering the counter yourself for will-call). Deliveries always need a scheduled driver that day.</p>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -4388,6 +4409,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
     <div className="max-w-2xl mx-auto px-4 md:px-6 pb-24">
       <div className="pt-4"><HelpNote title="New here? How booking works">
         <p>Four quick steps: <b>1)</b> pick your equipment, <b>2)</b> choose dates and whether we deliver or you pick up, <b>3)</b> your details (and upload a Certificate of Insurance if it's required), <b>4)</b> review, e-sign, and pay. Your price updates live as you go.</p>
+        <p>You can book any day from today up to the shop's booking window, and only on days someone's scheduled to work. If a day or time shows no slots, no one's available then — pick another day, or switch between delivery and will-call.</p>
         <p><b>Renting more than one piece?</b> After you set a piece's dates, tap <b>“Add another piece of equipment”</b> — each one gets its <b>own dates and delivery/pickup</b> (deliver everything together, or on different days — your choice). You enter your details once, sign once, and pay once for the whole order. You only pay one delivery fee when several pieces go out on the same day.</p>
         <p>Already booked? Use <b>Manage my booking</b> up top to extend, change delivery, or cancel with your confirmation code.</p>
       </HelpNote></div>
@@ -4473,9 +4495,9 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
         {/* step 1: dates */}
         {stepN === 1 && (
           <div className="space-y-4">
-            <StepHead icon={CalendarDays} title="When do you need it?" sub={`Pick your day, how long, and how you'll get it and return it. Booking is open for the next ${b.bookHorizonDays || 30} days.`} />
+            <StepHead icon={CalendarDays} title="When do you need it?" sub={`Pick your day, how long, and how you'll get it and return it. Booking is open for the next ${b.bookHorizonDays || 30} days — and only on days someone's scheduled to work.`} />
             <Field label="Start date">
-              <input type="date" min={today()} max={addDays(today(), b.bookHorizonDays)} value={form.start} onChange={(e) => set({ start: e.target.value })}
+              <input type="date" min={today()} max={addDays(today(), b.bookHorizonDays || 30)} value={form.start} onChange={(e) => set({ start: e.target.value })}
                 className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
             </Field>
             <Field label="How long?">

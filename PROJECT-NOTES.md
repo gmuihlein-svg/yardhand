@@ -240,6 +240,15 @@ Team & dispatch · Fleet · Settings.
 - **Delivery on/off (`business.offerDelivery`, default true):** Settings → Rental policy toggle
   "Offer delivery & collection." When off, the customer booking flow hides "Deliver to me" and
   "You pick it up (collect)", leaving only will-call pickup + yard drop-off — for yard-only businesses.
+- **Booking window = staffing horizon (`business.bookHorizonDays`, default 30):** Settings → "How far
+  ahead you take bookings" dropdown (2 weeks / 1 / 2 / 3 / 6 months). ONE number that unifies three
+  things: (1) the furthest a customer can book — `max` on the customer date picker; (2) the crew dispatch
+  board length (TeamView); (3) each worker's calendar length (EmployeePortal). Framed as "how far out you
+  schedule work hours," because a customer can only book a day/time when someone's scheduled — the app
+  already gates each slot via `outCovers`/`windowCovered` (delivery needs a scheduled driver that day;
+  will-call is covered whenever the owner works the counter, else needs staff). Sample staff availability
+  (`mkAvail`) projects 100 days so a 2-month+ window has demo coverage. Fully-automatic far-out staffing
+  (set recurring weekly hours once) is the natural follow-on — task #11 (standing weekly schedule).
 - **Multi-equipment cart (per-item dates):** a customer can book several pieces in ONE checkout.
   On the Dates step, **"Add another piece of equipment"** saves the current item to `cart` (state in
   `CustomerBooking`) and returns to the size picker; **each item keeps its own dates + delivery/return
