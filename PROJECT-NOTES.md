@@ -281,6 +281,21 @@ Team & dispatch · Fleet · Settings.
 - **At-risk dashboard alert:** Dashboard `atRisk` — a we-deliver or we-collect leg coming up within 3 days
   with NOBODY assigned surfaces RED + named on the Start-here list. The safety net for far-out bookings
   taken under flexible/hybrid mode, so nothing slips through uncovered.
+- **Custom job roles / positions (`business.roles[]`, `contractor.roleId`):** each business defines its own
+  roles — `{id, name, drive, yard}` — where `drive` = can do delivery/collection road runs, `yard` = can do
+  will-call/yard handoffs. Seeded: Driver, Yard attendant, Driver + Yard, Mechanic. A role with neither
+  (Mechanic/Manager) is never offered a dispatch job but is a normal scheduled/paid employee. Helpers
+  `roleOf/roleCaps/canDoKind/roleName` (top-level). `availableDrivers/assignRun/windowCovered` take a
+  `kind` ("road"|"yard"|null) and filter by capability; all callers pass it — the customer gate
+  (`outCovers` delivery→road, will-call→yard; `returnDayStaffed`→road), `autoOne` (j.kind),
+  `autoAssignEverything` (tagged _kind), `sickDay` (per booking method), and the manual assign dropdown
+  (filters to qualified people). UI: **Settings → "Job roles (positions)"** manager (add/rename/delete +
+  Delivery/Yard toggles; deleting a role reassigns its people to "both"); per-person role picker on each
+  Team card; a D/Y/DY/— badge on the dispatch grid. **Roles are orthogonal to pay** — tax status (W2/1099)
+  and pay basis (perjob/hourly/salary) are unchanged and apply to every role (caveat: per-job pay only
+  comes from dispatch jobs, so non-dispatch roles fit hourly/salary). Verified live: no driver-capable
+  person → delivery slots = 0 & "no driver available"; driver present → 8 slots. Company-wide (edited on
+  `state.business.roles`, not per-branch overrides). Extends toward capability/permission layers later.
 - **Multi-equipment cart (per-item dates):** a customer can book several pieces in ONE checkout.
   On the Dates step, **"Add another piece of equipment"** saves the current item to `cart` (state in
   `CustomerBooking`) and returns to the size picker; **each item keeps its own dates + delivery/return

@@ -126,7 +126,8 @@ function yardEvents(state) {
 
 /* which active drivers are available for a given date + window, not already booked, and
    keeping the owner's between-jobs buffer clear (so back-to-back jobs have travel time) */
-function availableDrivers(state, date, window, excludeId) {
+// kind: "road" (delivery/collection) | "yard" (will-call/handoff) | null (any) — filters by role capability.
+function availableDrivers(state, date, window, excludeId, kind) {
   const runs = legRuns(state);
   const bufWin = Math.ceil(((state.business && state.business.bufferMins) || 0) / 60); // buffer expressed in whole hour-slots
   const wi = WINDOWS.indexOf(window);
@@ -138,13 +139,14 @@ function availableDrivers(state, date, window, excludeId) {
   };
   return (state.contractors || []).filter((c) =>
     c.active && c.id !== excludeId &&
+    canDoKind(state.business, c, kind) &&               // role must be able to do this kind of job
     availOn(c, date).includes(window) &&
     !runs.some((r) => r.by === c.id && r.date === date && tooClose(r.time))
   );
 }
-/* round-robin among AVAILABLE drivers, evened by current load */
-function assignRun(state, date, window, excludeId, rot) {
-  const pool = availableDrivers(state, date, window, excludeId);
+/* round-robin among AVAILABLE, role-qualified drivers, evened by current load */
+function assignRun(state, date, window, excludeId, rot, kind) {
+  const pool = availableDrivers(state, date, window, excludeId, kind);
   if (!pool.length) return null;
   const load = (id) => activeRunCount(state, id);
   pool.sort((a, b) => load(a.id) - load(b.id));
@@ -152,8 +154,8 @@ function assignRun(state, date, window, excludeId, rot) {
   const tied = pool.filter((p) => load(p.id) === min);
   return tied[(rot || 0) % tied.length].id;
 }
-/* whether a window on a date can be covered by someone (for gating customer slots) */
-const windowCovered = (state, date, window) => availableDrivers(state, date, window, null).length > 0;
+/* whether a window on a date can be covered by a role-qualified person (for gating customer slots) */
+const windowCovered = (state, date, window, kind) => availableDrivers(state, date, window, null, kind).length > 0;
 
 /* legacy fallback (any least-busy active driver, ignores availability) */
 function pickContractor(state, excludeId) {
@@ -197,6 +199,16 @@ const availOn = (c, dateISO) => {
   if (c && c.avail && Object.prototype.hasOwnProperty.call(c.avail, dateISO)) return c.avail[dateISO] || [];
   return weeklyOn(c, dateISO);
 };
+
+/* ── Roles / positions ────────────────────────────────────────────────────────
+   A worker's role (c.roleId → business.roles) carries two dispatch capabilities:
+   drive (delivery/collection road runs) and yard (will-call/yard handoffs). A role
+   with neither (Mechanic, Manager) is a normal scheduled/paid employee who is never
+   offered a dispatch job. Missing role/roles default to "can do both" so nothing breaks. */
+const roleOf = (biz, c) => ((biz && biz.roles) || []).find((r) => r.id === (c && c.roleId)) || null;
+const roleCaps = (biz, c) => { const r = roleOf(biz, c); return r ? { drive: !!r.drive, yard: !!r.yard } : { drive: true, yard: true }; };
+const canDoKind = (biz, c, kind) => { if (!kind) return true; const caps = roleCaps(biz, c); return kind === "yard" ? caps.yard : caps.drive; };
+const roleName = (biz, c) => { const r = roleOf(biz, c); return r ? r.name : "Driver + Yard"; };
 /* turn a window label ("8:00 AM") on an ISO date into a Date, for lead-time checks */
 const slotDateTime = (dateISO, label) => {
   const d = new Date(dateISO + "T00:00:00");
@@ -294,6 +306,16 @@ const SEED = {
     phone: "(704) 555-0100",
     logo: "", theme: { accent: "#F2A900", dark: "#2B3A44" }, ownerPass: "admin", teamPass: "team", timezone: "America/New_York",
     pickupHours: WINDOWS,
+    // Custom job roles (per business). Each role is a name + two dispatch capabilities:
+    //   drive = can do delivery/collection road runs · yard = can do will-call/yard handoffs.
+    // A role with neither (Mechanic, Manager) is never offered a dispatch job — but is still a
+    // normal scheduled/paid employee. Owners can rename/add/remove these in Settings.
+    roles: [
+      { id: "driver", name: "Driver", drive: true, yard: false },
+      { id: "yard", name: "Yard attendant", drive: false, yard: true },
+      { id: "both", name: "Driver + Yard", drive: true, yard: true },
+      { id: "mechanic", name: "Mechanic", drive: false, yard: false },
+    ],
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
     dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, scheduleControl: "both", bookingMode: "hybrid", hybridNearDays: 14, rr: 0, offerDelivery: true,
@@ -321,9 +343,9 @@ const SEED = {
       reqLabel: "You'll need to tow this", tow: "Tows behind most ½-ton trucks and larger SUVs. 2\" ball on a Class III hitch rated ~5,000 lb, a 7-pin connector, and a trailer-brake controller." },
   ],
   contractors: [
-    { id: "c1", name: "Marcus Reed", phone: "704-555-0301", email: "marcus@extpro.com", vehicle: "F-250", active: true,
+    { id: "c1", name: "Marcus Reed", phone: "704-555-0301", email: "marcus@extpro.com", vehicle: "F-250", active: true, roleId: "both",
       avail: mkAvail((dow) => dow === 0 ? null : WINDOWS) },          // Mon–Sat, all windows
-    { id: "c2", name: "Tanya Brooks", phone: "704-555-0302", email: "tanya@extpro.com", vehicle: "Ram 2500", active: true,
+    { id: "c2", name: "Tanya Brooks", phone: "704-555-0302", email: "tanya@extpro.com", vehicle: "Ram 2500", active: true, roleId: "driver",
       avail: mkAvail((dow) => (dow >= 1 && dow <= 5) ? ["10:00 AM", "12:00 PM", "2:00 PM"] : null) }, // weekdays midday
   ],
   trailers: [
@@ -2543,11 +2565,11 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
     s.bookings.forEach((b) => {
       if (b.status === "returned" || b.status === "cancelled") return;
       if (b.outBy === id && !b.outPaid && b.start === today()) {
-        const cid = assignRun(s, b.start, b.pickupTime, id, rot++);
+        const cid = assignRun(s, b.start, b.pickupTime, id, rot++, b.outMethod === "delivery" ? "road" : "yard");
         b.outBy = cid; cid ? moved++ : orphan++;
       }
       if (b.returnBy === id && !b.returnPaid && b.end === today()) {
-        const cid = assignRun(s, b.end, b.returnTime || b.pickupTime, id, rot++);
+        const cid = assignRun(s, b.end, b.returnTime || b.pickupTime, id, rot++, b.returnMethod === "collect" ? "road" : "yard");
         b.returnBy = cid; cid ? moved++ : orphan++;
       }
     });
@@ -2599,11 +2621,11 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
   const owedRoad = payJobs.filter((j) => j.kind === "road").reduce((s, j) => s + j.jobFee, 0);
   const owedYardTotal = payJobs.filter((j) => j.kind === "yard").reduce((s, j) => s + j.jobFee, 0);
   const owedTotal = owedRoad + owedYardTotal;
-  const autoOne = (j) => { const cid = assignRun(state, j.date, j.time, null, Date.now()); if (!cid) { flash("No one's free then — set their hours or pick someone manually."); return; } reassign(j, cid); };
+  const autoOne = (j) => { const cid = assignRun(state, j.date, j.time, null, Date.now(), j.kind); if (!cid) { flash("No one qualified is free then — check their role & hours, or pick someone manually."); return; } reassign(j, cid); };
   const autoAssignEverything = () => {
     let s = structuredClone(state); let rot = 0; let n = 0;
-    [...legRuns(s).filter((r) => !r.by), ...yardEvents(s).filter((e) => !e.by || e.by === "owner")].forEach((j) => {
-      const cid = assignRun(s, j.date, j.time, null, rot++); if (!cid) return;
+    [...legRuns(s).filter((r) => !r.by).map((r) => ({ ...r, _kind: "road" })), ...yardEvents(s).filter((e) => !e.by || e.by === "owner").map((e) => ({ ...e, _kind: "yard" }))].forEach((j) => {
+      const cid = assignRun(s, j.date, j.time, null, rot++, j._kind); if (!cid) return;
       const bk = s.bookings.find((x) => x.id === j.bookingId); if (!bk) return;
       if (j.leg === "out") bk.outBy = cid; else bk.returnBy = cid; n++;
     });
@@ -2620,7 +2642,7 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
         </button>
       </div>
       <HelpNote>
-        <p>One crew, two kinds of work: <b>delivery/collection runs</b> (someone drives) and <b>will-call/yard handoffs</b> (someone staffs the yard). The same people can do both.</p>
+        <p>One crew, two kinds of work: <b>delivery/collection runs</b> (someone drives) and <b>will-call/yard handoffs</b> (someone staffs the yard). Each person has a <b>role</b> that decides which they can do — set it on their card in section 3 (a little <b>D</b>/<b>Y</b>/<b>DY</b> badge shows it on the schedule below). Only qualified people are offered a job: a Yard-only person is never put on a delivery, a Mechanic is never dispatched at all. Make and name your own roles in <b>Settings → Job roles</b>.</p>
         <p>Read it top to bottom: <b>1)</b> upcoming jobs and who's covering each (assign with the dropdown; unassigned road runs are highlighted), <b>2)</b> {hourly ? "payroll — clocked hours × each person's rate, with a Pay button" : flat ? `payroll — each person's fixed ${periodWord === "2 weeks" ? "bi-weekly" : "weekly"} salary, with a Pay button` : "who you owe for finished jobs, one line each, with a Pay/Mark-paid button"}, <b>3)</b> your people (add/pause, sick-day{hourly ? ", and set each one's hourly rate" : flat ? ", and set each one's salary" : ""}), <b>4)</b> each person's working hours — tap a day to set a range, <b>5)</b> auto-assign settings.</p>
         <p><b>How you pay your team</b> is set in Settings → "How you pay your team" (two separate choices: their tax status — {state.business.workerModel === "employee" ? "W2 employees" : "1099 contractors"} — and how you pay them). {hourly
           ? <>You're paying <b>by the hour</b>: your crew <b>clock in/out</b> from their portal, and section 2 above adds up each person's hours × rate so you can pay them hourly. Set each person's rate on their card in section 3. (Hourly works whether they're 1099 or W2.)</>
@@ -2666,7 +2688,7 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
                         <select value={effVal} onChange={(e) => reassign(j, e.target.value)} className="text-[11px] rounded px-1 py-1" style={{ border: `1px solid ${need ? T.amber : T.line}`, color: T.sub }}>
                           {!effVal && <option value="">Assign…</option>}
                           {showYou && <option value="owner">You</option>}
-                          {state.contractors.filter((x) => x.active || x.id === j.by).map((x) => <option key={x.id} value={x.id}>{x.name.split(" ")[0]}</option>)}
+                          {state.contractors.filter((x) => (x.active && canDoKind(state.business, x, j.kind)) || x.id === j.by).map((x) => <option key={x.id} value={x.id}>{x.name.split(" ")[0]}</option>)}
                         </select>
                       );
                     })()}
@@ -2770,6 +2792,12 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
                   <div className="min-w-0">
                     <div className="font-bold text-sm truncate">{c.name} {!c.active && <span className="text-xs font-normal" style={{ color: T.sub }}>· inactive</span>}</div>
                     <div className="text-xs truncate" style={{ color: T.sub }}>{c.vehicle} · {c.phone}</div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-[11px]" style={{ color: T.sub }}>Role</span>
+                      <select value={c.roleId || "both"} onChange={(e) => { const rid = e.target.value; update((n) => { const d = n.contractors.find((x) => x.id === c.id); d.roleId = rid; }); flash(`${c.name.split(" ")[0]} is now ${(roleOf(state.business, { roleId: rid }) || {}).name || rid}.`, true); }} className="px-1.5 py-0.5 rounded text-[11px] font-semibold" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+                        {(state.business.roles || []).map((r) => <option key={r.id} value={r.id}>{r.name}{!r.drive && !r.yard ? " (no dispatch)" : ""}</option>)}
+                      </select>
+                    </div>
                     {hourly && (
                       <div className="flex items-center gap-1 mt-1">
                         <span className="text-[11px]" style={{ color: T.sub }}>Pay $</span>
@@ -2820,7 +2848,12 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
           </div>
           {state.contractors.map((c) => (
             <div key={c.id} className="grid items-center" style={{ gridTemplateColumns: `110px repeat(${horizon}, 1fr)`, height: 34 }}>
-              <button onClick={() => setWeeklyFor({ driverId: c.id })} title="Set repeating weekly hours" className="text-xs font-bold truncate pr-2 text-left flex items-center gap-1" style={{ color: T.steel }}><CalendarClock size={12} className="shrink-0" style={{ color: T.sub }} /> <span className="truncate">{c.name.split(" ")[0]}</span> {!c.active && <span style={{ color: T.sub }}>·off</span>}</button>
+              <button onClick={() => setWeeklyFor({ driverId: c.id })} title={`${roleName(state.business, c)} · tap to set repeating weekly hours`} className="text-xs font-bold truncate pr-2 text-left flex items-center gap-1" style={{ color: T.steel }}>
+                <CalendarClock size={12} className="shrink-0" style={{ color: T.sub }} />
+                <span className="truncate">{c.name.split(" ")[0]}</span>
+                {(() => { const cap = roleCaps(state.business, c); const tag = cap.drive && cap.yard ? "DY" : cap.drive ? "D" : cap.yard ? "Y" : "—"; return <span className="text-[9px] font-bold px-1 rounded shrink-0" style={{ background: tag === "—" ? T.graySoft : T.blueSoft, color: tag === "—" ? T.sub : T.blue }}>{tag}</span>; })()}
+                {!c.active && <span style={{ color: T.sub }}>·off</span>}
+              </button>
               {days.map((d) => {
                 const wins = availOn(c, d);
                 const dayRuns = [...runs, ...events].filter((r) => r.by === c.id && r.date === d);
@@ -3314,6 +3347,15 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
     if (isBase) return { ...s, business: { ...s.business, ...patch } };
     return { ...s, locations: s.locations.map((l) => l.id === curId ? { ...l, overrides: { ...(l.overrides || {}), ...patch } } : l) };
   });
+  // Job roles are company-wide (shared across branches) — edit state.business.roles directly.
+  const roles = state.business.roles || [];
+  const setRoleField = (id, patch) => setState((s) => ({ ...s, business: { ...s.business, roles: (s.business.roles || []).map((r) => r.id === id ? { ...r, ...patch } : r) } }));
+  const addRole = () => setState((s) => ({ ...s, business: { ...s.business, roles: [...(s.business.roles || []), { id: `r${Date.now()}`, name: "New role", drive: false, yard: false }] } }));
+  const delRole = (id) => setState((s) => ({
+    ...s,
+    business: { ...s.business, roles: (s.business.roles || []).filter((r) => r.id !== id) },
+    contractors: (s.contractors || []).map((c) => c.roleId === id ? { ...c, roleId: "both" } : c), // orphaned people fall back to Both
+  }));
   const setType = (size, patch) => setState((s) => {
     if (isBase) return { ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) };
     return { ...s, locations: s.locations.map((l) => l.id === curId ? { ...l, types: (l.types || s.types).map((t) => t.size === size ? { ...t, ...patch } : t) } : l) };
@@ -3359,9 +3401,10 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
       <HelpNote>
-        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, <b>whether you offer delivery</b> (Rental policy → turn off if you're yard-only), booking notice, <b>how far ahead you take bookings</b>, buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, <b>marketing win-back texts</b> (rebooking reminders to past customers — customers pick their own frequency or opt out, and you can turn it off per customer), cancellation policy, and your rental agreement.</p>
+        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, <b>whether you offer delivery</b> (Rental policy → turn off if you're yard-only), booking notice, <b>how far ahead you take bookings</b>, <b>when customers can book delivery/pickup</b>, <b>who sets work hours</b>, <b>job roles</b>, buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, <b>marketing win-back texts</b> (rebooking reminders to past customers — customers pick their own frequency or opt out, and you can turn it off per customer), cancellation policy, and your rental agreement.</p>
         <p><b>How far ahead you take bookings</b> (in the booking-timing cards) sets a single window that does two jobs at once: it's how far out you schedule your crew's work hours <b>and</b> the furthest ahead a customer can book — because a customer can only reserve a day when someone's actually working. Choose 2 weeks up to 6 months (most rental businesses use 1–2 months). Your crew's dispatch board and each worker's calendar run this same window. A day with nobody scheduled can't be booked; deliveries always need a scheduled driver that day, while will-call stays open whenever you cover the counter yourself. <b>Long rentals are fine</b> even if they return past your window — the equipment just needs someone working the day it goes <i>out</i>; if you're collecting it back, that pickup gets scheduled closer to the return date, when you know who's working.</p>
         <p><b>Who sets work hours</b> lets each business pick how the crew's schedule is controlled: <b>Workers set their own</b> (crew choose their hours in their portal — good for contractors), <b>You set it for them</b> (only you schedule; the crew portal is read-only — good for W2 shifts), or <b>Either</b> (both can; the default). It only changes who can edit hours — you can always see the schedule and assign jobs.</p>
+        <p><b>Job roles (positions)</b> let you make your own roles (Driver, Yard attendant, Mechanic, Manager — whatever fits) and set what each can do: <b>Delivery</b> (drives deliveries &amp; collections) and/or <b>Yard</b> (will-call &amp; yard returns). A person is only ever assigned a job their role can do — a Mechanic never gets a delivery, and the booking page only opens a delivery time when a delivery-capable person is scheduled. <b>Roles don't touch pay</b> — tax status (W2/1099) and how you pay (per-job / hourly / salary) are set separately and work the same for every role. (Note: since per-job pay only comes from delivery/yard jobs, non-dispatch roles like Mechanic are best paid hourly or salary.) Assign each person's role in Team &amp; dispatch.</p>
         <p><b>Your website (storefront)</b> is your public page — a real website + booking system you can point your own domain at. Every word is editable (headline, subheadline, trust line, the equipment heading, the “how it works” steps, the “why choose us” reasons, and the bottom call-to-action), and you can upload your own <b>hero image</b> (a photo of your equipment or a job) in place of the built-in illustration — so it fits any business, not just dump trailers. The <b>Customer-facing site</b> switch has three settings: <b>Full site</b> (hosted landing page + online booking), <b>Booking only</b> (skips the marketing sections and shows just your equipment + booking — put a “Book now” link to it on your own website), or <b>Owner-only</b> (no public page; visitors see a “call/text to book” card and you enter bookings yourself).</p>
         <p><b>How you pay your team</b> is two separate choices: their <b>tax status</b> (1099 contractors vs W2 employees — just paperwork wording) and <b>how you pay them</b> — <b>per job</b>, <b>by the hour</b>, or a <b>salary</b> (a fixed amount weekly or every 2 weeks). Any mix works — a 1099 contractor paid hourly, a W2 on salary, etc. Per-job shows a "who you owe" list; by-the-hour shows a payroll list of clocked hours × rate (crew clock in/out from their portal); salary shows a payroll list of each person's fixed amount with a Pay button. You set each person's rate/salary on their card in Team &amp; dispatch.</p>
         <p><b>Payments</b> is how money moves: pick how you <b>collect from customers</b> (Stripe, Square, PayPal/Venmo, Authorize.net, or manual cash/check), and how you <b>pay your team</b> — <b>through the platform</b> (a one-tap "Pay $X" button sends their payout) or <b>yourself</b> (you pay them your own way and just tap "Mark paid"). Real charging and payouts turn on when the payments backend is connected; for now they're set up and simulated.</p>
@@ -3737,6 +3780,31 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
           ))}
         </div>
         <p className="text-[11px]" style={{ color: T.sub }}>Currently: {(b.scheduleControl || "both") === "owner" ? <><b>you</b> set the crew's hours — they see their schedule but can't change it.</> : (b.scheduleControl || "both") === "worker" ? <>your <b>crew set their own</b> hours; you can still adjust on the dispatch grid.</> : <><b>either</b> — crew set their hours and you can adjust anytime.</>}</p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><User size={16} style={{ color: T.blue }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Job roles (positions)</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Make your own roles and choose what each can do. A role just decides which <b>jobs</b> a person can be assigned — everyone still gets scheduled and paid the same way regardless of role. <b>Delivery</b> = they drive deliveries &amp; collections; <b>Yard</b> = they handle will-call pickups &amp; yard returns. A role with <b>neither</b> (Mechanic, Manager) is never given a dispatch job but is still a normal employee. Set each person's role in <b>Team &amp; dispatch</b>.</p>
+        <div className="space-y-2">
+          <div className="grid items-center gap-2 text-[10px] font-bold uppercase tracking-wide px-1" style={{ color: T.sub, gridTemplateColumns: "1fr 70px 70px 28px" }}>
+            <span>Role name</span><span className="text-center">Delivery</span><span className="text-center">Yard</span><span />
+          </div>
+          {roles.map((r) => {
+            const used = (state.contractors || []).filter((c) => (c.roleId || "both") === r.id).length;
+            return (
+              <div key={r.id} className="grid items-center gap-2" style={{ gridTemplateColumns: "1fr 70px 70px 28px" }}>
+                <input value={r.name} onChange={(e) => setRoleField(r.id, { name: e.target.value })} className="px-2 py-1.5 rounded-lg text-sm font-semibold" style={{ border: `1px solid ${T.line}` }} />
+                <button onClick={() => setRoleField(r.id, { drive: !r.drive })} className="py-1.5 rounded-lg text-xs font-bold" style={r.drive ? { background: T.green, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>{r.drive ? "Yes" : "No"}</button>
+                <button onClick={() => setRoleField(r.id, { yard: !r.yard })} className="py-1.5 rounded-lg text-xs font-bold" style={r.yard ? { background: T.green, color: "#fff" } : { background: T.paper, color: T.sub, border: `1px solid ${T.line}` }}>{r.yard ? "Yes" : "No"}</button>
+                <button onClick={() => { if (used > 0) { flash(`${used} ${used === 1 ? "person is" : "people are"} in “${r.name}” — they'll move to Driver + Yard.`); } delRole(r.id); }} title="Delete role" className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: T.redSoft, color: T.red }}><Trash2 size={13} /></button>
+              </div>
+            );
+          })}
+        </div>
+        <button onClick={addRole} className="w-full py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5" style={{ background: T.paper, color: T.steel, border: `1px dashed ${T.steel}` }}><Plus size={15} /> Add a role</button>
+        <p className="text-[11px]" style={{ color: T.sub }}>A person is only offered a job their role can do — so a Mechanic never gets a delivery, and your booking page only opens a delivery time when a delivery-capable person is scheduled.</p>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -4401,18 +4469,18 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
   const outCovers = (h) => {
     if (form.outMethod === "delivery") {
       if (WINDOWS.indexOf(h) < firstJobWindows) return false; // too early — no time to reach them
-      return policyAllows(form.start, windowCovered(state, form.start, h));
+      return policyAllows(form.start, windowCovered(state, form.start, h, "road")); // needs a driver-capable person
     }
-    // owner covers the counter only if they work jobs; otherwise a staff member must be free (subject to policy)
+    // owner covers the counter only if they work jobs; otherwise yard-capable staff must be free (subject to policy)
     if (b.counterMode === "self" && b.ownerWorks !== false) return true;
-    return policyAllows(form.start, windowCovered(state, form.start, h));
+    return policyAllows(form.start, windowCovered(state, form.start, h, "yard"));
   };
   const slotSoonEnough = (h) => slotDateTime(form.start, h).getTime() >= Date.now() + outLeadHours * 3600000;
   // Return leg: self drop-off ("yard") needs nobody. "Collect" (we come get it) needs a driver on the
   // return day — gated by the SAME booking-availability policy above. Strict: must be staffed or it's
   // blocked (steer to drop-off). Flexible / hybrid-far: accepted now, assigned closer to the date.
   const returnNeedsDriver = form.returnMethod === "collect";
-  const returnDayStaffed = (b.pickupHours || []).some((h) => windowCovered(state, end, h));
+  const returnDayStaffed = (b.pickupHours || []).some((h) => windowCovered(state, end, h, "road")); // collection needs a driver
   const returnAllowed = policyAllows(end, returnDayStaffed);
   const returnBlocked = returnNeedsDriver && !returnAllowed;                 // policy won't allow an unstaffed collect → drop-off
   const returnDeferred = returnNeedsDriver && returnAllowed && !returnDayStaffed; // accepted, will be assigned closer to the date
