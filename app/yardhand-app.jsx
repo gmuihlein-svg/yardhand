@@ -559,6 +559,49 @@ export default function App() {
 }
 
 /* =====================================================================
+   PORTAL CHOOSER  —  one place to pick which business to open.
+   Lives on its own URL (/portal). Shows two doors: your rental business (/)
+   and your SaaS business (/operator). Bookmark this to choose each time,
+   or bookmark either door directly to skip straight in.
+===================================================================== */
+export function PortalChooser() {
+  const [biz, setBiz] = useState(null);
+  useEffect(() => {
+    (async () => { try { const w = await loadWorkspace(); if (w && w.business) setBiz(w.business); } catch (e) { /* ignore */ } })();
+  }, []);
+  const name = (biz && biz.name) || "My rental business";
+  const go = (path) => { try { window.location.href = path; } catch (e) { /* ignore */ } };
+  const card = "text-left rounded-2xl p-5 transition hover:-translate-y-0.5 focus:outline-none w-full";
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: T.steelDk }}>
+      <div className="w-full max-w-3xl">
+        <div className="text-center mb-8">
+          <div className="text-2xl font-extrabold text-white tracking-tight">Which business do you want to open?</div>
+          <div className="text-sm mt-1.5" style={{ color: "#B7C0C6" }}>You run two — pick one to sign in. They stay completely separate.</div>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <button onClick={() => go("/")} className={card} style={{ background: T.panel, boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}>
+            <BrandMark logo={biz && biz.logo} size={44} />
+            <div className="mt-3 font-extrabold text-lg tracking-tight">{name}</div>
+            <div className="text-[11px] font-bold uppercase tracking-widest mt-0.5" style={{ color: T.amberDk }}>Equipment rental</div>
+            <div className="text-xs mt-1.5" style={{ color: T.sub }}>Your rental business — dashboard, bookings, crew, fleet, and your public storefront.</div>
+            <div className="mt-4 inline-flex items-center gap-1 font-extrabold text-sm" style={{ color: T.steel }}>Open <ArrowRight size={15} /></div>
+          </button>
+          <button onClick={() => go("/operator")} className={card} style={{ background: T.panel, boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}>
+            <div className="rounded-md flex items-center justify-center" style={{ width: 44, height: 44, background: T.steel }}><Building2 size={24} style={{ color: "#fff" }} /></div>
+            <div className="mt-3 font-extrabold text-lg tracking-tight">Yardhand · Operator</div>
+            <div className="text-[11px] font-bold uppercase tracking-widest mt-0.5" style={{ color: T.amberDk }}>Software (SaaS) business</div>
+            <div className="text-xs mt-1.5" style={{ color: T.sub }}>The software you sell — subscribers, revenue &amp; KPIs, and your Yardhand marketing site.</div>
+            <div className="mt-4 inline-flex items-center gap-1 font-extrabold text-sm" style={{ color: T.steel }}>Open <ArrowRight size={15} /></div>
+          </button>
+        </div>
+        <p className="text-center text-[11px] mt-6" style={{ color: "#6C7178" }}>Each opens its own separate login. Bookmark this page to choose again anytime — or bookmark either door directly to skip straight in.</p>
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================================
    OPERATOR APP  —  the SEPARATE front door for your SaaS business (Yardhand).
    Lives on its own URL (/operator) with its own login, completely apart from
    the rental business app at "/". Two businesses, two logins, no cross-over:
@@ -587,6 +630,7 @@ export function OperatorApp() {
 
   const flash = (m) => { setToast({ m }); setTimeout(() => setToast(null), 2600); };
   const toRental = () => { try { window.location.href = "/"; } catch (e) { /* ignore */ } };
+  const toChooser = () => { try { window.location.href = "/portal"; } catch (e) { /* ignore */ } };
 
   if (loading || !state) {
     return (
@@ -599,7 +643,7 @@ export function OperatorApp() {
   }
 
   if (!superAuthed) {
-    return <PlatformLogin state={state} onBack={toRental}
+    return <PlatformLogin state={state} onBack={toChooser}
       onAuthed={() => { setSuperAuthed(true); try { sessionStorage.setItem("yardhand_platform", "1"); } catch (e) {} }} />;
   }
 
@@ -902,6 +946,7 @@ function OwnerLogin({ state, onAuthed, onBack }) {
           {expected === "admin" && <div className="text-[11px] mt-3 p-2 rounded-lg text-center" style={{ background: T.amberSoft, color: T.amberDk }}>Prototype demo · default password is <b>admin</b> — change it in Settings → Owner access.</div>}
         </div>
         <button onClick={onBack} className="w-full mt-4 text-xs font-semibold" style={{ color: "#B7C0C6" }}>← Back to public site</button>
+        <button onClick={() => { try { window.location.href = "/portal"; } catch (e) {} }} className="w-full mt-2 text-xs font-semibold" style={{ color: "#8A9299" }}>Choose a different business ↗</button>
         <p className="text-[11px] text-center mt-3" style={{ color: "#6C7178" }}>Prototype sign-in. Real accounts, roles, and secure passwords get wired up when this goes live.</p>
       </div>
     </div>
@@ -966,7 +1011,7 @@ function PlatformLogin({ state, onAuthed, onBack }) {
           <button onClick={submit} className="w-full py-2.5 rounded-lg font-extrabold" style={{ background: T.amber, color: T.steelDk }}>Enter</button>
           {expected === "operator" && <div className="text-[11px] p-2 rounded-lg text-center" style={{ background: T.amberSoft, color: T.amberDk }}>Demo · passcode is <b>operator</b> (change it inside). This portal is <b>separate</b> from every business's login — your subscribing customers never see it.</div>}
         </div>
-        <button onClick={onBack} className="w-full mt-4 text-xs font-semibold" style={{ color: "#B7C0C6" }}>← Back</button>
+        <button onClick={onBack} className="w-full mt-4 text-xs font-semibold" style={{ color: "#B7C0C6" }}>← Choose a different business</button>
         <p className="text-[11px] text-center mt-3" style={{ color: "#6C7178" }}>For the platform owner only. When you go multi-tenant this lives on a separate operator site.</p>
       </div>
     </div>
