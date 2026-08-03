@@ -9,10 +9,10 @@ anything.
 - [Part B — How to Use Yardhand](#part-b--how-to-use-yardhand)  *(owner & crew guide)*
 - [Part C — The Pitch](#part-c--the-pitch)  *(for selling it to other rental businesses)*
 - [Part D — Roadmap & What's Simulated](#part-d--roadmap--whats-simulated)  *(the path to launch)*
+- [Part E — Technical Reference](#part-e--technical-reference)  *(files, routes, data model, helpers)*
 
-> Deep-reference companions still live in the repo: `PROJECT-NOTES.md` (detailed change log),
-> `PLATFORM-PLAN.md` (multi-tenant/security/billing build plan), and the polished Word versions
-> in `docs/` (Operator's Guide + Partnership Pitch). This handbook is the single consolidated view.
+> **This is the only project document — it includes everything.** (The one-line repo `README.md`
+> is just Next.js boilerplate.) A polished Word version can be generated on request.
 
 ---
 
@@ -258,6 +258,33 @@ handed down after the fact.
   offline-tolerant); the owner's daily loop and taking a booking comfortable on mobile; customer
   booking + `/book` embed feel native; add-to-home-screen / PWA.
 
+## Security checklist
+- [ ] Real auth (hashed passwords, sessions, reset, optional MFA)
+- [ ] Roles: platform_owner / business_owner / crew / customer
+- [ ] Row-Level Security on every table (tenant isolation)
+- [ ] Operator portal gated to platform_owner role
+- [ ] Files (COI, signatures) in access-controlled Storage
+- [ ] Secrets server-side only; anon key + RLS on client
+- [ ] Payments via Stripe tokens (no raw cards stored)
+- [ ] Audit log of sensitive changes
+- [ ] PII minimization, retention/deletion, privacy policy + consent
+
+## Durability checklist
+- [ ] Automated backups + point-in-time recovery
+- [ ] Soft-deletes with a recovery window
+- [ ] Version history on bookings / agreements / settings
+- [ ] Per-business data export
+- [ ] Guarded writes (per-tenant rows; validation)
+- [ ] Cloud = source of truth; localStorage = cache only (already true)
+
+## Open decisions (confirm before building the backend)
+1. **Data model migration:** JSONB-per-tenant first (fast) vs. normalize now (robust)? → Recommended:
+   JSONB-per-tenant first, normalize incrementally.
+2. **Hosting/plan:** Supabase paid tier (for point-in-time recovery) + Vercel Pro for commercial use.
+3. **Auth provider:** Supabase Auth (fits the stack) vs. an external identity provider.
+4. **Providers:** Stripe (payments/billing) default; SMS via Twilio; email via SendGrid/Resend.
+5. **Compliance scope:** which regions/customers → GDPR/CCPA obligations, privacy-policy owner.
+
 ## Bottom line
 The product depth and operational modeling are already strong — the hard part most competitors get
 wrong. The remaining work is the plumbing that makes it a business people trust with their livelihood:
@@ -266,5 +293,53 @@ mobile.** Do Phases 1–2 first; everything sellable sits on top of them.
 
 ---
 
+# Part E — Technical Reference
+
+*Key files, routes, data shapes, and helpers — so work can resume precisely.*
+
+## Routes / files
+- `app/yardhand-app.jsx` — the whole client app (owner, crew, customer, storefront, settings,
+  operator). Single `"use client"` file. Exports `App` (default), `OperatorApp`, `PortalChooser`.
+- `app/page.js` — renders `<YardHandApp/>` + LocalBusiness JSON-LD (async, from `getBusiness()`).
+- `app/layout.js` — `generateMetadata()` builds title/description/keywords/OG from business settings.
+- `app/site-data.js` — server-side `getBusiness()` (REST read of the workspace; null fallback).
+- `app/db.js` — `loadWorkspace/saveWorkspace/subscribeWorkspace` (Supabase + localStorage).
+- `app/book/page.js` → `<YardHandApp embed/>` (booking only, noindex).
+- `app/operator/page.js` → `<OperatorApp/>` (SaaS admin, passcode, noindex).
+- `app/portal/page.js` → `<PortalChooser/>` (pick rental vs SaaS door, noindex).
+- `app/robots.js`, `app/sitemap.js`.
+
+## State shape (one `state` object, synced as one JSONB row `id=default`)
+`{ business, types[], trailers[], contractors[], bookings[], locations[], platform }`
+- **business** — name, yard, phone, brand `theme{accent,dark}`, `logo`, `ownerPass`, `teamPass`,
+  fees/deposit/tax/waiver, `pickupHours`, `dispatchMode`, `counterMode`, `ownerWorks`,
+  `bookHorizonDays`, `scheduleControl` (worker|owner|both), `bookingMode` (strict|flexible|hybrid),
+  `hybridNearDays`, `offerDelivery`, `siteMode` (full|booking|owner) + editable storefront copy,
+  `seoTitle`/`seoDescription`/`seoKeywords`, `workerModel` (contractor|employee), `payBasis`
+  (perjob|hourly|flat), `flatPeriod`, `roles[]` (`{id,name,drive,yard}`), marketing* fields.
+- **contractors[]** — `{id,name,phone,email,vehicle,active, roleId, pin, avail{date:[windows]},
+  weekly{dow:[fromIdx,toIdx]}, hourlyRate, flatRate, shifts[], payouts[]}`.
+- **locations[]** — branches; each may carry `overrides` (business fields) + `types`.
+- **platform** — simulated SaaS layer: `operatorPass`, `trialDays`, `plans[]`, `tenants[]`, `site{}`.
+
+## Availability & dispatch engine (top-level helpers in yardhand-app.jsx)
+- `availOn(c, dateISO)` — a worker's hours for a date: explicit `avail[date]` override (incl. `[]` =
+  day off) wins, else the `weekly` pattern. `weeklyOn`, `rangeWindows` support it.
+- Roles: `roleOf`, `roleCaps`, `canDoKind(biz,c,kind)`, `roleName`. `kind` = `"road"` (delivery/
+  collection) | `"yard"` (will-call/handoff) | null.
+- `availableDrivers(state,date,window,excludeId,kind)` → filters active + role-qualified + available +
+  not-too-close. `assignRun(...,kind)` round-robins by load. `windowCovered(...,kind)` gates customer
+  slots. Customer booking `outCovers`/return checks call these with the right `kind`, gated by
+  `policyAllows(date,staffed)` per `bookingMode`.
+
+## Build / run / deploy
+- Build: `timeout 300 npm run build`. Dev: PORT 3112 (`fuser -k 3112/tcp` first, then start, wait for
+  "ready"). Playwright at `/opt/node22/lib/node_modules/playwright`, chromium
+  `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`.
+- Sandbox has no Supabase/Vercel/Stripe/Twilio — cloud & live paths verify only at deploy.
+- All sending (texts/emails/payouts/customer payments/billing) is **simulated** until backends connect.
+
+---
+
 *Keep this handbook current as Yardhand grows. It's the single place that explains what Yardhand is,
-how to use it, how to sell it, and what's left to build.*
+how to use it, how to sell it, what's left to build, and how the code is put together.*

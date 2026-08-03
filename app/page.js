@@ -5,7 +5,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://yardhand.vercel.ap
 
 // Structured data (JSON-LD) so Google/AI understand this is a local rental business and show it
 // richly in local results — built from the owner's own settings (name, city, phone, equipment) with
-// sensible fallbacks. Per-tenant lookup (by domain) is the multi-tenant step — see PLATFORM-PLAN.md.
+// sensible fallbacks. Per-tenant lookup (by domain) is the multi-tenant step — see YARDHAND-HANDBOOK.md (Part D).
 export default async function Page() {
   const biz = await getBusiness();
   const name = (biz && biz.name) || "Ext Professionals";
