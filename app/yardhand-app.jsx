@@ -770,9 +770,8 @@ function TopBar({ state, mode, setMode, signOut, locations, locId, switchLoc }) 
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <BrandMark logo={state.business.logo} size={36} />
-          <div className="leading-tight min-w-0">
-            <div className="font-extrabold tracking-tight text-white truncate" style={{ letterSpacing: "-0.01em" }}>{state.business.name}</div>
-            {mode === "owner" && locs.length > 1 && cur && <div className="text-[10px] font-bold" style={{ color: T.amber }}>{cur.name}</div>}
+          <div className="min-w-0">
+            <div className="font-extrabold tracking-tight text-white truncate" style={{ letterSpacing: "-0.01em" }}>{(cur && cur.overrides && cur.overrides.name) || state.business.name}</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
