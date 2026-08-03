@@ -399,8 +399,7 @@ function priceExplain(type, days) {
 export default function App() {
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState("owner"); // owner | customer | landing | employee | platform
-  const [superAuthed, setSuperAuthed] = useState(false); // platform operator (you) signed in — NOT a business owner
+  const [mode, setMode] = useState("owner"); // owner | customer | landing | employee
   const [custStart, setCustStart] = useState("book"); // initial customer view
   const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
@@ -432,7 +431,6 @@ export default function App() {
     })();
     try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_owner") === "1") setAuthed(true); } catch (e) { /* ignore */ }
     try { if (typeof window !== "undefined") { const eid = sessionStorage.getItem("yardhand_emp"); if (eid) setEmployeeId(eid); } } catch (e) { /* ignore */ }
-    try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_platform") === "1") setSuperAuthed(true); } catch (e) { /* ignore */ }
     // realtime: pick up changes made on another device (ignore our own echoes)
     return subscribeWorkspace((incoming) => {
       setState((prev) => JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming);
@@ -509,10 +507,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen" style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
-      {mode === "platform" && !superAuthed ? (
-        <PlatformLogin state={state} onBack={() => setMode("owner")}
-          onAuthed={() => { setSuperAuthed(true); try { sessionStorage.setItem("yardhand_platform", "1"); } catch (e) {} }} />
-      ) : mode === "landing" ? (
+      {mode === "landing" ? (
         <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} team={() => setMode("employee")} />
       ) : mode === "owner" && !authed ? (
         <OwnerLogin state={state} onBack={() => setMode("landing")}
@@ -523,11 +518,9 @@ export default function App() {
       ) : (
         <>
           <TopBar state={state} mode={mode} setMode={setMode} locations={locations} locId={locId} switchLoc={switchLoc}
-            signOut={() => { setAuthed(false); setEmployeeId(null); setSuperAuthed(false); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); sessionStorage.removeItem("yardhand_platform"); } catch (e) {} setMode("landing"); }} />
+            signOut={() => { setAuthed(false); setEmployeeId(null); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); }} />
           {mode === "employee" ? (
             <EmployeePortal {...{ state, employeeId, setBooking, update, flash, signOut: () => { setEmployeeId(null); try { sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); } }} />
-          ) : mode === "platform" ? (
-            <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24"><PlatformAdmin {...{ state, setState, flash, back: () => setMode("owner") }} /></div>
           ) : mode === "owner" ? (
             <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24">
               <OwnerNav tab={tab} setTab={setTab} />
@@ -559,6 +552,86 @@ export default function App() {
               <RotateCcw size={13} /> Undo
             </button>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =====================================================================
+   OPERATOR APP  —  the SEPARATE front door for your SaaS business (Yardhand).
+   Lives on its own URL (/operator) with its own login, completely apart from
+   the rental business app at "/". Two businesses, two logins, no cross-over:
+   the rental app never shows this, and this never shows rental operations —
+   only your SaaS subscribers, financials, and the Yardhand marketing site.
+   It reads/writes the same workspace (shared platform data) as the main app.
+===================================================================== */
+export function OperatorApp() {
+  const [state, setState] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [superAuthed, setSuperAuthed] = useState(false); // platform operator (you) signed in
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const seeded = (await loadWorkspace()) || structuredClone(SEED);
+      if (seeded.business) seeded.business = { ...structuredClone(SEED.business), ...seeded.business };
+      if (!seeded.platform) seeded.platform = structuredClone(SEED.platform);
+      setState(seeded);
+      setLoading(false);
+    })();
+    try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_platform") === "1") setSuperAuthed(true); } catch (e) { /* ignore */ }
+    return subscribeWorkspace((incoming) => { setState((prev) => JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming); });
+  }, []);
+  useEffect(() => { if (state && !loading) saveWorkspace(state); }, [state, loading]);
+
+  const flash = (m) => { setToast({ m }); setTimeout(() => setToast(null), 2600); };
+  const toRental = () => { try { window.location.href = "/"; } catch (e) { /* ignore */ } };
+
+  if (loading || !state) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: T.steelDk }}>
+        <div className="flex items-center gap-3" style={{ color: "#B7C0C6" }}>
+          <Building2 className="animate-pulse" size={26} /> <span className="font-semibold tracking-wide">Loading Operator…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!superAuthed) {
+    return <PlatformLogin state={state} onBack={toRental}
+      onAuthed={() => { setSuperAuthed(true); try { sessionStorage.setItem("yardhand_platform", "1"); } catch (e) {} }} />;
+  }
+
+  const signOut = () => { setSuperAuthed(false); try { sessionStorage.removeItem("yardhand_platform"); } catch (e) {} };
+
+  return (
+    <div className="min-h-screen" style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
+      <div style={{ background: T.steelDk }} className="sticky top-0 z-40 border-b">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="rounded-md flex items-center justify-center shrink-0" style={{ width: 36, height: 36, background: T.amber }}><Building2 size={20} style={{ color: T.steelDk }} /></div>
+            <div className="min-w-0 leading-tight">
+              <div className="font-extrabold tracking-tight text-white truncate">Yardhand · Operator</div>
+              <div className="text-[11px] uppercase tracking-widest" style={{ color: T.amber }}>SaaS control room</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={toRental} title="Go to your rental business" className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2", border: "1px solid rgba(255,255,255,0.15)" }}>
+              <Truck size={15} /> <span className="hidden sm:inline">My rental business</span>
+            </button>
+            <button onClick={signOut} title="Sign out of Operator" className="px-2.5 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2", border: "1px solid rgba(255,255,255,0.15)" }}>
+              <LogOut size={15} /> <span className="hidden md:inline">Sign out</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="max-w-6xl mx-auto px-4 md:px-6 pb-24">
+        <PlatformAdmin {...{ state, setState, flash, back: toRental }} />
+      </div>
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3" style={{ background: T.steelDk, color: "#fff" }}>
+          <Check size={16} style={{ color: T.amber }} /> <span className="text-sm font-medium">{toast.m}</span>
         </div>
       )}
     </div>
@@ -785,7 +858,7 @@ function TopBar({ state, mode, setMode, signOut, locations, locId, switchLoc }) 
             <button onClick={() => setMode("landing")} className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2" }}>
               <Home size={15} /> <span className="hidden sm:inline">Site</span>
             </button>
-            {[["owner", "Owner", LayoutDashboard], ["employee", "Team", Users], ["customer", "Book a trailer", Truck], ["platform", "Operator", Building2]].map(([m, label, Icon]) => (
+            {[["owner", "Owner", LayoutDashboard], ["employee", "Team", Users], ["customer", "Book a trailer", Truck]].map(([m, label, Icon]) => (
               <button key={m} onClick={() => setMode(m)}
                 className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5 transition"
                 style={mode === m ? { background: T.amber, color: T.steelDk } : { color: "#D8DEE2" }}>
@@ -793,7 +866,7 @@ function TopBar({ state, mode, setMode, signOut, locations, locId, switchLoc }) 
               </button>
             ))}
           </div>
-          {(mode === "owner" || mode === "employee" || mode === "platform") && signOut && (
+          {(mode === "owner" || mode === "employee") && signOut && (
             <button onClick={signOut} title="Sign out" className="px-2.5 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2", border: "1px solid rgba(255,255,255,0.15)" }}>
               <LogOut size={15} /> <span className="hidden md:inline">Sign out</span>
             </button>
@@ -1332,6 +1405,7 @@ function Dashboard({ state, typeBySize, trailerStatus, currentBooking, setBookin
         <p>It only shows on screen here — <b>no email or text</b>. Clear the list and you're on top of the day.</p>
         <p>The four <b>tiles</b> (Out on rent, Available, Due back today, Overdue) are tappable — they open the matching list. <b>Pickups &amp; returns today</b> has one-tap buttons to mark trailers out or back. Everything updates live across your devices and your crew's.</p>
         <p>Use the tabs up top for the rest: Calendar, Bookings, Customers, Team &amp; dispatch, Fleet, Insights, and Settings — each has its own “How this page works” note.</p>
+        <p><b>Managing the Yardhand software business?</b> That's a <b>separate business with its own door</b> — go to your web address ending in <b>/operator</b> and sign in with your operator passcode. It's deliberately kept out of this rental dashboard so the two never mix. (It doesn't apply if you only run the rental business.)</p>
       </HelpNote>
 
       {/* Start-here daily checklist — what needs the owner today */}
@@ -2861,7 +2935,9 @@ function PlatformAdmin({ state, setState, flash, back }) {
 
       <HelpNote>
         <p>This is <b>your</b> control panel as the software owner — separate from any single business's dashboard. It tracks everyone paying you (or trialing) for Yardhand.</p>
-        <p><b>Two tabs:</b> <b>Subscribers &amp; financials</b> (who's paying/trialing, your MRR/ARR, plans, signup defaults) and <b>Marketing site</b> (your public Yardhand product page — where businesses find you and start a free trial; edit it here, it's only visible to you). This whole portal is separate from your equipment rental business.</p>
+        <p><b>Two separate businesses, two separate doors.</b> Your equipment-rental business (Ext Professionals) lives at the main web address with its own owner login. This SaaS business (Yardhand — the software you sell) lives at its own web address ending in <b>/operator</b>, with its own separate login (this screen's passcode). The two never mix: the rental app doesn't show this portal, and this portal doesn't show your rental operations. To hop between them, use <b>“My rental business”</b> up top here, or open <b>/operator</b> to come back.</p>
+        <p><b>Same data on both — nothing was removed.</b> Splitting them into two doors didn't change any settings or features; both sides keep everything they had, and everything here is still fully editable. It's purely about keeping the two businesses cleanly apart.</p>
+        <p><b>Two tabs here:</b> <b>Subscribers &amp; financials</b> (who's paying/trialing, your MRR/ARR, plans, signup defaults) and <b>Marketing site</b> (your public Yardhand product page — where businesses find you and start a free trial; edit it here, it's only visible to you).</p>
       </HelpNote>
 
       {/* sub-nav: split the SaaS side into its own tabs */}
