@@ -305,6 +305,12 @@ Team & dispatch · Fleet · Settings.
   employee mode. A person can only open their own view — verified live (wrong PIN blocked, own PIN in,
   coworker's PIN blocked). NOTE: prototype-level UI gating — true isolation (can't read another person's
   data even via the API) needs the real Supabase Auth + RLS layer in PLATFORM-PLAN Phases 1–2.
+- **In-app SEO helper (`business.seoTitle/seoDescription/seoKeywords`):** Settings → "Get found on Google
+  (SEO)" card — editable page title / meta description / keywords (with smart placeholders from name+city)
+  plus a plain-English "get-found checklist" (Google Business Profile, reviews, city+service wording, own
+  domain, local directories). Captured now; wiring the edited values into the LIVE page tags is the
+  per-tenant `generateMetadata` step at launch (#24). The technical baseline (metadata/JSON-LD/robots/
+  sitemap) is already live for the primary site.
 - **Embeddable / linkable booking page (`/book`, `App({embed})`):** `app/book/page.js` renders
   `<YardHandApp embed />` (noindex). In embed mode `App` returns ONLY `<CustomerArea embed>` (no top bar,
   no owner chrome) after computing the same derived helpers — reusing all booking logic, no duplication.

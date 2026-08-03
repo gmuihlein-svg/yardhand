@@ -3630,6 +3630,35 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         </div>
         <p className="text-[11px]" style={{ color: T.sub }}>To set up a branch: switch to it (top bar or the link above), then edit any Settings card — equipment, pricing, waiver, fees, branding — and it changes <b>that branch only</b>. Its trailers, crew, and bookings are added from that branch's Fleet and Team tabs.</p>
       </Card>
+
+      {/* ─────────── GET FOUND ON GOOGLE (SEO) ─────────── */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><Search size={16} style={{ color: T.green }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Get found on Google (SEO)</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Your site already has the <b>technical SEO built in</b> — a proper page title, description, local-business data Google reads, a sitemap, mobile-friendly, and fast loading. You don't have to code anything. Fill in the words below in your own language, then follow the checklist — that's what actually gets you found.</p>
+        <Field label="Page title (shows as the blue link in Google)"><input value={b.seoTitle ?? ""} placeholder={`Dump Trailer Rental in ${b.yard || "your city"} | ${b.name}`} onChange={(e) => set({ seoTitle: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <Field label="Description (the gray text under the link)"><textarea value={b.seoDescription ?? ""} placeholder={`Rent a dump trailer in ${b.yard || "your area"} for cleanouts, roofing, or debris. Book online in a minute — delivery or pickup.`} onChange={(e) => set({ seoDescription: e.target.value })} rows={2} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, resize: "none" }} /></Field>
+        <Field label="Keywords (what people type to find you — comma separated)"><input value={b.seoKeywords ?? ""} placeholder={`dump trailer rental ${b.yard || "city"}, debris removal, roll-off alternative`} onChange={(e) => set({ seoKeywords: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        <div className="rounded-xl p-3" style={{ background: T.paper, border: `1px solid ${T.line}` }}>
+          <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: T.steel }}>Your get-found checklist</div>
+          {[
+            ["Set up a free Google Business Profile", "The #1 thing for local search — it puts you on Google Maps and the local results. Go to google.com/business, add your business, service area, phone, and a link to your site."],
+            ["Ask every happy customer for a Google review", "Reviews are the biggest ranking factor for the map results. Even a handful moves you up. (We can auto-send a review request after each rental once messaging is on.)"],
+            ["Use your city + service in your words above", "Put your city and what you rent right in the title, description, and your homepage headline — that's how Google matches searches."],
+            ["Connect your own domain", "A name like yourbusiness.com looks legit and helps ranking. You point it at your site (a one-time setup at launch)."],
+            ["List your business in a few local directories", "Yelp, Bing Places, and your local chamber — consistent name/address/phone everywhere builds trust with Google."],
+          ].map(([t, d], i) => (
+            <div key={i} className="flex items-start gap-2 py-1.5" style={i ? { borderTop: `1px solid ${T.line}` } : {}}>
+              <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold" style={{ background: T.greenSoft, color: T.green }}>{i + 1}</span>
+              <div><div className="text-sm font-semibold">{t}</div><div className="text-[11px]" style={{ color: T.sub }}>{d}</div></div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px]" style={{ color: T.sub }}>The technical SEO baseline is live for the primary site today; per-business auto-SEO (each business's own title/city/equipment generated automatically) and going live on your own domain turn on with the launch/multi-tenant step.</p>
+      </Card>
+
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><ImageIcon size={16} style={{ color: T.amberDk }} /></span>
