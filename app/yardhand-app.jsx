@@ -350,6 +350,18 @@ const SEED = {
       { id: "tn4", name: "Foothills Tool Rental", owner: "Robin Vega", email: "robin@foothillstools.com", signup: "2026-05-02", plan: "starter", status: "past_due", trialEnds: "2026-05-09", billing: "autopay", lastActive: addDays(today(), -13) },
       { id: "tn5", name: "Cabarrus Trailer Co", owner: "Alex Kim", email: "alex@cabarrustrailer.com", signup: "2026-07-10", plan: "pro", status: "canceled", trialEnds: "2026-07-17", billing: "autopay", lastActive: addDays(today(), -8) },
     ],
+    // Editable public marketing site for Yardhand-the-product (where businesses find you & start a trial).
+    site: {
+      heroTitle: "Run your rental business without the chaos",
+      heroSub: "Yardhand is the all-in-one booking, dispatch, and payments app for equipment rental companies. Take bookings online, schedule your crew, and get paid — all in one place.",
+      ctaText: "Start your 7-day free trial",
+      features: [
+        { title: "Online booking, 24/7", desc: "A booking site your customers use to reserve and pay in a minute — no phone tag." },
+        { title: "Crew scheduling & dispatch", desc: "Auto-assign drivers and yard staff, track hours, and pay per job, hourly, or salary." },
+        { title: "Payments & deposits", desc: "Collect rentals and deposits, and pay your team — every dollar tracked." },
+        { title: "Any equipment", desc: "Trailers, skid steers, tools, party rentals — your catalog, your pricing, your brand." },
+      ],
+    },
   },
 };
 
@@ -2828,6 +2840,11 @@ function PlatformAdmin({ state, setState, flash, back }) {
   const order = { past_due: 0, trialing: 1, active: 2, canceled: 3 };
   const sorted = [...tenants].sort((a, b) => (order[a.status] - order[b.status]) || ((daysLeft(a.trialEnds)) - (daysLeft(b.trialEnds))));
 
+  const [ptab, setPtab] = useState("dashboard"); // dashboard (subscribers & financials) | site (marketing site)
+  const site = p.site || {};
+  const setSite = (patch) => setState((s) => ({ ...s, platform: { ...s.platform, site: { ...(s.platform.site || {}), ...patch } } }));
+  const setFeature = (i, patch) => setState((s) => ({ ...s, platform: { ...s.platform, site: { ...(s.platform.site || {}), features: (s.platform.site.features || []).map((f, j) => j === i ? { ...f, ...patch } : f) } } }));
+
   return (
     <div className="space-y-6 pt-4">
       <div className="flex items-center justify-between gap-2">
@@ -2845,9 +2862,17 @@ function PlatformAdmin({ state, setState, flash, back }) {
 
       <HelpNote>
         <p>This is <b>your</b> control panel as the software owner — separate from any single business's dashboard. It tracks everyone paying you (or trialing) for Yardhand.</p>
-        <p><b>Top row:</b> how many businesses are <b>in a free trial</b>, how many are <b>paying</b>, your <b>monthly recurring revenue (MRR)</b>, and anyone <b>past due</b>. <b>Financials &amp; KPIs</b> adds the full picture — <b>ARR</b> (annual recurring revenue), <b>ARPU</b> (average revenue per paying account), your <b>trial→paid conversion</b> rate, <b>churn</b>, <b>new sign-ups this month</b>, <b>revenue at risk</b> (past-due dollars), and a <b>revenue-by-plan</b> breakdown. Everything recalculates live as you change a plan price or a business's status. <b>Signup defaults</b> set the free-trial length, whether a card is required up front, and whether new accounts default to autopay (recurring) or manual invoicing — like Jobber/Housecall Pro. <b>Plans</b> are your price tiers. <b>The list</b> shows each business with its plan, status, trial days left, and last activity; use the controls to convert a trial to paying, extend a trial, or cancel.</p>
+        <p><b>Two tabs:</b> <b>Subscribers &amp; financials</b> (who's paying/trialing, your MRR/ARR, plans, signup defaults) and <b>Marketing site</b> (your public Yardhand product page — where businesses find you and start a free trial; edit it here, it's only visible to you). This whole portal is separate from your equipment rental business.</p>
       </HelpNote>
 
+      {/* sub-nav: split the SaaS side into its own tabs */}
+      <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: T.graySoft }}>
+        {[["dashboard", "Subscribers & financials"], ["site", "Marketing site"]].map(([v, l]) => (
+          <button key={v} onClick={() => setPtab(v)} className="px-3 py-1.5 rounded-md text-sm font-bold" style={ptab === v ? { background: "#fff", color: T.ink, boxShadow: "0 1px 2px rgba(0,0,0,0.08)" } : { color: T.sub }}>{l}</button>
+        ))}
+      </div>
+
+      {ptab === "dashboard" && (<>
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -2985,6 +3010,63 @@ function PlatformAdmin({ state, setState, flash, back }) {
         </div>
         <p className="text-[11px] mt-3" style={{ color: T.sub }}>Buttons are simulated for now — they update this preview so you can see the flow. When billing is live, “Convert to paying” starts the real subscription and “Cancel” stops it.</p>
       </Card>
+      </>)}
+
+      {ptab === "site" && (
+        <div className="space-y-5">
+          <div className="rounded-xl p-3 flex items-start gap-2 text-xs" style={{ background: T.amberSoft, color: T.amberDk }}>
+            <Info size={15} className="shrink-0 mt-0.5" />
+            <span>Your <b>public marketing site for Yardhand</b> — where rental businesses discover you, see your plans, and start a free trial. It's <b>separate from your equipment rental storefront</b>, only editable here by you. When you launch the SaaS, this page goes live with its own SEO and the “Start free trial” button creates their account.</span>
+          </div>
+
+          {/* live preview of the product page */}
+          <Card className="p-0 overflow-hidden">
+            <div className="px-4 py-2 text-[11px] font-bold uppercase tracking-wide" style={{ background: T.steelDk, color: "#fff" }}>Preview · yardhand.com</div>
+            <div className="p-6" style={{ background: T.paper }}>
+              <div className="text-center max-w-xl mx-auto">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold mb-3" style={{ background: T.amberSoft, color: T.amberDk }}>Rental management software</div>
+                <h1 className="font-extrabold tracking-tight" style={{ fontSize: "clamp(1.6rem,4vw,2.4rem)", lineHeight: 1.1 }}>{site.heroTitle}</h1>
+                <p className="mt-2 text-sm" style={{ color: T.sub }}>{site.heroSub}</p>
+                <button className="mt-4 px-5 py-2.5 rounded-xl font-extrabold" style={{ background: T.amber, color: T.steelDk }}>{site.ctaText}</button>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3 mt-6">
+                {(site.features || []).map((f, i) => (
+                  <div key={i} className="p-3 rounded-lg flex items-start gap-2" style={{ background: "#fff", border: `1px solid ${T.line}` }}>
+                    <Check size={16} style={{ color: T.green, marginTop: 1 }} className="shrink-0" />
+                    <div><div className="font-bold text-sm">{f.title}</div><div className="text-xs mt-0.5" style={{ color: T.sub }}>{f.desc}</div></div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-center text-xs font-bold uppercase tracking-wide mt-6 mb-2" style={{ color: T.sub }}>Simple pricing</div>
+              <div className="grid grid-cols-3 gap-2">
+                {plans.map((pl) => (
+                  <div key={pl.id} className="p-3 rounded-xl text-center" style={{ background: "#fff", border: `1px solid ${T.line}` }}>
+                    <div className="font-extrabold text-sm">{pl.name}</div>
+                    <div className="text-xl font-extrabold tabular-nums mt-1">${pl.price}<span className="text-[11px]" style={{ color: T.sub }}>/mo</span></div>
+                    <div className="text-[10px] mt-0.5" style={{ color: T.sub }}>{pl.note}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          {/* editor */}
+          <Card className="p-4 space-y-3">
+            <h3 className="font-bold text-sm uppercase tracking-wide">Edit your marketing site</h3>
+            <Field label="Headline"><input value={site.heroTitle || ""} onChange={(e) => setSite({ heroTitle: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+            <Field label="Subheadline"><textarea value={site.heroSub || ""} onChange={(e) => setSite({ heroSub: e.target.value })} rows={2} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+            <Field label="Call-to-action button"><input value={site.ctaText || ""} onChange={(e) => setSite({ ctaText: e.target.value })} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+            <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: T.blue }}>Features (what Yardhand does)</div>
+            {(site.features || []).map((f, i) => (
+              <div key={i} className="rounded-lg p-2.5 space-y-1.5" style={{ background: T.paper }}>
+                <input value={f.title} onChange={(e) => setFeature(i, { title: e.target.value })} placeholder="Feature title" className="w-full p-2 rounded-lg text-sm font-bold" style={{ border: `1px solid ${T.line}` }} />
+                <input value={f.desc} onChange={(e) => setFeature(i, { desc: e.target.value })} placeholder="Short description" className="w-full p-2 rounded-lg text-xs" style={{ border: `1px solid ${T.line}` }} />
+              </div>
+            ))}
+            <p className="text-[11px]" style={{ color: T.sub }}>Pricing shown on this page comes from your <b>Plans</b> (Subscribers &amp; financials tab). This is your <b>SaaS storefront</b> — completely separate from your equipment rental booking site.</p>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

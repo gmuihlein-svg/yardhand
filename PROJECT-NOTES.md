@@ -196,6 +196,13 @@ Team & dispatch · Fleet · Settings.
   bar chart — all derived live from the tenant data. **All simulated**
   until the real accounts + Stripe-Billing backend is connected — tasks #26 (trial + subscription billing)
   and #27 (this dashboard, real). Part of the multi-tenant foundation (#10).
+  **Organized into sub-tabs (`ptab`):** "Subscribers & financials" (the admin: KPIs, financials, plans,
+  signup defaults, tenants) and "Marketing site" (an editable public Yardhand product-marketing page —
+  `state.platform.site`: heroTitle/heroSub/ctaText/features[]; live preview + editor; pricing pulls from
+  `plans`). This is the **SaaS storefront** (acquire subscribers), separate from the rental storefront,
+  editable only inside the passcode-gated Operator portal. Its SEO goes live when the SaaS launches (task #24).
+  **App structure = two sides:** the **equipment rental side** (top-bar Site/Owner/Team/Book) and the
+  **SaaS side** (everything behind the Operator tab, with its own sub-tabs). Clean separation.
 - **SEO (technical foundation):** `app/layout.js` metadata (title template, description, keywords,
   Open Graph + Twitter, canonical, robots) tuned for "dump trailer rental Charlotte NC"; `app/page.js`
   injects **LocalBusiness JSON-LD** (name, phone, area served, address, per-equipment offers);
