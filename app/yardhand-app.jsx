@@ -2911,7 +2911,7 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
         </div>
       </Card>
 
-      {adding && <AddContractorModal payBasis={state.business.payBasis} periodWord={periodWord} onClose={() => setAdding(false)}
+      {adding && <AddContractorModal payBasis={state.business.payBasis} periodWord={periodWord} roles={state.business.roles || []} onClose={() => setAdding(false)}
         onAdd={(c) => { update((n) => n.contractors.push({ ...c, locationId: locId })); setAdding(false); flash(`Added ${c.name}.`, true); }} />}
       {editAvail && <AvailabilityEditor {...editAvail} state={state} update={update} onClose={() => setEditAvail(null)} />}
       {weeklyFor && <WeeklyEditor driverId={weeklyFor.driverId} state={state} update={update} onClose={() => setWeeklyFor(null)} />}
@@ -3030,8 +3030,9 @@ function WeeklyEditor({ driverId, state, update, onClose, selfName }) {
   );
 }
 
-function AddContractorModal({ onClose, onAdd, payBasis, periodWord }) {
+function AddContractorModal({ onClose, onAdd, payBasis, periodWord, roles = [] }) {
   const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); const [vehicle, setVehicle] = useState(""); const [rate, setRate] = useState("");
+  const [role, setRole] = useState(roles.some((r) => r.id === "both") ? "both" : (roles[0] && roles[0].id) || "both");
   const hourly = payBasis === "hourly", flat = payBasis === "flat";
   const rateLabel = hourly ? "Hourly pay rate ($/hr)" : flat ? `Salary ($/${periodWord})` : "Hourly pay rate ($/hr) — optional";
   const unit = hourly ? "/hr" : flat ? `/${periodWord}` : "/hr";
@@ -3044,6 +3045,14 @@ function AddContractorModal({ onClose, onAdd, payBasis, periodWord }) {
           <Field label="Tow vehicle (if they drive)"><input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. F-250 · leave blank for yard-only" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         </div>
         <Field label="Email (for job alerts & their portal login)"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@yourcompany.com" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        {roles.length > 0 && (
+          <Field label="Position (what they can be assigned)">
+            <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full p-2.5 rounded-lg text-sm font-semibold" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+              {roles.map((r) => <option key={r.id} value={r.id}>{r.name}{!r.drive && !r.yard ? " (no delivery/yard jobs)" : r.drive && r.yard ? " (delivery + yard)" : r.drive ? " (delivery)" : " (yard)"}</option>)}
+            </select>
+            <p className="text-[11px] mt-1" style={{ color: T.sub }}>Add or edit positions in Settings → Job roles. You can change this anytime on their card.</p>
+          </Field>
+        )}
         <Field label={rateLabel}>
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold" style={{ color: T.sub }}>$</span>
@@ -3057,7 +3066,7 @@ function AddContractorModal({ onClose, onAdd, payBasis, periodWord }) {
         : flat
         ? <>You pay a salary, so this person gets ${rate || "—"} every {periodWord} regardless of jobs or hours — you'll see them on the payroll list in Team &amp; dispatch with a Pay button. You can change the amount anytime on their card. At launch, collect the right paperwork first (W-4 for W2, or W-9 for 1099) — see the guide.</>
         : <>The same person can drive delivery/collection runs and staff yard handoffs — assign them to either from Team &amp; dispatch. At launch, collect a signed agreement and the right tax form (W-9 for 1099, W-4 for W2) and a COI before their first job (see the guide). An hourly rate is optional here since you pay per job.</>}</p>
-      <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, email, vehicle: vehicle || "—", active: true, hourlyRate: (hourly || !flat) ? (Number(rate) || 0) : 0, flatRate: flat ? (Number(rate) || 0) : 0, shifts: [] })}
+      <button disabled={!name} onClick={() => onAdd({ id: "c" + Date.now(), name, phone, email, vehicle: vehicle || "—", active: true, roleId: role, hourlyRate: (hourly || !flat) ? (Number(rate) || 0) : 0, flatRate: flat ? (Number(rate) || 0) : 0, shifts: [] })}
         className="w-full mt-4 py-2.5 rounded-lg font-bold disabled:opacity-40" style={{ background: T.steel, color: "#fff" }}>Add employee</button>
     </Modal>
   );
