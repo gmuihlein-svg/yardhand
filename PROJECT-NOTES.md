@@ -201,8 +201,12 @@ Team & dispatch · Fleet · Settings.
   `state.platform.site`: heroTitle/heroSub/ctaText/features[]; live preview + editor; pricing pulls from
   `plans`). This is the **SaaS storefront** (acquire subscribers), separate from the rental storefront,
   editable only inside the passcode-gated Operator portal. Its SEO goes live when the SaaS launches (task #24).
-  **App structure = two sides:** the **equipment rental side** (top-bar Site/Owner/Team/Book) and the
-  **SaaS side** (everything behind the Operator tab, with its own sub-tabs). Clean separation.
+  **App structure = two separate businesses on separate routes:** the **equipment rental side** at `/`
+  (top-bar Site/Owner/Team/Book, owner password) and the **SaaS side** at `/operator` (its own login +
+  `OperatorApp`, operator passcode). A `/portal` chooser (`PortalChooser`) lets the owner pick which to
+  open; owner login links to it, operator login's back returns to it. Both `/operator` and `/portal` are
+  **noindex** (private owner portals). Same shared workspace data on both — the split is navigation/access
+  only, not data isolation (that's the multi-tenant backend, #10). Removed the old top-bar "Operator" tab.
 - **SEO (technical foundation):** `app/layout.js` metadata (title template, description, keywords,
   Open Graph + Twitter, canonical, robots) tuned for "dump trailer rental Charlotte NC"; `app/page.js`
   injects **LocalBusiness JSON-LD** (name, phone, area served, address, per-equipment offers);
@@ -210,6 +214,22 @@ Team & dispatch · Fleet · Settings.
   `NEXT_PUBLIC_SITE_URL` (defaults to Vercel URL). Static/single-business today; per-tenant dynamic SEO
   via `generateMetadata` and a Yardhand-product marketing site (for SaaS-customer acquisition) are
   follow-ons (task #24, multi-tenant #10). Off-page (Google Business Profile, reviews) stays the owner's.
+
+  **⏳ SEO — DO WHEN IT'S THE RIGHT TIME (user reminder, keep this list):**
+  1. **Set the real domain.** Put the live domain in `NEXT_PUBLIC_SITE_URL` (Vercel env) so canonical
+     URLs, Open Graph, robots, and sitemap all point at the real site instead of the Vercel default.
+  2. **Rental-business SEO is already built** (metadata + LocalBusiness JSON-LD + robots + sitemap) — it
+     just needs the real domain + a Google Business Profile (off-page) once bookings go live.
+  3. **Keep `/operator` and `/portal` noindex forever** — they're private owner portals, never marketing.
+  4. **SaaS-product SEO is the "not yet" piece.** The Yardhand marketing site currently lives ONLY as an
+     editable preview inside the Operator portal. When the SaaS goes public it needs its OWN indexable
+     route (e.g. a public `yardhand` marketing page), with SoftwareApplication/Product JSON-LD, its own
+     title/description/keywords aimed at "rental business software", its own OG image, and a sitemap entry.
+     Do NOT index it before the multi-tenant + billing backend is live (#10/#26) — no point ranking a page
+     that can't yet sign anyone up.
+  5. **Per-tenant SEO** (multi-tenant): switch `app/layout.js`/`app/page.js` static metadata to
+     `generateMetadata()` so each subscribing business gets its own city/name/equipment SEO.
+  6. This is tracked as **task #24**; revisit at launch time.
 - **Marketing · win-back texts (`business.marketing*`, simulated):** Settings → Marketing card — master
   toggle `marketingRebook`, default cadence `marketingRebookDays` (30/90/180/365), channel, and message.
   Reminds **past customers** to rebook. **Per-customer off:** owner toggles a customer off in Customers
