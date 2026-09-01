@@ -794,16 +794,16 @@ function BrandMark({ logo, size = 36 }) {
   // default: a dump-trailer mark (amber badge, steel trailer) until the owner uploads a logo
   return (
     <div className="rounded-md flex items-center justify-center shrink-0" style={{ width: size, height: size, background: T.amber }}>
-      <svg viewBox="0 0 30 22" width={Math.round(size * 0.72)} height={Math.round(size * 0.72 * 22 / 30)} fill={T.steelDk} stroke={T.steelDk} strokeLinejoin="round" strokeLinecap="round">
-        {/* raised dump bed */}
-        <polygon points="6,12 22,12 26.5,3.5 10.5,3.5" />
+      <svg viewBox="0 0 32 22" width={Math.round(size * 0.74)} height={Math.round(size * 0.74 * 22 / 32)} fill={T.steelDk} stroke={T.steelDk} strokeLinejoin="round" strokeLinecap="round">
+        {/* deep dump bed, raised at the front */}
+        <polygon points="4,14 18,8.5 20.5,3.5 6.5,9" />
         {/* chassis */}
-        <line x1="5" y1="14" x2="22.5" y2="14" strokeWidth="2" />
-        {/* tongue + coupler */}
-        <line x1="7.5" y1="14" x2="2" y2="16" strokeWidth="2" />
+        <line x1="4" y1="15" x2="19" y2="15" strokeWidth="1.8" />
+        {/* tongue (front, right) */}
+        <line x1="13" y1="15" x2="23" y2="16.5" strokeWidth="1.8" />
         {/* tandem wheels */}
-        <circle cx="11" cy="17" r="2.1" stroke="none" />
-        <circle cx="16.5" cy="17" r="2.1" stroke="none" />
+        <circle cx="7.5" cy="17.5" r="1.9" stroke="none" />
+        <circle cx="12" cy="17.5" r="1.9" stroke="none" />
       </svg>
     </div>
   );
@@ -813,28 +813,34 @@ function BrandMark({ logo, size = 36 }) {
 function TrailerArt({ className = "", style = {} }) {
   return (
     <div className={`flex items-center justify-center ${className}`} style={{ background: T.steelDk, ...style }}>
-      <svg viewBox="0 0 340 190" className="w-full" style={{ maxWidth: 320 }}>
-        {/* ground */}
-        <line x1="24" y1="171" x2="316" y2="171" stroke={T.amber} strokeWidth="3" strokeLinecap="round" />
-        {/* debris spilling out the back */}
-        <circle cx="250" cy="163" r="6" fill="#55666F" /><circle cx="264" cy="168" r="7" fill="#4A5A63" /><circle cx="279" cy="164" r="6" fill="#55666F" /><circle cx="291" cy="169" r="5" fill="#4A5A63" /><circle cx="256" cy="169" r="4" fill="#55666F" />
+      <svg viewBox="0 0 340 200" className="w-full" style={{ maxWidth: 320 }}>
+        {/* ground shadow */}
+        <ellipse cx="150" cy="185" rx="128" ry="7" fill="#000000" opacity="0.25" />
         {/* chassis frame */}
-        <line x1="74" y1="150" x2="250" y2="150" stroke="#2A363E" strokeWidth="7" strokeLinecap="round" />
-        {/* A-frame tongue + coupler */}
-        <line x1="76" y1="149" x2="22" y2="159" stroke="#2A363E" strokeWidth="6" strokeLinecap="round" />
-        <circle cx="20" cy="159" r="6" fill={T.amber} />
-        {/* hydraulic ram lifting the bed */}
-        <line x1="128" y1="150" x2="108" y2="96" stroke="#55666F" strokeWidth="6" strokeLinecap="round" />
-        {/* dump bed, raised at the front (dumping) */}
-        <polygon points="250,146 96,92 74,56 228,110" fill="#3A4C57" stroke={T.amber} strokeWidth="4" strokeLinejoin="round" />
-        <polyline points="92,80 150,92 208,104" fill="none" stroke={T.amber} strokeWidth="3" opacity="0.65" strokeLinecap="round" />
-        {/* open tailgate */}
-        <line x1="250" y1="146" x2="278" y2="167" stroke="#3A4C57" strokeWidth="5" strokeLinecap="round" />
-        {/* fender */}
-        <path d="M130 153 q42 -30 84 0" fill="none" stroke="#2A363E" strokeWidth="5" />
+        <line x1="70" y1="152" x2="252" y2="152" stroke="#2A363E" strokeWidth="7" strokeLinecap="round" />
+        {/* A-frame tongue, coupler, jack, battery box (front, right) */}
+        <line x1="208" y1="152" x2="318" y2="160" stroke="#2A363E" strokeWidth="6" strokeLinecap="round" />
+        <line x1="250" y1="152" x2="318" y2="160" stroke="#2A363E" strokeWidth="6" strokeLinecap="round" />
+        <rect x="304" y="152" width="15" height="12" rx="2" fill="#2A363E" />
+        <line x1="286" y1="157" x2="286" y2="177" stroke="#2A363E" strokeWidth="4" strokeLinecap="round" />
+        <rect x="258" y="136" width="22" height="16" rx="2" fill="#2A363E" />
+        {/* hydraulic cylinder lifting the front of the bed */}
+        <line x1="214" y1="152" x2="236" y2="104" stroke="#5B6B74" strokeWidth="8" strokeLinecap="round" />
+        <line x1="214" y1="152" x2="226" y2="128" stroke="#8A99A1" strokeWidth="4" strokeLinecap="round" />
+        {/* dump bed — deep box, raised at the front */}
+        <polygon points="72,152 248,98 257,60 81,114" fill="#33434D" stroke={T.amber} strokeWidth="3.5" strokeLinejoin="round" />
+        {/* ribbed side panels */}
+        <line x1="92" y1="126" x2="236" y2="82" stroke="#26343C" strokeWidth="2.5" />
+        <line x1="86" y1="118" x2="242" y2="70" stroke="#26343C" strokeWidth="2.5" />
+        {/* reflective side tape */}
+        <line x1="80" y1="147" x2="245" y2="97" stroke={T.amber} strokeWidth="4" strokeDasharray="9 13" opacity="0.9" strokeLinecap="round" />
+        {/* rear tailgate, swung open */}
+        <line x1="72" y1="152" x2="56" y2="172" stroke="#33434D" strokeWidth="5" strokeLinecap="round" />
+        {/* fender over the tandem wheels */}
+        <path d="M100 154 q42 -30 84 0" fill="none" stroke="#2A363E" strokeWidth="6" strokeLinecap="round" />
         {/* tandem wheels */}
-        <circle cx="150" cy="159" r="15" fill="#1E2A32" stroke="#55666F" strokeWidth="3" /><circle cx="150" cy="159" r="5" fill={T.amber} />
-        <circle cx="194" cy="159" r="15" fill="#1E2A32" stroke="#55666F" strokeWidth="3" /><circle cx="194" cy="159" r="5" fill={T.amber} />
+        <circle cx="120" cy="166" r="16" fill="#1E2A32" stroke="#55666F" strokeWidth="3" /><circle cx="120" cy="166" r="8" fill="none" stroke="#55666F" strokeWidth="2" /><circle cx="120" cy="166" r="4" fill={T.amber} />
+        <circle cx="164" cy="166" r="16" fill="#1E2A32" stroke="#55666F" strokeWidth="3" /><circle cx="164" cy="166" r="8" fill="none" stroke="#55666F" strokeWidth="2" /><circle cx="164" cy="166" r="4" fill={T.amber} />
       </svg>
     </div>
   );
