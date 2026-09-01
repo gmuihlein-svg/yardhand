@@ -15,7 +15,7 @@ export async function generateMetadata() {
   const city = (biz && biz.yard) || "Charlotte, NC";
   const title = (biz && biz.seoTitle && biz.seoTitle.trim()) || `Dump Trailer Rental in ${city} | ${name}`;
   const description = (biz && biz.seoDescription && biz.seoDescription.trim()) ||
-    `Rent a dump trailer in ${city} for roofing, concrete, demolition, renovation cleanouts, or landscaping haul-off. Delivery or will-call — book online in a minute, no CDL needed.`;
+    `Rent a dump trailer in ${city} for roofing, remodel, demolition, renovation cleanouts, or landscaping haul-off. Delivery or will-call — book online in a minute, no CDL needed.`;
   const keywords = (biz && biz.seoKeywords && biz.seoKeywords.trim())
     ? biz.seoKeywords.split(",").map((s) => s.trim()).filter(Boolean)
     : ["dump trailer rental", `dump trailer rental ${city}`, "dumpster trailer rental", "debris removal trailer", "roll-off dumpster alternative", name];
