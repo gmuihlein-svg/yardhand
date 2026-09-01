@@ -3466,7 +3466,7 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Wrench size={16} style={{ color: T.amberDk }} /></span>
           <h3 className="font-bold text-sm uppercase tracking-wide">Tow gear &amp; add-ons</h3>
         </div>
-        <p className="text-xs" style={{ color: T.sub }}>Hitch balls, ball mounts, adapters, brake controllers, straps — the gear a customer might not have. It's offered on the booking page (“Don't have the right hitch?”), charged once per order, and listed on the booking so you have it ready at pickup. Set your own list and prices.</p>
+        <p className="text-xs" style={{ color: T.sub }}>Hitch balls, ball mounts, adapters, brake controllers, straps — the truck-side gear a customer might not have. These are <b>rentals</b> (they come back with the trailer). Offered on the booking page (“Don't have the right hitch?”), charged once per order, and listed on the booking so you have it ready at pickup. Set your own list and rental prices below — add, rename, or remove anything.</p>
         <div className="space-y-2">
           <div className="grid items-center gap-2 text-[10px] font-bold uppercase tracking-wide px-1" style={{ color: T.sub, gridTemplateColumns: "1fr 60px 28px" }}>
             <span>Item &amp; description</span><span className="text-center">Price $</span><span />
@@ -4572,7 +4572,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
             {(b.addons || []).length > 0 && (
               <div className="rounded-xl p-3" style={{ background: T.paper, border: `1px solid ${T.line}` }}>
                 <div className="text-sm font-bold flex items-center gap-1.5"><Wrench size={15} style={{ color: T.amberDk }} /> Don't have the right hitch?</div>
-                <p className="text-[11px] mt-0.5 mb-2" style={{ color: T.sub }}>Add any tow gear you're missing and we'll have it ready for you at pickup.</p>
+                <p className="text-[11px] mt-0.5 mb-2" style={{ color: T.sub }}>Rent any tow gear you're missing — we'll have it ready at pickup, and it comes back with the trailer.</p>
                 <div className="space-y-1.5">
                   {(b.addons || []).map((a) => {
                     const on = (form.addons || []).includes(a.id);

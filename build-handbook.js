@@ -138,8 +138,14 @@ body.push(bullet([B("List your business in a few local directories "), T("(Yelp,
 body.push(H2("How the money works"));
 body.push(P("Per-unit daily/weekly/2-week/monthly rates; delivery/self-pickup fees; a refundable deposit hold (not a charge); optional damage waiver; sales tax; cancellation rules. Crew pay: choose their tax status (1099/W2) and how you pay (per-job / hourly / salary), any mix; payroll views total what's owed with a Pay/Mark-paid button."));
 
-body.push(H2("Tow gear & add-ons"));
-body.push(P([T("Customers often show up without the right hitch. In "), B("Settings → Tow gear & add-ons"), T(", stock the parts they might need — hitch balls, a ball mount, a 7-pin → 4-flat adapter, a plug-in brake controller, straps, a pin & lock — with your own prices. They appear on the booking page under "), B("“Don't have the right hitch?”"), T(", get charged once per order, and show on the booking as "), B("“Tow gear to have ready”"), T(" so you can set it out at pickup. Keep each equipment type's “You'll need to tow this” note accurate so customers know what to grab.")]));
+body.push(H2("Tow gear & add-ons (rentals)"));
+body.push(P([T("Customers often show up without the right hitch. The trailer already has "), B("its half"), T(" — the coupler, safety chains, jack, and 7-pin plug — but the customer's "), B("truck"), T(" needs a ball mount, the right-size ball, a brake controller, and a matching connector. In "), B("Settings → Tow gear & add-ons"), T(", stock that truck-side gear as "), B("rentals"), T(" (it comes back with the trailer) with your own prices. It appears on the booking page under "), B("“Don't have the right hitch?”"), T(", is charged once per order, and shows on the booking as "), B("“Tow gear to have ready”"), T(" so you can set it out at pickup. You add, rename, re-price, or remove items yourself — it's fully editable in the app.")]));
+body.push(P([B("What you still need to figure out:")]));
+body.push(bullet([B("Ball sizes that match your trailers "), T("— 2-5/16\" for the heavy ones (14K / 9,990), 2\" for the 5x8. Stock the right ones.")]));
+body.push(bullet([B("Your rental price per item "), T("— the seeded numbers ($8–$35) are placeholders; set what you'll actually charge.")]));
+body.push(bullet([B("How many of each you keep on hand "), T("— the app doesn't track add-on quantity yet, so watch it manually so you don't promise a ball mount that's already out with another rental.")]));
+body.push(bullet([B("Getting it back "), T("— it's a rental, so decide how you handle non-returns (e.g. add a small deposit or charge for a missing part). The trailer's deposit is separate.")]));
+body.push(bullet([B("Brake controller "), T("— decide whether you stock a plug-in one, and confirm it works with the trucks your customers drive.")]));
 
 body.push(H2("Signing in"));
 body.push(P([B("Owner: "), T("your address → owner password. "), B("Crew: "), T("Team sign-in on your public site → phone/email + personal PIN.")]));
