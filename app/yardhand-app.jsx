@@ -8,7 +8,7 @@ import {
   Phone, Mail, MapPin, Wrench, RotateCcw, ShieldCheck, CreditCard, Search,
   ChevronRight, CircleDot, PackageCheck, CalendarClock, Building2, User, Home,
   BarChart3, TrendingUp, TrendingDown, Percent, Image as ImageIcon, Sparkles, Trash2,
-  LogOut, Lock, Users, FileText, Info
+  LogOut, Lock, Users, FileText, Info, Send, MessageSquare, UserPlus, Megaphone
 } from "lucide-react";
 
 /* ---------------- design tokens (inline styles; no arbitrary Tailwind) --------------- */
@@ -351,8 +351,16 @@ const SEED = {
     ownerAlertNewBooking: true, ownerAlertCancel: true, ownerAlertTextToBook: true, ownerAlertScheduleChange: false, ownerAlertHandoff: true,
     textToBookAutoReply: true, bookingLink: "", textToBookMessage: "Thanks for reaching out! You can book your trailer online in about a minute here:", textToBookNotifyChannel: "both",
     marketingRebook: false, marketingRebookMessage: "Hi! It's been a while since your last rental — need a dump trailer again? You can book online in about a minute:", marketingRebookDays: 90, marketingRebookChannel: "text", marketingOptOut: [], marketingPrefs: {},
+    messageTemplates: [
+      { id: "t_winback", name: "Win-back (haven't rented lately)", text: "Hi {name}, it's {business} — been a while! Need a dump trailer for a cleanout, roofing, or demo job? Book online in about a minute:" },
+      { id: "t_promo", name: "Promo / discount", text: "Hi {name}, {business} here — this week only, $20 off any dump-trailer rental. Reserve your dates online:" },
+      { id: "t_season", name: "Seasonal reminder", text: "Hi {name}, cleanup season is here — grab a dump trailer from {business} before the calendar fills up. Book online:" },
+      { id: "t_review", name: "Ask for a review", text: "Thanks for renting with {business}, {name}! If we did right by you, a quick Google review would mean the world:" },
+    ],
     agreementText: "RENTAL AGREEMENT & LIABILITY WAIVER\n\n1. TOWING. I will tow the trailer with a properly rated vehicle, hitch, and working lights/brakes, and I accept full responsibility for safe, legal towing.\n\n2. LOAD LIMITS. I will not exceed the trailer's rated payload/GVWR. Overweight fines, tickets, and resulting damage are my responsibility.\n\n3. LAWFUL DISPOSAL. I will haul and dispose of debris only at a lawful facility. No hazardous waste, liquids, tires, or prohibited materials. I am responsible for lawful disposal.\n\n4. CONDITION & RETURN. I accept the trailer in good working condition and will return it in the same condition, reasonably clean and empty, less normal wear. A quick inspection occurs at handover and return.\n\n5. LIABILITY & INDEMNITY. I assume all liability and hold the owner harmless for any injury, death, or property damage arising from my towing, hauling, or use of the trailer.\n\n6. DEPOSIT & DAMAGE. A refundable deposit hold applies. I authorize charges for damage, overweight stress, late return, or a dirty/contaminated trailer.\n\n7. RENTED TOW GEAR & ATTACHMENTS. Any hitch ball, ball mount/drawbar, adapter, brake controller, straps, or other accessory I rent is provided as-is for my convenience. I am responsible for confirming it is the correct size and rating for my vehicle and my loaded weight, for inspecting it before use, and for hitching, connecting, and securing it correctly. I accept full responsibility for its use and hold the owner harmless for any injury, death, or property damage arising from it.\n\n8. OWNERSHIP. The owner retains ownership; no subletting. Governing law: North Carolina.\n\nBy signing, I confirm I have read and agree to these terms and the posted cancellation policy.",
   },
+  prospects: [],
+  campaigns: [],
   types: [
     { size: "7x14", name: "7×14 Dump (14K GVWR)", cuyd: "7.3 cu yd", daily: 155, weekly: 580, biweekly: 1120, monthly: 1880, image: "",
       desc: "Our biggest hauler. 14,000 lb GVWR, dual 7K axles, and 24\" sides that hold 7.3 cubic yards — the right pick for concrete tear-outs, roofing tear-offs, and heavy demo. Ramps and a full-height rear gate included.",
@@ -584,7 +592,8 @@ export default function App({ embed = false }) {
               {tab === "insights" && <InsightsView {...{ state: scoped }} />}
               {tab === "calendar" && <CalendarBoard {...{ state: scoped, trailerStatus, openDetail: setDetail }} />}
               {tab === "bookings" && <BookingsView {...{ state: scoped, typeBySize, setBooking, flash, openDetail: setDetail, openExtend: setExtend }} />}
-              {tab === "customers" && <CustomersView {...{ state: scoped, openDetail: setDetail, update }} />}
+              {tab === "customers" && <CustomersView {...{ state: scoped, openDetail: setDetail, update, flash }} />}
+              {tab === "marketing" && <MarketingView {...{ state, setState, update, flash }} />}
               {tab === "team" && <TeamView {...{ state: scoped, locId, setBooking, update, flash, openDetail: setDetail }} />}
               {tab === "fleet" && <FleetView {...{ state: scoped, locId, typeBySize, trailerStatus, currentBooking, update, flash }} />}
               {tab === "settings" && <SettingsView {...{ state, setState, flash, locId, locations, switchLoc }} />}
@@ -1267,6 +1276,7 @@ function OwnerNav({ tab, setTab }) {
     ["calendar", "Calendar", CalendarDays],
     ["bookings", "Bookings", ClipboardList],
     ["customers", "Customers", Users],
+    ["marketing", "Marketing", Megaphone],
     ["team", "Team & dispatch", User],
     ["fleet", "Fleet", Boxes],
     ["settings", "Settings", Settings],
@@ -2322,9 +2332,18 @@ function StatusPill({ b }) {
   const [label, c, bg] = STATUS_PILL[k] || ["—", T.sub, T.graySoft];
   return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: c, background: bg }}>{label}</span>;
 }
-function CustomersView({ state, openDetail, update }) {
+function CustomersView({ state, openDetail, update, flash }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null); // customer key pending delete confirmation
+  const delCustomer = (c) => {
+    update((n) => {
+      n.bookings = (n.bookings || []).filter((b) => (b.name || "—").trim().toLowerCase() !== c.key);
+      if (n.business && Array.isArray(n.business.marketingOptOut)) n.business.marketingOptOut = n.business.marketingOptOut.filter((k) => k !== c.key);
+    });
+    setConfirmDel(null); setOpen(null);
+    if (flash) flash(`Deleted ${c.name} and their ${c.rentals} rental${c.rentals === 1 ? "" : "s"}.`, true);
+  };
   const customers = useMemo(() => computeCustomers(state), [state]);
   const ql = q.trim().toLowerCase();
   const filtered = ql ? customers.filter((c) =>
@@ -2402,11 +2421,205 @@ function CustomersView({ state, openDetail, update }) {
                     </div>
                   </button>
                 ))}
+                {update && (
+                  <div className="pt-2">
+                    {confirmDel === c.key ? (
+                      <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.redSoft }}>
+                        <span className="text-xs font-bold" style={{ color: T.red }}>Delete {c.name} and their {c.rentals} rental{c.rentals === 1 ? "" : "s"}?</span>
+                        <div className="flex gap-1.5 shrink-0">
+                          <button onClick={() => delCustomer(c)} className="text-[11px] font-bold px-2.5 py-1.5 rounded" style={{ background: T.red, color: "#fff" }}>Yes, delete</button>
+                          <button onClick={() => setConfirmDel(null)} className="text-[11px] font-bold px-2.5 py-1.5 rounded" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmDel(c.key)} className="text-[11px] font-bold flex items-center gap-1" style={{ color: T.red }}><Trash2 size={12} /> Delete customer</button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+/* ---------------- MARKETING --------------- */
+function MarketingView({ state, setState, update, flash }) {
+  const b = state.business || {};
+  const customers = useMemo(() => computeCustomers(state), [state]);
+  const prospects = state.prospects || [];
+  const templates = b.messageTemplates || [];
+  const campaigns = state.campaigns || [];
+
+  const [channel, setChannel] = useState(b.marketingRebookChannel || "text");
+  const [toCust, setToCust] = useState(true);
+  const [toProsp, setToProsp] = useState(true);
+  const [msg, setMsg] = useState("");
+  const [tplId, setTplId] = useState("");
+
+  const optedOut = new Set(b.marketingOptOut || []);
+  const wantsPhone = channel === "text" || channel === "both";
+  const wantsEmail = channel === "email" || channel === "both";
+  const reachable = (r) => (wantsPhone && r.phone) || (wantsEmail && r.email);
+  const custRecipients = customers.filter((c) => !optedOut.has(c.key) && reachable(c));
+  const prospRecipients = prospects.filter((p) => reachable(p));
+  const recipients = [...(toCust ? custRecipients : []), ...(toProsp ? prospRecipients : [])];
+
+  const fill = (t, name) => (t || "").replace(/\{name\}/gi, ((name || "there").split(" ")[0])).replace(/\{business\}/gi, b.name || "us");
+  const link = b.bookingLink || "";
+  const sampleName = (recipients[0] && recipients[0].name) || (customers[0] && customers[0].name) || "Alex";
+  const preview = (fill(msg, sampleName) + (link ? " " + link : "")).trim();
+
+  const pickTemplate = (id) => { setTplId(id); const t = templates.find((x) => x.id === id); if (t) setMsg(t.text); };
+
+  const send = () => {
+    if (!msg.trim()) { flash("Write a message first."); return; }
+    if (!recipients.length) { flash("No reachable contacts for that audience and channel."); return; }
+    const camp = { id: "cmp" + Date.now(), at: new Date().toISOString(), channel, count: recipients.length,
+      audience: [toCust ? `${custRecipients.length} customer${custRecipients.length === 1 ? "" : "s"}` : null, toProsp ? `${prospRecipients.length} prospect${prospRecipients.length === 1 ? "" : "s"}` : null].filter(Boolean).join(" + "),
+      text: msg };
+    setState((s) => ({ ...s, campaigns: [camp, ...(s.campaigns || [])].slice(0, 50) }));
+    flash(`Queued to ${recipients.length} contact${recipients.length === 1 ? "" : "s"} by ${channelLabel(channel)}. Real sending turns on when your text/email service is connected.`, true);
+  };
+
+  const setTpl = (id, patch) => setState((s) => ({ ...s, business: { ...s.business, messageTemplates: (s.business.messageTemplates || []).map((t) => t.id === id ? { ...t, ...patch } : t) } }));
+  const addTpl = () => setState((s) => ({ ...s, business: { ...s.business, messageTemplates: [...(s.business.messageTemplates || []), { id: "t" + Date.now(), name: "New template", text: "" }] } }));
+  const delTpl = (id) => setState((s) => ({ ...s, business: { ...s.business, messageTemplates: (s.business.messageTemplates || []).filter((t) => t.id !== id) } }));
+
+  const [pName, setPName] = useState(""); const [pPhone, setPPhone] = useState(""); const [pEmail, setPEmail] = useState(""); const [pNote, setPNote] = useState("");
+  const addProspect = () => {
+    if (!pName.trim()) { flash("Give the prospect a name."); return; }
+    const p = { id: "p" + Date.now(), name: pName.trim(), phone: pPhone.trim(), email: pEmail.trim(), note: pNote.trim(), addedAt: new Date().toISOString() };
+    setState((s) => ({ ...s, prospects: [p, ...(s.prospects || [])] }));
+    setPName(""); setPPhone(""); setPEmail(""); setPNote("");
+    flash("Prospect added.", true);
+  };
+  const delProspect = (id) => { setState((s) => ({ ...s, prospects: (s.prospects || []).filter((p) => p.id !== id) })); flash("Prospect removed.", true); };
+
+  const seg = (v, l, cur, on) => <button key={v} onClick={() => on(v)} className="flex-1 py-1.5 rounded-md text-xs font-bold" style={cur === v ? { background: T.steel, color: "#fff" } : { color: T.sub }}>{l}</button>;
+  const badge = "text-[11px] font-bold px-2 py-1 rounded";
+
+  return (
+    <div className="space-y-4">
+      <SectionTitle>Marketing</SectionTitle>
+      <HelpNote>
+        <p>Reach past customers and your own prospects with a text or email — write it yourself or start from a template. Placeholders <b>{"{name}"}</b> and <b>{"{business}"}</b> fill in automatically for each person, and your booking link is added to the end.</p>
+        <p><b>Prospects</b> are leads you add by hand (someone who called, a contact from a job site). They live here so you can message them alongside past customers. <b>Automatic</b> win-back reminders are separate — set those in Settings → Payments &amp; messaging.</p>
+        <p><b>Note:</b> messages are set up and counted here now; real sending switches on when your text/email service is connected. Always give people a way to opt out — turn a customer off individually on their card in the Customers tab.</p>
+      </HelpNote>
+
+      {/* COMPOSE & SEND */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Send size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Send a message</h3>
+        </div>
+        <Field label="Who gets it">
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setToCust((v) => !v)} className="p-2.5 rounded-lg text-left" style={{ border: `2px solid ${toCust ? T.amber : T.line}`, background: toCust ? T.amberSoft : "#fff" }}>
+              <div className="text-sm font-bold flex items-center gap-1.5">{toCust ? <Check size={14} style={{ color: T.amberDk }} /> : <CircleDot size={14} style={{ color: T.sub }} />} Past customers</div>
+              <div className="text-[11px]" style={{ color: T.sub }}>{custRecipients.length} reachable by {channelLabel(channel)}</div>
+            </button>
+            <button onClick={() => setToProsp((v) => !v)} className="p-2.5 rounded-lg text-left" style={{ border: `2px solid ${toProsp ? T.amber : T.line}`, background: toProsp ? T.amberSoft : "#fff" }}>
+              <div className="text-sm font-bold flex items-center gap-1.5">{toProsp ? <Check size={14} style={{ color: T.amberDk }} /> : <CircleDot size={14} style={{ color: T.sub }} />} Prospects</div>
+              <div className="text-[11px]" style={{ color: T.sub }}>{prospRecipients.length} reachable by {channelLabel(channel)}</div>
+            </button>
+          </div>
+        </Field>
+        <Field label="Send by">
+          <div className="flex gap-1 p-1 rounded-lg" style={{ background: T.paper }}>
+            {[["text", "Text"], ["email", "Email"], ["both", "Text & email"]].map(([v, l]) => seg(v, l, channel, setChannel))}
+          </div>
+        </Field>
+        <Field label="Start from a template (optional)">
+          <select value={tplId} onChange={(e) => pickTemplate(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}`, background: "#fff" }}>
+            <option value="">Write my own…</option>
+            {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Message"><textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={4} placeholder="Type your message… use {name} and {business} and they fill in per person." className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
+        {msg.trim() && <div className="text-xs p-2.5 rounded-lg" style={{ background: T.blueSoft, color: T.blue }}><b>Preview (as {sampleName.split(" ")[0]}):</b> {preview}{!link && <span className="block mt-1 opacity-80">Tip: add your booking link in Settings → Payments &amp; messaging so it's appended automatically.</span>}</div>}
+        <button onClick={send} disabled={!recipients.length || !msg.trim()} className="w-full py-2.5 rounded-lg font-extrabold flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: T.amber, color: T.steelDk }}>
+          <Send size={16} /> Send to {recipients.length} contact{recipients.length === 1 ? "" : "s"}
+        </button>
+      </Card>
+
+      {/* PROSPECTS */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><UserPlus size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Prospects &amp; leads · {prospects.length}</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>People who haven't rented yet — add anyone who called or you met on a job. They can be included in your messages above.</p>
+        <div className="grid grid-cols-2 gap-2">
+          <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="Name *" className="p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+          <input value={pPhone} onChange={(e) => setPPhone(e.target.value)} placeholder="Phone" className="p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+          <input value={pEmail} onChange={(e) => setPEmail(e.target.value)} placeholder="Email" className="p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+          <input value={pNote} onChange={(e) => setPNote(e.target.value)} placeholder="Note (e.g. roofer, called 6/1)" className="p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+        </div>
+        <button onClick={addProspect} className="w-full py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5" style={{ background: T.paper, color: T.steel, border: `1px dashed ${T.steel}` }}><Plus size={15} /> Add prospect</button>
+        {prospects.length === 0 ? <Empty>No prospects yet — add your first lead above.</Empty> : (
+          <div className="space-y-2">
+            {prospects.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg" style={{ background: T.paper }}>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold truncate">{p.name}</div>
+                  <div className="text-xs truncate" style={{ color: T.sub }}>{[p.phone, p.email, p.note].filter(Boolean).join(" · ") || "no contact info"}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {p.phone && <a href={`tel:${p.phone}`} title="Call" className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft, color: T.blue }}><Phone size={13} /></a>}
+                  <button onClick={() => delProspect(p.id)} title="Remove" className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: T.redSoft, color: T.red }}><Trash2 size={13} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* TEMPLATES */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><MessageSquare size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Message templates</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Saved messages you can reuse. Edit the text to whatever you want — <b>{"{name}"}</b> and <b>{"{business}"}</b> fill in per person.</p>
+        <div className="space-y-2">
+          {templates.map((t) => (
+            <div key={t.id} className="p-2.5 rounded-lg space-y-1.5" style={{ background: T.paper }}>
+              <div className="flex items-center gap-2">
+                <input value={t.name} onChange={(e) => setTpl(t.id, { name: e.target.value })} className="flex-1 px-2 py-1.5 rounded-lg text-sm font-semibold" style={{ border: `1px solid ${T.line}`, background: "#fff" }} />
+                <button onClick={() => delTpl(t.id)} title="Delete template" className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: T.redSoft, color: T.red }}><Trash2 size={13} /></button>
+              </div>
+              <textarea value={t.text} onChange={(e) => setTpl(t.id, { text: e.target.value })} rows={2} className="w-full px-2 py-1.5 rounded-lg text-[13px]" style={{ border: `1px solid ${T.line}`, background: "#fff" }} />
+            </div>
+          ))}
+        </div>
+        <button onClick={addTpl} className="w-full py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5" style={{ background: T.paper, color: T.steel, border: `1px dashed ${T.steel}` }}><Plus size={15} /> Add template</button>
+      </Card>
+
+      {/* RECENT SENDS */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Clock size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Recent sends</h3>
+        </div>
+        {campaigns.length === 0 ? <Empty>Nothing sent yet — your campaigns will show here.</Empty> : (
+          <div className="space-y-2">
+            {campaigns.map((c) => (
+              <div key={c.id} className="p-2.5 rounded-lg" style={{ background: T.paper }}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={badge} style={{ background: T.blueSoft, color: T.blue }}>{channelLabel(c.channel)} · {c.count} sent</span>
+                  <span className="text-[11px]" style={{ color: T.sub }}>{new Date(c.at).toLocaleString()}</span>
+                </div>
+                <div className="text-xs mt-1" style={{ color: T.sub }}>{c.audience}</div>
+                <div className="text-[13px] mt-1">{c.text}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
