@@ -725,10 +725,12 @@ function Landing({ state, typeBySize, go, owner, team, operator }) {
         <div className="grid md:grid-cols-3 gap-4">
           {state.types.map((t, i) => (
             <div key={t.size} className="rounded-2xl p-5 flex flex-col" style={{ background: "#fff", border: `1px solid ${i === 0 ? T.amber : T.line}` }}>
-              {i === 0 && <div className="inline-block self-start text-[11px] font-bold px-2 py-0.5 rounded-full mb-2" style={{ background: T.amberSoft, color: T.amberDk }}>Most popular</div>}
-              {t.image
-                ? <img src={t.image} alt={t.name} className="w-full h-40 rounded-xl object-cover mb-3" />
-                : <TrailerArt className="w-full h-40 rounded-xl overflow-hidden mb-3" />}
+              <div className="relative mb-3">
+                {t.image
+                  ? <img src={t.image} alt={t.name} className="w-full h-40 rounded-xl object-cover" />
+                  : <TrailerArt className="w-full h-40 rounded-xl overflow-hidden" />}
+                {i === 0 && <div className="absolute top-2 left-2 text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm" style={{ background: T.amber, color: T.steelDk }}>Most popular</div>}
+              </div>
               <div className="font-extrabold text-lg">{t.name}</div>
               <div className="text-xs mb-3" style={{ color: T.sub }}>{t.cuyd || " "}</div>
               <div className="flex items-baseline gap-1"><span className="text-3xl font-extrabold tabular-nums">${t.daily}</span><span className="text-sm" style={{ color: T.sub }}>/24 hrs</span></div>
