@@ -287,8 +287,8 @@ function mkHistory() {
 // Defaults are Ext Professionals' dump-trailer wording so the owner's site is unchanged out of the box.
 const SITE_DEFAULTS = {
   siteMode: "full", // full = hosted storefront + booking · booking = booking page only (own website markets) · owner = no public page
-  heroTitle: "Dump trailers,",
-  heroAccent: "ready when you are.",
+  heroTitle: "Dump trailers for",
+  heroAccent: "remodels, roofing, demo & more.",
   heroSub: "Rent a dump trailer for roofing tear-offs, remodel and demolition debris, construction and renovation cleanouts, or landscaping and junk haul-off. We deliver, or pick it up at our yard — book online in under a minute.",
   trustLine: "Trusted by Charlotte contractors & homeowners",
   fleetHeading: "Pick your size",
