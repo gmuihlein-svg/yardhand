@@ -3029,6 +3029,7 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
           <MapPin size={16} /> Editing settings for <b>{curLoc.name}</b> — these changes apply to this branch only. Switch branches in the top bar.
         </div>
       )}
+      <Section title="Business & website" icon={Building2}>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Building2 size={16} style={{ color: T.amberDk }} /></span>
@@ -3283,6 +3284,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         </div>
         <button onClick={() => { set({ theme: { ...DEFAULT_THEME } }); flash("Colors reset to default.", true); }} className="text-xs font-bold" style={{ color: T.steel }}>Reset to default colors</button>
       </Card>
+      </Section>
+      <Section title="Owner access" icon={Lock}>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.steel }}><Lock size={16} style={{ color: "#fff" }} /></span>
@@ -3296,6 +3299,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         </div>
         <p className="text-[11px]" style={{ color: T.sub }}>Prototype note: these are simple gates stored in your browser. Real logins with individual staff accounts, roles, and encrypted passwords come with the database phase.</p>
       </Card>
+      </Section>
+      <Section title="Pricing & equipment" icon={Boxes}>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><Truck size={16} style={{ color: T.green }} /></span>
@@ -3363,6 +3368,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         ))}
         <p className="text-[11px]" style={{ color: T.sub }}>Photos are saved to this browser and auto-shrunk to fit. When you go live, they'll move to cloud storage.</p>
       </Card>
+      </Section>
+      <Section title="Booking & rental policy" icon={CalendarClock}>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><DollarSign size={16} style={{ color: T.green }} /></span>
@@ -3431,6 +3438,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         </div>
         <p className="text-[11px]" style={{ color: T.sub }}>However far out someone books, <b>you never lose track</b>: any staffed job coming up with nobody assigned shows red on your dashboard, and if a worker drops off a job it re-assigns or flags for you. Set repeating hours in <b>Team &amp; dispatch</b> so far-out days fill themselves.</p>
       </Card>
+      </Section>
+      <Section title="Team, roles & tow gear" icon={Users}>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><Users size={16} style={{ color: T.blue }} /></span>
@@ -3575,6 +3584,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
             : `Salary: each person gets the same fixed amount every ${b.flatPeriod === "biweekly" ? "two weeks" : "week"}, no matter how many jobs or hours. Team & dispatch shows a payroll list with each person's ${b.flatPeriod === "biweekly" ? "bi-weekly" : "weekly"} amount and a Pay button; set each person's salary on their card. Best for a steady crew you keep on regardless of volume.`}
         </p>
       </Card>
+      </Section>
+      <Section title="Payments & messaging" icon={Settings}>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.greenSoft }}><CreditCard size={16} style={{ color: T.green }} /></span>
@@ -3740,6 +3751,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
           </>
         )}
       </Card>
+      </Section>
+      <Section title="Policies & data" icon={Settings}>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><RotateCcw size={16} style={{ color: T.blue }} /></span>
@@ -3783,6 +3796,7 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         })}
           className="px-3 py-2 rounded-lg text-sm font-bold" style={{ background: T.redSoft, color: T.red }}>Reset everything</button>
       </Card>
+      </Section>
       <p className="text-xs text-center pt-2" style={{ color: T.sub }}>
         {cloudEnabled
           ? "✓ Synced to the cloud — your data is backed up and shared across your devices."
@@ -4702,6 +4716,21 @@ function HelpNote({ title = "How this page works", children }) {
         <ChevronRight size={16} style={{ color: T.blue, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
       </button>
       {open && <div className="px-3 pb-3 text-xs leading-relaxed space-y-1.5" style={{ color: T.blue }}>{children}</div>}
+    </div>
+  );
+}
+function Section({ title, icon: Icon, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ background: T.panel, border: `1px solid ${T.line}` }}>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left">
+        <span className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wide" style={{ color: T.ink }}>
+          {Icon && <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Icon size={16} style={{ color: T.amberDk }} /></span>}
+          {title}
+        </span>
+        <ChevronRight size={18} style={{ color: T.sub, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+      </button>
+      {open && <div className="px-3 pb-4 space-y-6">{children}</div>}
     </div>
   );
 }
