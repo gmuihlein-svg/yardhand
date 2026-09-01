@@ -138,6 +138,9 @@ body.push(bullet([B("List your business in a few local directories "), T("(Yelp,
 body.push(H2("How the money works"));
 body.push(P("Per-unit daily/weekly/2-week/monthly rates; delivery/self-pickup fees; a refundable deposit hold (not a charge); optional damage waiver; sales tax; cancellation rules. Crew pay: choose their tax status (1099/W2) and how you pay (per-job / hourly / salary), any mix; payroll views total what's owed with a Pay/Mark-paid button."));
 
+body.push(H2("Tow gear & add-ons"));
+body.push(P([T("Customers often show up without the right hitch. In "), B("Settings → Tow gear & add-ons"), T(", stock the parts they might need — hitch balls, a ball mount, a 7-pin → 4-flat adapter, a plug-in brake controller, straps, a pin & lock — with your own prices. They appear on the booking page under "), B("“Don't have the right hitch?”"), T(", get charged once per order, and show on the booking as "), B("“Tow gear to have ready”"), T(" so you can set it out at pickup. Keep each equipment type's “You'll need to tow this” note accurate so customers know what to grab.")]));
+
 body.push(H2("Signing in"));
 body.push(P([B("Owner: "), T("your address → owner password. "), B("Crew: "), T("Team sign-in on your public site → phone/email + personal PIN.")]));
 
