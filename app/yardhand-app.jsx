@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { loadWorkspace, saveWorkspace, subscribeWorkspace, cloudEnabled } from "./db";
 import {
   Truck, LayoutDashboard, CalendarDays, ClipboardList, Boxes, Settings,
@@ -572,7 +572,7 @@ export default function App({ embed = false }) {
   return (
     <div className="min-h-screen" style={{ background: T.paper, color: T.ink, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
       {mode === "landing" ? (
-        <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} team={() => setMode("employee")} />
+        <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); if (!authed) { try { history.pushState(null, ""); } catch (e) {} } }} owner={() => setMode("owner")} team={() => setMode("employee")} />
       ) : mode === "owner" && !authed ? (
         <OwnerLogin state={state} onBack={() => { setMode("landing"); try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch (e) {} }}
           onAuthed={() => { setAuthed(true); try { sessionStorage.setItem("yardhand_owner", "1"); } catch (e) {} }} />
@@ -4164,6 +4164,19 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash
   const [picked, setPicked] = useState(null);
   const [err, setErr] = useState("");
   const [panel, setPanel] = useState(null); // 'extend' | 'logistics' | 'cancel'
+  // Browser/phone Back: close an open panel, then deselect the booking, then out to the storefront.
+  const pickedRef = useRef(picked); useEffect(() => { pickedRef.current = picked; }, [picked]);
+  const panelRef = useRef(panel); useEffect(() => { panelRef.current = panel; }, [panel]);
+  useEffect(() => {
+    if (embed || authed) return;
+    const onPop = () => {
+      if (panelRef.current) { setPanel(null); try { history.pushState(null, ""); } catch (e) {} }
+      else if (pickedRef.current) { setPicked(null); try { history.pushState(null, ""); } catch (e) {} }
+      else { setMode("landing"); }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [embed, authed, setMode]);
 
   const digits = (s) => (s || "").replace(/\D/g, "");
   const lookupBooking = () => {
@@ -4441,6 +4454,20 @@ function PriceBreakdown({ type, days, base, waiver, waiverAmt, outMethod, return
 function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode, authed, embed = false }) {
   const [stepN, setStepN] = useState(0);
   const [lastCode, setLastCode] = useState("");
+  // Make the browser/phone Back button feel normal: step back through the wizard, then out to the
+  // storefront. (This is a single-page app, so screens don't change the address bar on their own.)
+  const stepRef = useRef(stepN);
+  useEffect(() => { stepRef.current = stepN; }, [stepN]);
+  useEffect(() => {
+    if (embed || authed) return; // only for public customers; staff navigate with the top bar
+    const onPop = () => {
+      const n = stepRef.current;
+      if (n > 0 && n < 4) { setStepN(n - 1); try { history.pushState(null, ""); } catch (e) {} }
+      else { setMode("landing"); }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [embed, authed, setMode]);
   const b = state.business;
   const [form, setForm] = useState({
     size: null, start: addDays(today(), 1), days: 3, pickupTime: b.pickupHours[0], returnTime: b.pickupHours[0],
