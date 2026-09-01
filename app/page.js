@@ -13,7 +13,7 @@ export default async function Page() {
   const [locality, region] = cityFull.split(",").map((s) => s.trim());
   const phone = (biz && biz.phone) || "(704) 555-0100";
   const description = (biz && biz.seoDescription && biz.seoDescription.trim()) ||
-    `Dump trailer rental in ${cityFull}. Book online for concrete, roofing, cleanouts, or yard debris — delivery or will-call, no CDL needed.`;
+    `Dump trailer rental in ${cityFull}. Roofing, concrete, demolition, renovation cleanouts, or landscaping haul-off — book online, delivery or will-call, no CDL needed.`;
   const offers = Array.isArray(biz && biz.types) && biz.types.length
     ? biz.types.filter((t) => t && t.name).map((t) => ({
         "@type": "Offer",
