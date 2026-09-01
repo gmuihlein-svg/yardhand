@@ -115,6 +115,7 @@ body.push(check("Settings → business name, yard/location, phone, hours, time z
 body.push(check("Fleet → add your real trailers (size, GVWR/payload) and remove the sample ones."));
 body.push(check("Settings → prices, delivery/collection fees, deposit, tax rate, and cancellation policy."));
 body.push(check("Settings → Tow gear & add-ons → set each item's On-hand count to what you actually own (buy quality, load-rated hardware)."));
+body.push(check("Adopt the tow-gear rule that protects you: supplying gear is your sharpest liability (a failed ball mount can mean a product-liability claim a waiver may not cover). Never certify that a ball or mount fits a customer's truck — supply rated, inspected gear and let them confirm the fit. The booking page already tells customers they're responsible for size/rating, offers gear as-is, and the rental agreement has a dedicated tow-gear clause; keep all three in place."));
 body.push(check("Settings → Owner access → change the owner password off the demo default; add your crew and their PINs."));
 body.push(check("Settings → your website copy, hero photo, and site mode (full site / booking-only / owner-only); point your domain at it when ready."));
 body.push(check("Do a full test booking yourself end-to-end (book → agreement → pay → dispatch → return) before you go live."));
