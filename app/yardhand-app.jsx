@@ -1835,6 +1835,10 @@ function FleetView({ state, locId, typeBySize, trailerStatus, currentBooking, up
                       title="Toggle maintenance" className="p-1.5 rounded-md" style={{ background: tr.maint ? T.amber : "transparent", color: tr.maint ? T.steelDk : T.sub, border: `1px solid ${T.line}` }}>
                       <Wrench size={14} />
                     </button>
+                    <button onClick={() => { if (cb) { flash(`That unit is on ${cb.name}'s rental — cancel or return it first.`); return; } update((n) => { n.trailers = n.trailers.filter((x) => x.id !== tr.id); }); flash(`Removed unit ${tr.assetId}.`, true); }}
+                      title="Remove this unit" className="p-1.5 rounded-md" style={{ background: "transparent", color: T.red, border: `1px solid ${T.line}` }}>
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
               );
@@ -2677,13 +2681,14 @@ function TeamView({ state, locId, setBooking, update, flash, openDetail }) {
                   <div className="flex gap-2 justify-end mt-0.5">
                     {c.active && <button onClick={() => sickDay(c.id, c.name.split(" ")[0])} className="text-[11px] font-bold" style={{ color: T.red }}>sick today</button>}
                     <button onClick={() => toggleActive(c)} className="text-[11px] font-bold" style={{ color: T.sub }}>{c.active ? "set inactive" : "set active"}</button>
+                    <button onClick={() => { if (open > 0) { flash(`${c.name.split(" ")[0]} still has ${open} job${open === 1 ? "" : "s"} booked — reassign those first, or use “set inactive.”`); return; } update((n) => { n.contractors = n.contractors.filter((x) => x.id !== c.id); }); flash(`Removed ${c.name}.`, true); }} title="Remove permanently" className="text-[11px] font-bold" style={{ color: T.red }}>remove</button>
                   </div>
                 </div>
               </div>
             );
           })}
         </div>
-        <p className="text-[11px] mt-2" style={{ color: T.sub }}><b>sick today</b> frees just today's jobs and hands them to someone else; <b>set inactive</b> takes a person off the schedule for a while and frees their upcoming jobs.</p>
+        <p className="text-[11px] mt-2" style={{ color: T.sub }}><b>sick today</b> frees just today's jobs and hands them to someone else; <b>set inactive</b> takes a person off the schedule for a while and frees their upcoming jobs (they can't sign in while inactive); <b>remove</b> deletes them for good — best once someone leaves and you no longer need their history.</p>
       </Card>
 
       {/* ─────────── 3) THE HOURS — availability calendar ─────────── */}
@@ -3755,6 +3760,17 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
         <textarea value={b.agreementText} onChange={(e) => set({ agreementText: e.target.value })} rows={8}
           className="w-full p-2.5 rounded-lg text-xs" style={{ border: `1px solid ${T.line}`, fontFamily: "ui-monospace, monospace" }} />
         <p className="text-[11px]" style={{ color: T.sub }}>Prototype note: this captures a signature record. A production e-sign service (DocuSign, Dropbox Sign, SignWell) adds a tamper-evident audit trail and secure storage when you go live.</p>
+      </Card>
+      <Card className="p-4">
+        <h3 className="font-bold text-sm uppercase tracking-wide mb-1">Start fresh — clear the example rentals</h3>
+        <p className="text-xs mb-3" style={{ color: T.sub }}>Removes the sample <b>bookings</b> and the <b>customers</b> that come from them, so your dashboard, calendar, and bookings start empty and real. <b>Keeps</b> everything you set up — your equipment catalog, tow gear, pricing, roles, crew, website, password, and settings. Undoable for a few seconds.</p>
+        <button onClick={() => setConfirm({
+          title: "Clear the example rentals?",
+          body: "This removes every booking and its customers so you start with a clean, empty schedule. Your equipment, tow gear, pricing, crew, website, password, and all settings stay exactly as they are. You can undo it for a few seconds after.",
+          confirmLabel: "Clear example rentals", danger: true,
+          onYes: () => { setState((s) => ({ ...s, bookings: [] })); flash("Cleared the example rentals — clean slate.", true); },
+        })}
+          className="px-3 py-2 rounded-lg text-sm font-bold" style={{ background: T.redSoft, color: T.red }}>Clear example rentals</button>
       </Card>
       <Card className="p-4">
         <h3 className="font-bold text-sm uppercase tracking-wide mb-1">Reset demo data</h3>
