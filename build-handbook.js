@@ -101,6 +101,24 @@ body.push(P([T("The owner & crew guide.", { italics: true, color: SUB })]));
 body.push(H2("The big picture"));
 body.push(P("Yardhand runs your whole rental yard from one screen: customers book & pay themselves, you dispatch drivers, track your fleet, and see your money — no wall calendar, no phone tag."));
 
+body.push(H2("Before you open — your startup checklist"));
+body.push(P([T("Do these before you take your first real booking. The first block is legal/business setup (off-app, but the app can't substitute for it); the second is getting the app ready.")]));
+body.push(P([B("Set up the business:")]));
+body.push(check("Form an LLC (or have your attorney/CPA advise on the right entity) so a claim comes after the business, not your personal assets."));
+body.push(check("Get commercial general-liability insurance written for trailer/equipment rental — call a commercial agent, not your personal auto insurer. This is your real protection in a crash or injury; don't rent until it's in force."));
+body.push(check("Have a North Carolina attorney review and finalize your rental agreement (the app's built-in text is a solid starting draft, not a lawyer-reviewed contract)."));
+body.push(check("Decide your Certificate-of-Insurance rule (Settings → who must show proof of insurance) and require it where it makes sense — commercial customers at minimum."));
+body.push(check("Register for state/local business licenses and sales-tax collection as required; confirm your tax rate in Settings."));
+body.push(check("Open a business bank account and set up how you'll take deposits and payments."));
+body.push(P([B("Get the app ready:")]));
+body.push(check("Settings → business name, yard/location, phone, hours, time zone, and logo."));
+body.push(check("Fleet → add your real trailers (size, GVWR/payload) and remove the sample ones."));
+body.push(check("Settings → prices, delivery/collection fees, deposit, tax rate, and cancellation policy."));
+body.push(check("Settings → Tow gear & add-ons → set each item's On-hand count to what you actually own (buy quality, load-rated hardware)."));
+body.push(check("Settings → Owner access → change the owner password off the demo default; add your crew and their PINs."));
+body.push(check("Settings → your website copy, hero photo, and site mode (full site / booking-only / owner-only); point your domain at it when ready."));
+body.push(check("Do a full test booking yourself end-to-end (book → agreement → pay → dispatch → return) before you go live."));
+
 body.push(H2("The one idea worth understanding: two legs"));
 body.push(P([T("Every rental is "), B("two separate trips"), T(" — the OUT leg (getting the trailer to the customer) and the RETURN leg (getting it back). Each is scheduled on its own, so a month-long rental never ties up a driver for a month. Each leg is either self-serve (customer picks up / drops off at your yard — needs nobody) or you handle it (delivery / collection — needs a driver).")]));
 
@@ -148,6 +166,16 @@ body.push(bullet([B("Your rental price per item "), T("— the seeded numbers ($
 body.push(bullet([B("How many of each to buy "), T("— set each "), B("On hand"), T(" count to what you actually own. Aim for at least one of every common attachment per trailer so you're never short when the fleet is busy.")]));
 body.push(bullet([B("Getting it back "), T("— it's a rental, so decide how you handle non-returns (e.g. add a small deposit or charge for a missing part). The trailer's deposit is separate.")]));
 body.push(bullet([B("Brake controller "), T("— decide whether you stock a plug-in one, and confirm it works with the trucks your customers drive.")]));
+
+body.push(H2("Protecting yourself — insurance, agreements & liability"));
+body.push(callout("This is not legal advice.", [[T("It's a plain-English summary so you know what to ask a licensed insurance agent and a North Carolina business attorney. Get their sign-off before you rent to anyone.")]]));
+body.push(P([B("The app is a record-keeper, not a shield. "), T("It captures a signed rental agreement, a Certificate of Insurance, and a waiver, and it flags on the Dashboard when any are missing (red alerts). That paperwork is "), B("evidence that helps you"), T(" — it is not legal protection by itself. Your real protection comes from four things, none of them software:")]));
+body.push(num([B("Commercial insurance. "), T("A general-liability policy written for equipment/trailer rental is what actually covers a crash, injury, or death. Also require customers to carry and show their own auto/liability insurance — the app collects that Certificate of Insurance and warns you when it's missing or expired.")]));
+body.push(num([B("An LLC. "), T("Renting under a business entity keeps a lawsuit off your personal house, savings, and vehicle.")]));
+body.push(num([B("An attorney-reviewed agreement. "), T("Have a NC attorney finalize the rental agreement. Note the limits of any waiver: in most states it "), B("cannot"), T(" fully release you from your own gross negligence, and it's hard to waive away a personal-injury or wrongful-death claim by the person who was hurt. That's exactly why insurance is non-negotiable.")]));
+body.push(num([B("A careful, documented process. "), T("Inspect every trailer and every attachment before it goes out, keep only quality rated hardware, and keep records. “We inspected it and it was rated for the load” is what keeps a negligence claim off you.")]));
+body.push(P([B("If a customer does something wrong (a crash, overloading, illegal disposal): "), T("your signed agreement puts responsibility for safe, legal towing and loading on them, and their own insurance is the first line — but you'll still want your own liability policy in case you're named too. Never hand over a trailer without the agreement signed; the Dashboard flags any that aren't.")]));
+body.push(P([B("The wrong-attachment scenario is your sharpest risk. "), T("Because you now supply tow gear, a failed ball mount can pull you into a "), B("product-liability"), T(" claim on top of negligence — and a waiver may not save you from that. The app is built to reduce it: the booking page tells the customer "), B("they"), T(" are responsible for confirming size and load rating, gear is offered “as-is,” and the agreement has a dedicated tow-gear clause. Keep it that way — don't "), B("certify"), T(" that a given ball or mount fits a customer's truck; supply rated gear and let them confirm the fit. Stock only stamped, load-rated hardware from reputable makers, and inspect it every time.")]));
 
 body.push(H2("Signing in"));
 body.push(P([B("Owner: "), T("your address → owner password. "), B("Crew: "), T("Team sign-in on your public site → phone/email + personal PIN.")]));
