@@ -316,6 +316,17 @@ const SEED = {
       { id: "both", name: "Driver + Yard", drive: true, yard: true },
       { id: "mechanic", name: "Mechanic", drive: false, yard: false },
     ],
+    // Tow gear & add-ons the customer can grab if they don't have the right hitch/parts.
+    // Offered during booking; charged once per order; shown on the booking so you have it ready.
+    addons: [
+      { id: "ball238", name: "2-5/16\" hitch ball", desc: "For the heavy trailers (14K / 9,990). Fits your ball mount.", price: 18 },
+      { id: "ball2", name: "2\" hitch ball", desc: "For the 5x8 (5K). Fits your ball mount.", price: 12 },
+      { id: "mount", name: "Ball mount / drawbar", desc: "The bar that slides into your receiver — rent it for the trip.", price: 15 },
+      { id: "adapter", name: "7-pin → 4-flat adapter", desc: "If your truck only has a 4-pin connector.", price: 10 },
+      { id: "brake", name: "Plug-in brake controller", desc: "Portable brake controller if your truck doesn't have one.", price: 35 },
+      { id: "straps", name: "Ratchet straps (set of 4)", desc: "Tie your load down safely.", price: 20 },
+      { id: "pinlock", name: "Hitch pin & lock", desc: "Secures the ball mount in the receiver.", price: 8 },
+    ],
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
     dispatchMode: "auto", counterMode: "self", ownerWorks: true, bookHorizonDays: 30, scheduleControl: "both", bookingMode: "hybrid", hybridNearDays: 14, rr: 0, offerDelivery: true,
@@ -2938,6 +2949,11 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
     business: { ...s.business, roles: (s.business.roles || []).filter((r) => r.id !== id) },
     contractors: (s.contractors || []).map((c) => c.roleId === id ? { ...c, roleId: "both" } : c), // orphaned people fall back to Both
   }));
+  // Tow gear & add-ons (company-wide catalog)
+  const addons = state.business.addons || [];
+  const setAddonField = (id, patch) => setState((s) => ({ ...s, business: { ...s.business, addons: (s.business.addons || []).map((a) => a.id === id ? { ...a, ...patch } : a) } }));
+  const addAddon = () => setState((s) => ({ ...s, business: { ...s.business, addons: [...(s.business.addons || []), { id: `a${Date.now()}`, name: "New item", desc: "", price: 0 }] } }));
+  const delAddon = (id) => setState((s) => ({ ...s, business: { ...s.business, addons: (s.business.addons || []).filter((a) => a.id !== id) } }));
   const setType = (size, patch) => setState((s) => {
     if (isBase) return { ...s, types: s.types.map((t) => t.size === size ? { ...t, ...patch } : t) };
     return { ...s, locations: s.locations.map((l) => l.id === curId ? { ...l, types: (l.types || s.types).map((t) => t.size === size ? { ...t, ...patch } : t) } : l) };
@@ -2983,7 +2999,8 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
     <div className="space-y-6">
       <SectionTitle>Settings</SectionTitle>
       <HelpNote>
-        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, <b>whether you offer delivery</b> (Rental policy → turn off if you're yard-only), booking notice, <b>how far ahead you take bookings</b>, <b>when customers can book delivery/pickup</b>, <b>who sets work hours</b>, <b>job roles</b>, buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, <b>marketing win-back texts</b> (rebooking reminders to past customers — customers pick their own frequency or opt out, and you can turn it off per customer), cancellation policy, and your rental agreement.</p>
+        <p>Everything that makes the app <b>yours</b>: business name & time zone, <b>your website (storefront)</b>, locations/branches, branding (logo & colors), your equipment catalog with photos/descriptions/pricing, deposit & fees, <b>whether you offer delivery</b> (Rental policy → turn off if you're yard-only), booking notice, <b>how far ahead you take bookings</b>, <b>when customers can book delivery/pickup</b>, <b>who sets work hours</b>, <b>job roles</b>, <b>tow gear &amp; add-ons</b>, buffers, who covers jobs, how you pay your team, payments, notifications (customers, crew, you), text-to-book, <b>marketing win-back texts</b> (rebooking reminders to past customers — customers pick their own frequency or opt out, and you can turn it off per customer), cancellation policy, and your rental agreement.</p>
+        <p><b>Tow gear &amp; add-ons</b> lets you stock the hitch parts customers show up without — hitch balls, a ball mount, a 7-pin adapter, a plug-in brake controller, straps, a pin &amp; lock. Set your own list and prices; they appear on the booking page under <b>“Don't have the right hitch?”</b>, get charged once for the order, and show on the booking as <b>“Tow gear to have ready”</b> so you can set it out at pickup. Keep each equipment type's <b>“You'll need to tow this”</b> note accurate so customers know what to grab.</p>
         <p><b>How far ahead you take bookings</b> (in the booking-timing cards) sets a single window that does two jobs at once: it's how far out you schedule your crew's work hours <b>and</b> the furthest ahead a customer can book — because a customer can only reserve a day when someone's actually working. Choose 2 weeks up to 6 months (most rental businesses use 1–2 months). Your crew's dispatch board and each worker's calendar run this same window. A day with nobody scheduled can't be booked; deliveries always need a scheduled driver that day, while will-call stays open whenever you cover the counter yourself. <b>Long rentals are fine</b> even if they return past your window — the equipment just needs someone working the day it goes <i>out</i>; if you're collecting it back, that pickup gets scheduled closer to the return date, when you know who's working.</p>
         <p><b>Who sets work hours</b> lets each business pick how the crew's schedule is controlled: <b>Workers set their own</b> (crew choose their hours in their portal — good for contractors), <b>You set it for them</b> (only you schedule; the crew portal is read-only — good for W2 shifts), or <b>Either</b> (both can; the default). It only changes who can edit hours — you can always see the schedule and assign jobs.</p>
         <p><b>Job roles (positions)</b> let you make your own roles (Driver, Yard attendant, Mechanic, Manager — whatever fits) and set what each can do: <b>Delivery</b> (drives deliveries &amp; collections) and/or <b>Yard</b> (will-call &amp; yard returns). A person is only ever assigned a job their role can do — a Mechanic never gets a delivery, and the booking page only opens a delivery time when a delivery-capable person is scheduled. <b>Roles don't touch pay</b> — tax status (W2/1099) and how you pay (per-job / hourly / salary) are set separately and work the same for every role. (Note: since per-job pay only comes from delivery/yard jobs, non-dispatch roles like Mechanic are best paid hourly or salary.) Assign each person's role in Team &amp; dispatch.</p>
@@ -3446,6 +3463,30 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Wrench size={16} style={{ color: T.amberDk }} /></span>
+          <h3 className="font-bold text-sm uppercase tracking-wide">Tow gear &amp; add-ons</h3>
+        </div>
+        <p className="text-xs" style={{ color: T.sub }}>Hitch balls, ball mounts, adapters, brake controllers, straps — the gear a customer might not have. It's offered on the booking page (“Don't have the right hitch?”), charged once per order, and listed on the booking so you have it ready at pickup. Set your own list and prices.</p>
+        <div className="space-y-2">
+          <div className="grid items-center gap-2 text-[10px] font-bold uppercase tracking-wide px-1" style={{ color: T.sub, gridTemplateColumns: "1fr 60px 28px" }}>
+            <span>Item &amp; description</span><span className="text-center">Price $</span><span />
+          </div>
+          {addons.map((a) => (
+            <div key={a.id} className="grid items-start gap-2" style={{ gridTemplateColumns: "1fr 60px 28px" }}>
+              <div className="space-y-1">
+                <input value={a.name} onChange={(e) => setAddonField(a.id, { name: e.target.value })} placeholder="e.g. 2-5/16&quot; hitch ball" className="w-full px-2 py-1.5 rounded-lg text-sm font-semibold" style={{ border: `1px solid ${T.line}` }} />
+                <input value={a.desc || ""} onChange={(e) => setAddonField(a.id, { desc: e.target.value })} placeholder="short description customers see" className="w-full px-2 py-1 rounded-lg text-[11px]" style={{ border: `1px solid ${T.line}`, color: T.sub }} />
+              </div>
+              <input type="number" min="0" value={a.price} onChange={(e) => setAddonField(a.id, { price: +e.target.value })} className="w-full px-1.5 py-1.5 rounded-lg text-sm tabular-nums" style={{ border: `1px solid ${T.line}` }} />
+              <button onClick={() => delAddon(a.id)} title="Remove" className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: T.redSoft, color: T.red }}><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+        <button onClick={addAddon} className="w-full py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5" style={{ background: T.paper, color: T.steel, border: `1px dashed ${T.steel}` }}><Plus size={15} /> Add tow gear / accessory</button>
+        <p className="text-[11px]" style={{ color: T.sub }}>Tip: keep the “You'll need to tow this” note on each equipment type accurate (Equipment section) so customers know what to add here.</p>
+      </Card>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.blueSoft }}><CalendarClock size={16} style={{ color: T.blue }} /></span>
           <h3 className="font-bold text-sm uppercase tracking-wide">Scheduling buffers</h3>
         </div>
@@ -3888,6 +3929,14 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash
           <Row l="Deposit hold" r={`$${b.deposit} (refundable)`} />
         </div>
 
+        {Array.isArray(b.addons) && b.addons.length > 0 && (
+          <div className="rounded-xl p-3 mt-3 flex items-start gap-2" style={{ background: T.amberSoft }}>
+            <Wrench size={16} className="shrink-0 mt-0.5" style={{ color: T.amberDk }} />
+            <div><div className="text-sm font-bold" style={{ color: T.amberDk }}>Tow gear to have ready</div>
+              <div className="text-xs mt-0.5" style={{ color: T.amberDk }}>{b.addons.map((a) => a.name).join(" · ")}</div></div>
+          </div>
+        )}
+
         {/* Certificate of Insurance — self-upload when required */}
         {coiRequired(type, b.type) && (
           <div className="mt-4 rounded-xl overflow-hidden" style={{ border: `1px solid ${b.coiFile ? T.green : T.amber}` }}>
@@ -4086,8 +4135,10 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
     size: null, start: addDays(today(), 1), days: 3, pickupTime: b.pickupHours[0], returnTime: b.pickupHours[0],
     name: "", phone: "", email: "", address: "", ctype: "homeowner", waiver: true,
     outMethod: "willcall", returnMethod: "yard", notes: "", coi: false, coiFile: "", coiName: "", signName: "", agree: false,
+    addons: [],
   });
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const toggleAddon = (id) => setForm((f) => ({ ...f, addons: (f.addons || []).includes(id) ? f.addons.filter((x) => x !== id) : [...(f.addons || []), id] }));
   const end = addDays(form.start, form.days - 1);
   // minimum booking notice (lead time) before your crew can be booked for the out leg
   const outLeadHours = form.outMethod === "delivery" ? (b.leadDeliveryHours || 0) : (b.leadCounterHours || 0);
@@ -4146,7 +4197,10 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
   const orderOutFees = runFees(orderItems.map((it) => ({ date: it.start, method: it.outMethod })));
   const orderRetFees = runFees(orderItems.map((it) => ({ date: itemEnd(it), method: it.returnMethod })));
   const orderEquip = orderItems.reduce((s, it) => s + itemInfo(it).sub, 0);
-  const orderSub = orderEquip + orderOutFees + orderRetFees;
+  // Tow-gear add-ons — order-level, charged once for the whole order.
+  const addonList = (b.addons || []).filter((a) => (form.addons || []).includes(a.id));
+  const addonsCost = addonList.reduce((s, a) => s + (a.price || 0), 0);
+  const orderSub = orderEquip + orderOutFees + orderRetFees + addonsCost;
   const orderTax = Math.round(orderSub * b.taxRate);
   const orderTotal = orderSub + orderTax;
   const orderDeposit = b.deposit * orderItems.length;
@@ -4203,8 +4257,10 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
         signName: form.signName, signedAt: at, agreementText: b.agreementText,
       });
     }
+    // tow-gear add-ons ride on the order (charged once) — attach to the first booking so you have it ready
+    if (rows.length && addonList.length) { rows[0].addons = addonList.map((a) => ({ id: a.id, name: a.name, price: a.price })); rows[0].price += addonsCost; }
     rows.forEach(addBooking);
-    setOrderSummary({ items: items.map((it) => ({ ...it, info: itemInfo(it) })), total: orderTotal, deposit: orderDeposit });
+    setOrderSummary({ items: items.map((it) => ({ ...it, info: itemInfo(it) })), total: orderTotal, deposit: orderDeposit, addons: addonList });
     setLastCode(order);
     setStepN(4);
   };
@@ -4267,6 +4323,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
         ); })}
         <div className="pt-1.5 mt-0.5 space-y-0.5" style={{ borderTop: `1px solid ${T.line}` }}>
           <Row l="Delivery &amp; pickup runs" r={`$${orderOutFees + orderRetFees}`} />
+          {addonsCost > 0 && <Row l={`Tow gear (${addonList.length})`} r={`$${addonsCost}`} />}
           <Row l="Tax" r={`$${orderTax}`} />
           <Row l="Total" r={`$${orderTotal}`} bold big />
           <Row l={`Refundable deposit hold${orderItems.length > 1 ? ` · ${orderItems.length} units` : ""}`} r={`$${orderDeposit} (released at return)`} />
@@ -4512,6 +4569,25 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
               </div>
             )}
             <Toggle label="Add damage waiver" sub={`Caps your cost if something goes wrong · covers your whole order · $${orderItems.reduce((s, it) => s + Math.round(itemInfo(it).bs * b.waiverRate), 0)}`} on={form.waiver} set={(v) => set({ waiver: v })} />
+            {(b.addons || []).length > 0 && (
+              <div className="rounded-xl p-3" style={{ background: T.paper, border: `1px solid ${T.line}` }}>
+                <div className="text-sm font-bold flex items-center gap-1.5"><Wrench size={15} style={{ color: T.amberDk }} /> Don't have the right hitch?</div>
+                <p className="text-[11px] mt-0.5 mb-2" style={{ color: T.sub }}>Add any tow gear you're missing and we'll have it ready for you at pickup.</p>
+                <div className="space-y-1.5">
+                  {(b.addons || []).map((a) => {
+                    const on = (form.addons || []).includes(a.id);
+                    return (
+                      <button key={a.id} type="button" onClick={() => toggleAddon(a.id)} className="w-full flex items-center gap-2 p-2 rounded-lg text-left" style={on ? { background: T.amberSoft, border: `1.5px solid ${T.amber}` } : { background: "#fff", border: `1px solid ${T.line}` }}>
+                        <span className="w-5 h-5 rounded flex items-center justify-center shrink-0" style={{ background: on ? T.amber : T.paper, border: `1px solid ${on ? T.amber : T.line}` }}>{on && <Check size={13} style={{ color: T.steelDk }} />}</span>
+                        <span className="min-w-0 flex-1"><span className="text-sm font-semibold">{a.name}</span><span className="block text-[11px]" style={{ color: T.sub }}>{a.desc}</span></span>
+                        <span className="text-sm font-bold tabular-nums shrink-0">+${a.price}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {addonsCost > 0 && <div className="text-[11px] mt-2 font-semibold text-right" style={{ color: T.amberDk }}>Tow gear: +${addonsCost}</div>}
+              </div>
+            )}
             <Field label="Anything we should know? (optional)"><textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} placeholder="Job type, what you're hauling…" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
             {orderItems.length > 0 && orderBox}
             <NavBtns onBack={() => setStepN(1)} onNext={() => setStepN(3)} nextOk={form.name && form.phone && (!(form.outMethod === "delivery" || form.returnMethod === "collect") || form.address)} />
