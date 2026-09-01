@@ -732,7 +732,7 @@ function Landing({ state, typeBySize, go, owner, team, operator }) {
               {i === 0 && <div className="inline-block self-start text-[11px] font-bold px-2 py-0.5 rounded-full mb-2" style={{ background: T.amberSoft, color: T.amberDk }}>Most popular</div>}
               {t.image
                 ? <img src={t.image} alt={t.name} className="w-full h-40 rounded-xl object-cover mb-3" />
-                : <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3" style={{ background: T.paper }}><Truck size={24} style={{ color: T.steel }} /></div>}
+                : <TrailerArt className="w-full h-40 rounded-xl overflow-hidden mb-3" />}
               <div className="font-extrabold text-lg">{t.name}</div>
               <div className="text-xs mb-3" style={{ color: T.sub }}>{t.cuyd || " "}</div>
               <div className="flex items-baseline gap-1"><span className="text-3xl font-extrabold tabular-nums">${t.daily}</span><span className="text-sm" style={{ color: T.sub }}>/24 hrs</span></div>
@@ -804,7 +804,38 @@ function Landing({ state, typeBySize, go, owner, team, operator }) {
 /* ---------------- top bar --------------- */
 function BrandMark({ logo, size = 36 }) {
   if (logo) return <img src={logo} alt="logo" className="rounded-md object-contain shrink-0" style={{ width: size, height: size, background: "#fff", padding: 2 }} />;
-  return <div className="rounded-md flex items-center justify-center shrink-0" style={{ width: size, height: size, background: T.amber }}><Truck size={Math.round(size * 0.56)} style={{ color: T.steelDk }} /></div>;
+  // default: a dump-trailer mark (amber badge, steel trailer) until the owner uploads a logo
+  return (
+    <div className="rounded-md flex items-center justify-center shrink-0" style={{ width: size, height: size, background: T.amber }}>
+      <svg viewBox="0 0 28 22" width={Math.round(size * 0.68)} height={Math.round(size * 0.68 * 22 / 28)} fill={T.steelDk} stroke={T.steelDk} strokeLinejoin="round" strokeLinecap="round">
+        <polygon points="4,12 18,12 23,4 9,4" />
+        <line x1="3" y1="14.5" x2="19" y2="14.5" strokeWidth="2" />
+        <line x1="6.5" y1="14.5" x2="1.5" y2="16.5" strokeWidth="2" />
+        <circle cx="8" cy="17.5" r="2" stroke="none" />
+        <circle cx="15" cy="17.5" r="2" stroke="none" />
+      </svg>
+    </div>
+  );
+}
+
+/* Themed dump-trailer illustration — the placeholder shown wherever a real photo hasn't been uploaded yet (matches the hero art's steel/amber theme). */
+function TrailerArt({ className = "", style = {} }) {
+  return (
+    <div className={`flex items-center justify-center ${className}`} style={{ background: T.steelDk, ...style }}>
+      <svg viewBox="0 0 340 200" className="w-full" style={{ maxWidth: 260 }}>
+        <line x1="15" y1="165" x2="325" y2="165" stroke={T.amber} strokeWidth="3" />
+        <g>
+          <polygon points="70,150 250,150 235,70 120,70" fill="#3A4C57" stroke={T.amber} strokeWidth="3" strokeLinejoin="round" />
+          <polygon points="120,70 235,70 245,95 128,95" fill={T.amber} opacity="0.9" />
+          <circle cx="150" cy="120" r="9" fill="#55666F" /><circle cx="175" cy="130" r="11" fill="#4A5A63" /><circle cx="200" cy="118" r="8" fill="#55666F" />
+        </g>
+        <line x1="70" y1="152" x2="18" y2="152" stroke="#3A4C57" strokeWidth="6" strokeLinecap="round" />
+        <circle cx="16" cy="152" r="6" fill={T.amber} />
+        <circle cx="120" cy="165" r="17" fill="#1E2A32" stroke="#55666F" strokeWidth="3" /><circle cx="120" cy="165" r="5" fill={T.amber} />
+        <circle cx="200" cy="165" r="17" fill="#1E2A32" stroke="#55666F" strokeWidth="3" /><circle cx="200" cy="165" r="5" fill={T.amber} />
+      </svg>
+    </div>
+  );
 }
 
 function TopBar({ state, mode, setMode, signOut, locations, locId, switchLoc }) {
@@ -4443,7 +4474,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                     <div className="flex items-center gap-3 min-w-0">
                       {t.image
                         ? <img src={t.image} alt={t.name} className="w-16 h-16 rounded-lg object-cover shrink-0" style={{ border: `1px solid ${T.line}` }} />
-                        : <div className="w-16 h-16 rounded-lg flex items-center justify-center shrink-0" style={{ background: active ? T.amber : T.paper }}><Truck size={26} style={{ color: active ? T.steelDk : T.steel }} /></div>}
+                        : <TrailerArt className="w-16 h-16 rounded-lg shrink-0 overflow-hidden" />}
                       <div className="min-w-0">
                         <div className="font-bold">{t.name}</div>
                         <div className="text-xs" style={{ color: T.sub }}>{t.cuyd ? t.cuyd + " · " : ""}from ${t.daily}/day</div>
