@@ -209,6 +209,17 @@ const roleOf = (biz, c) => ((biz && biz.roles) || []).find((r) => r.id === (c &&
 const roleCaps = (biz, c) => { const r = roleOf(biz, c); return r ? { drive: !!r.drive, yard: !!r.yard } : { drive: true, yard: true }; };
 const canDoKind = (biz, c, kind) => { if (!kind) return true; const caps = roleCaps(biz, c); return kind === "yard" ? caps.yard : caps.drive; };
 const roleName = (biz, c) => { const r = roleOf(biz, c); return r ? r.name : "Driver + Yard"; };
+
+/* Add-on (tow gear) inventory: how many of an add-on are free over a date range =
+   quantity on hand minus overlapping reservations that carry it. */
+function addonUnitsFree(state, addonId, qty, start, end, excludeId) {
+  const reserved = (state.bookings || []).filter((b) =>
+    b.id !== excludeId && b.status !== "returned" && b.status !== "cancelled" &&
+    Array.isArray(b.addons) && b.addons.some((a) => a.id === addonId) &&
+    overlaps(start, end, b.start, b.end)
+  ).length;
+  return (qty || 0) - reserved;
+}
 /* turn a window label ("8:00 AM") on an ISO date into a Date, for lead-time checks */
 const slotDateTime = (dateISO, label) => {
   const d = new Date(dateISO + "T00:00:00");
@@ -319,13 +330,13 @@ const SEED = {
     // Tow gear & add-ons the customer can grab if they don't have the right hitch/parts.
     // Offered during booking; charged once per order; shown on the booking so you have it ready.
     addons: [
-      { id: "ball238", name: "2-5/16\" hitch ball", desc: "For the heavy trailers (14K / 9,990). Fits your ball mount.", price: 18 },
-      { id: "ball2", name: "2\" hitch ball", desc: "For the 5x8 (5K). Fits your ball mount.", price: 12 },
-      { id: "mount", name: "Ball mount / drawbar", desc: "The bar that slides into your receiver — rent it for the trip.", price: 15 },
-      { id: "adapter", name: "7-pin → 4-flat adapter", desc: "If your truck only has a 4-pin connector.", price: 10 },
-      { id: "brake", name: "Plug-in brake controller", desc: "Portable brake controller if your truck doesn't have one.", price: 35 },
-      { id: "straps", name: "Ratchet straps (set of 4)", desc: "Tie your load down safely.", price: 20 },
-      { id: "pinlock", name: "Hitch pin & lock", desc: "Secures the ball mount in the receiver.", price: 8 },
+      { id: "ball238", name: "2-5/16\" hitch ball", desc: "For the heavy trailers (14K / 9,990). Fits your ball mount. Rated for the trailer's loaded weight.", price: 18, qty: 6 },
+      { id: "ball2", name: "2\" hitch ball", desc: "For the 5x8 (5K). Fits your ball mount.", price: 12, qty: 4 },
+      { id: "mount", name: "Ball mount / drawbar", desc: "The bar that slides into your receiver — rent it for the trip. Rated for the load.", price: 15, qty: 6 },
+      { id: "adapter", name: "7-pin → 4-flat adapter", desc: "If your truck only has a 4-pin connector.", price: 10, qty: 6 },
+      { id: "brake", name: "Plug-in brake controller", desc: "Portable brake controller if your truck doesn't have one.", price: 35, qty: 3 },
+      { id: "straps", name: "Ratchet straps (set of 4)", desc: "Tie your load down safely.", price: 20, qty: 8 },
+      { id: "pinlock", name: "Hitch pin & lock", desc: "Secures the ball mount in the receiver.", price: 8, qty: 8 },
     ],
     deposit: 500, deliveryFee: 40, contractorFee: 40, counterFee: 20, dropFee: 25, taxRate: 0.07, waiverRate: 0.12,
     refundFullHrs: 48, refundLatePct: 0.5,
@@ -3466,24 +3477,31 @@ function SettingsView({ state, setState, flash, locId, locations: locsProp, swit
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><Wrench size={16} style={{ color: T.amberDk }} /></span>
           <h3 className="font-bold text-sm uppercase tracking-wide">Tow gear &amp; add-ons</h3>
         </div>
-        <p className="text-xs" style={{ color: T.sub }}>Hitch balls, ball mounts, adapters, brake controllers, straps — the truck-side gear a customer might not have. These are <b>rentals</b> (they come back with the trailer). Offered on the booking page (“Don't have the right hitch?”), charged once per order, and listed on the booking so you have it ready at pickup. Set your own list and rental prices below — add, rename, or remove anything.</p>
+        <p className="text-xs" style={{ color: T.sub }}>Hitch balls, ball mounts, adapters, brake controllers, straps — the truck-side gear a customer might not have. These are <b>rentals</b> (they come back with the trailer). Offered on the booking page (“Don't have the right hitch?”), charged once per order, and listed on the booking so you have it ready at pickup. <b>On-hand quantity is tracked</b> — once all of an item are out on overlapping rentals, it stops being offered for those dates, so you never promise a ball mount that's already gone.</p>
         <div className="space-y-2">
-          <div className="grid items-center gap-2 text-[10px] font-bold uppercase tracking-wide px-1" style={{ color: T.sub, gridTemplateColumns: "1fr 60px 28px" }}>
-            <span>Item &amp; description</span><span className="text-center">Price $</span><span />
+          <div className="grid items-center gap-2 text-[10px] font-bold uppercase tracking-wide px-1" style={{ color: T.sub, gridTemplateColumns: "1fr 54px 62px 28px" }}>
+            <span>Item &amp; description</span><span className="text-center">Price $</span><span className="text-center">On hand</span><span />
           </div>
-          {addons.map((a) => (
-            <div key={a.id} className="grid items-start gap-2" style={{ gridTemplateColumns: "1fr 60px 28px" }}>
+          {addons.map((a) => {
+            const low = (a.qty ?? 0) < (state.trailers || []).length; // fewer than one per trailer
+            return (
+            <div key={a.id} className="grid items-start gap-2" style={{ gridTemplateColumns: "1fr 54px 62px 28px" }}>
               <div className="space-y-1">
                 <input value={a.name} onChange={(e) => setAddonField(a.id, { name: e.target.value })} placeholder="e.g. 2-5/16&quot; hitch ball" className="w-full px-2 py-1.5 rounded-lg text-sm font-semibold" style={{ border: `1px solid ${T.line}` }} />
                 <input value={a.desc || ""} onChange={(e) => setAddonField(a.id, { desc: e.target.value })} placeholder="short description customers see" className="w-full px-2 py-1 rounded-lg text-[11px]" style={{ border: `1px solid ${T.line}`, color: T.sub }} />
               </div>
               <input type="number" min="0" value={a.price} onChange={(e) => setAddonField(a.id, { price: +e.target.value })} className="w-full px-1.5 py-1.5 rounded-lg text-sm tabular-nums" style={{ border: `1px solid ${T.line}` }} />
+              <input type="number" min="0" value={a.qty ?? 0} onChange={(e) => setAddonField(a.id, { qty: +e.target.value })} title={low ? "Fewer than one per trailer" : ""} className="w-full px-1.5 py-1.5 rounded-lg text-sm tabular-nums" style={{ border: `1px solid ${low ? T.amber : T.line}`, background: low ? T.amberSoft : "#fff" }} />
               <button onClick={() => delAddon(a.id)} title="Remove" className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: T.redSoft, color: T.red }}><Trash2 size={13} /></button>
             </div>
-          ))}
+            );
+          })}
         </div>
         <button onClick={addAddon} className="w-full py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5" style={{ background: T.paper, color: T.steel, border: `1px dashed ${T.steel}` }}><Plus size={15} /> Add tow gear / accessory</button>
-        <p className="text-[11px]" style={{ color: T.sub }}>Tip: keep the “You'll need to tow this” note on each equipment type accurate (Equipment section) so customers know what to add here.</p>
+        <div className="rounded-lg p-2.5 flex items-start gap-2 text-[11px]" style={{ background: T.blueSoft, color: T.blue }}>
+          <Info size={14} className="shrink-0 mt-0.5" />
+          <span>You run <b>{(state.trailers || []).length} trailer{(state.trailers || []).length === 1 ? "" : "s"}</b>. To be safe, keep <b>at least one of each attachment per trailer</b> (so ~{(state.trailers || []).length} of each common item) — that way any customer can be set up even when several trailers are out at once. An <b style={{ color: T.amberDk }}>amber</b> On-hand box means you're below that. Keep each equipment type's “You'll need to tow this” note accurate too.</span>
+        </div>
       </Card>
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -4200,6 +4218,10 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
   // Tow-gear add-ons — order-level, charged once for the whole order.
   const addonList = (b.addons || []).filter((a) => (form.addons || []).includes(a.id));
   const addonsCost = addonList.reduce((s, a) => s + (a.price || 0), 0);
+  // gear is out with the equipment for the whole order's span; check inventory over that window
+  const addonStart = orderItems.length ? orderItems.map((it) => it.start).sort()[0] : form.start;
+  const addonEnd = orderItems.length ? orderItems.map((it) => itemEnd(it)).sort().slice(-1)[0] : end;
+  const addonFree = (a) => addonUnitsFree(state, a.id, a.qty, addonStart, addonEnd);
   const orderSub = orderEquip + orderOutFees + orderRetFees + addonsCost;
   const orderTax = Math.round(orderSub * b.taxRate);
   const orderTotal = orderSub + orderTax;
@@ -4576,16 +4598,18 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
                 <div className="space-y-1.5">
                   {(b.addons || []).map((a) => {
                     const on = (form.addons || []).includes(a.id);
+                    const out = !on && addonFree(a) <= 0;   // none free for these dates
                     return (
-                      <button key={a.id} type="button" onClick={() => toggleAddon(a.id)} className="w-full flex items-center gap-2 p-2 rounded-lg text-left" style={on ? { background: T.amberSoft, border: `1.5px solid ${T.amber}` } : { background: "#fff", border: `1px solid ${T.line}` }}>
+                      <button key={a.id} type="button" disabled={out} onClick={() => { if (out) return; toggleAddon(a.id); }} className="w-full flex items-center gap-2 p-2 rounded-lg text-left disabled:opacity-50" style={on ? { background: T.amberSoft, border: `1.5px solid ${T.amber}` } : { background: "#fff", border: `1px solid ${T.line}` }}>
                         <span className="w-5 h-5 rounded flex items-center justify-center shrink-0" style={{ background: on ? T.amber : T.paper, border: `1px solid ${on ? T.amber : T.line}` }}>{on && <Check size={13} style={{ color: T.steelDk }} />}</span>
                         <span className="min-w-0 flex-1"><span className="text-sm font-semibold">{a.name}</span><span className="block text-[11px]" style={{ color: T.sub }}>{a.desc}</span></span>
-                        <span className="text-sm font-bold tabular-nums shrink-0">+${a.price}</span>
+                        {out ? <span className="text-[11px] font-bold shrink-0" style={{ color: T.red }}>Out for these dates</span> : <span className="text-sm font-bold tabular-nums shrink-0">+${a.price}</span>}
                       </button>
                     );
                   })}
                 </div>
-                {addonsCost > 0 && <div className="text-[11px] mt-2 font-semibold text-right" style={{ color: T.amberDk }}>Tow gear: +${addonsCost}</div>}
+                <p className="text-[10px] mt-2" style={{ color: T.sub }}>Important: your truck's hitch, ball mount, and ball must be <b>rated for the loaded trailer weight</b>. If you're unsure, ask us before pickup.</p>
+                {addonsCost > 0 && <div className="text-[11px] mt-1 font-semibold text-right" style={{ color: T.amberDk }}>Tow gear: +${addonsCost}</div>}
               </div>
             )}
             <Field label="Anything we should know? (optional)"><textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} placeholder="Job type, what you're hauling…" className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
