@@ -581,7 +581,7 @@ export default function App({ embed = false }) {
           onAuthed={(id) => { setEmployeeId(id); try { sessionStorage.setItem("yardhand_emp", id); } catch (e) {} }} />
       ) : (
         <>
-          <TopBar state={state} mode={mode} setMode={setMode} locations={locations} locId={locId} switchLoc={switchLoc}
+          <TopBar state={state} mode={mode} setMode={setMode} authed={authed} employeeId={employeeId} locations={locations} locId={locId} switchLoc={switchLoc}
             signOut={() => { setAuthed(false); setEmployeeId(null); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); } catch (e) {} try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch (e) {} setMode("landing"); }} />
           {mode === "employee" ? (
             <EmployeePortal {...{ state, employeeId, setBooking, update, flash, signOut: () => { setEmployeeId(null); try { sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); } }} />
@@ -599,7 +599,7 @@ export default function App({ embed = false }) {
               {tab === "settings" && <SettingsView {...{ state, setState, flash, locId, locations, switchLoc }} />}
             </div>
           ) : (
-            <CustomerArea {...{ state: scoped, typeBySize, countAvail, findUnit, addBooking, setBooking, update, flash, setMode, initialView: custStart, locations, locId, switchLoc }} />
+            <CustomerArea {...{ state: scoped, typeBySize, countAvail, findUnit, addBooking, setBooking, update, flash, setMode, authed, initialView: custStart, locations, locId, switchLoc }} />
           )}
         </>
       )}
@@ -857,9 +857,10 @@ function TrailerArt({ className = "", style = {} }) {
   );
 }
 
-function TopBar({ state, mode, setMode, signOut, locations, locId, switchLoc }) {
+function TopBar({ state, mode, setMode, authed, employeeId, signOut, locations, locId, switchLoc }) {
   const locs = locations || [];
   const cur = locs.find((l) => l.id === locId);
+  const staff = !!(authed || employeeId); // signed-in owner/crew see the full switcher; public customers only get Home
   return (
     <div style={{ background: T.steelDk }} className="sticky top-0 z-40 border-b" >
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-2">
@@ -876,20 +877,27 @@ function TopBar({ state, mode, setMode, signOut, locations, locId, switchLoc }) 
               {locs.map((l) => <option key={l.id} value={l.id} style={{ color: "#000" }}>{l.name}</option>)}
             </select>
           )}
-          <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: "rgba(255,255,255,0.08)" }}>
-            <button onClick={() => setMode("landing")} className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2" }}>
-              <Home size={15} /> <span className="hidden sm:inline">Site</span>
-            </button>
-            {[["owner", "Owner", LayoutDashboard], ["employee", "Team", Users], ["customer", "Book a trailer", Truck]]
-              .filter(([m]) => !(mode === "employee" && m === "owner")) // crew portal doesn't advertise the owner dashboard
-              .map(([m, label, Icon]) => (
-              <button key={m} onClick={() => setMode(m)}
-                className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5 transition"
-                style={mode === m ? { background: T.amber, color: T.steelDk } : { color: "#D8DEE2" }}>
-                <Icon size={15} /> <span className="hidden sm:inline">{label}</span>
+          {staff ? (
+            <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <button onClick={() => setMode("landing")} className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2" }}>
+                <Home size={15} /> <span className="hidden sm:inline">Site</span>
               </button>
-            ))}
-          </div>
+              {[["owner", "Owner", LayoutDashboard], ["employee", "Team", Users], ["customer", "Book a trailer", Truck]]
+                .filter(([m]) => !(mode === "employee" && m === "owner")) // crew portal doesn't advertise the owner dashboard
+                .map(([m, label, Icon]) => (
+                <button key={m} onClick={() => setMode(m)}
+                  className="px-3 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5 transition"
+                  style={mode === m ? { background: T.amber, color: T.steelDk } : { color: "#D8DEE2" }}>
+                  <Icon size={15} /> <span className="hidden sm:inline">{label}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            // public customer: a single, clear way back to the storefront — no staff doors exposed
+            <button onClick={() => setMode("landing")} className="px-3.5 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5" style={{ background: "rgba(255,255,255,0.12)", color: "#fff" }}>
+              <ArrowLeft size={15} /> Home
+            </button>
+          )}
           {(mode === "owner" || mode === "employee") && signOut && (
             <button onClick={signOut} title="Sign out" className="px-2.5 py-1.5 rounded-md text-sm font-semibold flex items-center gap-1.5" style={{ color: "#D8DEE2", border: "1px solid rgba(255,255,255,0.15)" }}>
               <LogOut size={15} /> <span className="hidden md:inline">Sign out</span>
@@ -4116,7 +4124,7 @@ function AddTypeModal({ onClose, onAdd, existing, onPhoto }) {
 }
 
 /* ---------------- CUSTOMER AREA (book + manage sub-nav) --------------- */
-function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, setBooking, update, flash, setMode, initialView, locations, locId, switchLoc, embed = false }) {
+function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, setBooking, update, flash, setMode, authed, initialView, locations, locId, switchLoc, embed = false }) {
   const [view, setView] = useState(initialView || "book"); // book | manage
   const locs = locations || [];
   const cur = locs.find((l) => l.id === locId);
@@ -4142,14 +4150,14 @@ function CustomerArea({ state, typeBySize, countAvail, findUnit, addBooking, set
         </div>
       </div>
       {view === "book"
-        ? <CustomerBooking {...{ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode, embed }} />
-        : <CustomerManage {...{ state, typeBySize, findUnit, setBooking, update, flash, setMode, embed }} />}
+        ? <CustomerBooking {...{ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode, authed, embed }} />
+        : <CustomerManage {...{ state, typeBySize, findUnit, setBooking, update, flash, setMode, authed, embed }} />}
     </div>
   );
 }
 
 /* ---------------- CUSTOMER MANAGE (self-service dashboard) --------------- */
-function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash, setMode, embed = false }) {
+function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash, setMode, authed, embed = false }) {
   const b0 = state.business;
   const [code, setCode] = useState("");
   const [contact, setContact] = useState("");
@@ -4201,7 +4209,7 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash
             You only reach your own reservation — the code plus a matching phone or email is required, so no one can open someone else's. Demo: try <b>WY-1001</b> with <b>704-555-0142</b>.
           </div>
         </Card>
-        {!embed && <div className="text-center mt-4"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>}
+        {!embed && authed && <div className="text-center mt-4"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>}
       </div>
     );
   }
@@ -4321,7 +4329,7 @@ function CustomerManage({ state, typeBySize, findUnit, setBooking, update, flash
       })()}
 
       <p className="text-xs text-center mt-3" style={{ color: T.sub }}>Changes update your reservation instantly and adjust the charge on your card on file.</p>
-      {!embed && <div className="text-center mt-2"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>}
+      {!embed && authed && <div className="text-center mt-2"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>}
     </div>
   );
 }
@@ -4430,7 +4438,7 @@ function PriceBreakdown({ type, days, base, waiver, waiverAmt, outMethod, return
   );
 }
 
-function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode, embed = false }) {
+function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, flash, setMode, authed, embed = false }) {
   const [stepN, setStepN] = useState(0);
   const [lastCode, setLastCode] = useState("");
   const b = state.business;
@@ -4613,7 +4621,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
           </div>
         </Card>
         <button onClick={() => { setCart([]); setOrderSummary(null); setStepN(0); set({ size: null, name: "", phone: "", email: "" }); }} className="mt-6 text-sm font-bold" style={{ color: T.steel }}>Start a new order →</button>
-        {!embed && <div className="mt-2"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(back to owner view)</button></div>}
+        {!embed && authed && <div className="mt-2"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(back to owner view)</button></div>}
       </div>
     );
   }
@@ -4953,7 +4961,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
           </div>
         )}
       </Card>
-      {!embed && <div className="text-center mt-4"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>}
+      {!embed && authed && <div className="text-center mt-4"><button onClick={() => setMode("owner")} className="text-xs" style={{ color: T.sub }}>(owner view)</button></div>}
     </div>
   );
 }
