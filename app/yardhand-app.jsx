@@ -800,7 +800,7 @@ function BrandMark({ logo, size = 36 }) {
         {/* chassis */}
         <line x1="4" y1="15" x2="19" y2="15" strokeWidth="1.8" />
         {/* tongue (front, right) */}
-        <line x1="13" y1="15" x2="23" y2="16.5" strokeWidth="1.8" />
+        <line x1="13" y1="15" x2="23" y2="15" strokeWidth="1.8" />
         {/* tandem wheels */}
         <circle cx="7.5" cy="17.5" r="1.9" stroke="none" />
         <circle cx="12" cy="17.5" r="1.9" stroke="none" />
@@ -816,14 +816,14 @@ function TrailerArt({ className = "", style = {} }) {
       <svg viewBox="0 0 340 200" className="w-full" style={{ maxWidth: 320 }}>
         {/* ground shadow */}
         <ellipse cx="150" cy="185" rx="128" ry="7" fill="#000000" opacity="0.25" />
-        {/* chassis frame */}
-        <line x1="70" y1="152" x2="252" y2="152" stroke="#2A363E" strokeWidth="7" strokeLinecap="round" />
-        {/* A-frame tongue, coupler, jack, battery box (front, right) */}
-        <line x1="208" y1="152" x2="318" y2="160" stroke="#2A363E" strokeWidth="6" strokeLinecap="round" />
-        <line x1="250" y1="152" x2="318" y2="160" stroke="#2A363E" strokeWidth="6" strokeLinecap="round" />
-        <rect x="304" y="152" width="15" height="12" rx="2" fill="#2A363E" />
-        <line x1="286" y1="157" x2="286" y2="177" stroke="#2A363E" strokeWidth="4" strokeLinecap="round" />
-        <rect x="258" y="136" width="22" height="16" rx="2" fill="#2A363E" />
+        {/* chassis frame + tongue — one straight, level bar */}
+        <line x1="70" y1="152" x2="312" y2="152" stroke="#2A363E" strokeWidth="7" strokeLinecap="round" />
+        {/* coupler */}
+        <rect x="305" y="146" width="15" height="12" rx="2" fill="#2A363E" />
+        {/* drop-leg jack */}
+        <line x1="286" y1="152" x2="286" y2="174" stroke="#2A363E" strokeWidth="4" strokeLinecap="round" />
+        {/* battery / tool box on the tongue */}
+        <rect x="256" y="137" width="22" height="15" rx="2" fill="#2A363E" />
         {/* hydraulic cylinder lifting the front of the bed */}
         <line x1="214" y1="152" x2="236" y2="104" stroke="#5B6B74" strokeWidth="8" strokeLinecap="round" />
         <line x1="214" y1="152" x2="226" y2="128" stroke="#8A99A1" strokeWidth="4" strokeLinecap="round" />
