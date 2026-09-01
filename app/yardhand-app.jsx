@@ -469,6 +469,9 @@ export default function App({ embed = false }) {
     // fresh visitors (no session) still land on the public storefront, never the owner login.
     try { if (typeof window !== "undefined" && !embed && sessionStorage.getItem("yardhand_owner") === "1") { setAuthed(true); setMode("owner"); } } catch (e) { /* ignore */ }
     try { if (typeof window !== "undefined" && !embed) { const eid = sessionStorage.getItem("yardhand_emp"); if (eid) { setEmployeeId(eid); setMode("employee"); } } } catch (e) { /* ignore */ }
+    // hidden staff entrance: visiting /#owner or /#team opens the sign-in door. There is no public
+    // link to it, so customers never see "owner access" — the owner bookmarks the URL for themselves/crew.
+    try { if (typeof window !== "undefined" && !embed) { const h = (window.location.hash || "").toLowerCase(); if (h === "#owner") setMode("owner"); else if (h === "#team") setMode("employee"); } } catch (e) { /* ignore */ }
     // realtime: pick up changes made on another device (ignore our own echoes)
     return subscribeWorkspace((incoming) => {
       setState((prev) => JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming);
@@ -563,15 +566,15 @@ export default function App({ embed = false }) {
       {mode === "landing" ? (
         <Landing state={state} typeBySize={typeBySize} go={(v) => { setCustStart(v); setMode("customer"); }} owner={() => setMode("owner")} team={() => setMode("employee")} />
       ) : mode === "owner" && !authed ? (
-        <OwnerLogin state={state} onBack={() => setMode("landing")}
+        <OwnerLogin state={state} onBack={() => { setMode("landing"); try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch (e) {} }}
           onAuthed={() => { setAuthed(true); try { sessionStorage.setItem("yardhand_owner", "1"); } catch (e) {} }} />
       ) : mode === "employee" && !employeeId ? (
-        <EmployeeLogin state={state} onBack={() => setMode("landing")}
+        <EmployeeLogin state={state} onBack={() => { setMode("landing"); try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch (e) {} }}
           onAuthed={(id) => { setEmployeeId(id); try { sessionStorage.setItem("yardhand_emp", id); } catch (e) {} }} />
       ) : (
         <>
           <TopBar state={state} mode={mode} setMode={setMode} locations={locations} locId={locId} switchLoc={switchLoc}
-            signOut={() => { setAuthed(false); setEmployeeId(null); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); }} />
+            signOut={() => { setAuthed(false); setEmployeeId(null); try { sessionStorage.removeItem("yardhand_owner"); sessionStorage.removeItem("yardhand_emp"); } catch (e) {} try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch (e) {} setMode("landing"); }} />
           {mode === "employee" ? (
             <EmployeePortal {...{ state, employeeId, setBooking, update, flash, signOut: () => { setEmployeeId(null); try { sessionStorage.removeItem("yardhand_emp"); } catch (e) {} setMode("landing"); } }} />
           ) : mode === "owner" ? (
@@ -646,10 +649,7 @@ function Landing({ state, typeBySize, go, owner, team, operator }) {
         <footer style={{ background: T.steelDk }}>
           <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="text-sm" style={{ color: "#B7C0C6" }}>{b.name} · {b.yard} · {b.phone}</div>
-            <div className="flex items-center gap-4">
-              {team && <button onClick={team} className="text-xs" style={{ color: "#6C7178" }}>Team sign-in</button>}
-              <button onClick={owner} className="text-xs" style={{ color: "#6C7178" }}>Owner login</button>
-            </div>
+            {/* no public sign-in links — owner/crew use the private /#owner and /#team URLs */}
           </div>
         </footer>
       </div>
@@ -792,10 +792,7 @@ function Landing({ state, typeBySize, go, owner, team, operator }) {
       <footer style={{ background: T.steelDk }}>
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-sm" style={{ color: "#B7C0C6" }}>{b.name} · {b.yard} · {b.phone}</div>
-          <div className="flex items-center gap-4">
-            {team && <button onClick={team} className="text-xs" style={{ color: "#6C7178" }}>Team sign-in</button>}
-            <button onClick={owner} className="text-xs" style={{ color: "#6C7178" }}>Owner login</button>
-          </div>
+          {/* no public sign-in links — owner/crew use the private /#owner and /#team URLs */}
         </div>
       </footer>
     </div>
