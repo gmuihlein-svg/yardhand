@@ -437,7 +437,7 @@ function priceExplain(type, days) {
 export default function App({ embed = false }) {
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState(embed ? "customer" : "owner"); // owner | customer | landing | employee
+  const [mode, setMode] = useState(embed ? "customer" : "landing"); // owner | customer | landing | employee — public lands on the storefront; owner/crew sign in from the footer
   const [custStart, setCustStart] = useState("book"); // initial customer view
   const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
@@ -465,8 +465,10 @@ export default function App({ embed = false }) {
       setLoading(false);
       try { const al = sessionStorage.getItem("yardhand_loc"); setActiveLoc(al && seeded.locations.some((l) => l.id === al) ? al : defLoc); } catch (e) { setActiveLoc(defLoc); }
     })();
-    try { if (typeof window !== "undefined" && sessionStorage.getItem("yardhand_owner") === "1") setAuthed(true); } catch (e) { /* ignore */ }
-    try { if (typeof window !== "undefined") { const eid = sessionStorage.getItem("yardhand_emp"); if (eid) setEmployeeId(eid); } } catch (e) { /* ignore */ }
+    // remember a signed-in owner/crew on this device so THEY skip the storefront and go straight in —
+    // fresh visitors (no session) still land on the public storefront, never the owner login.
+    try { if (typeof window !== "undefined" && !embed && sessionStorage.getItem("yardhand_owner") === "1") { setAuthed(true); setMode("owner"); } } catch (e) { /* ignore */ }
+    try { if (typeof window !== "undefined" && !embed) { const eid = sessionStorage.getItem("yardhand_emp"); if (eid) { setEmployeeId(eid); setMode("employee"); } } } catch (e) { /* ignore */ }
     // realtime: pick up changes made on another device (ignore our own echoes)
     return subscribeWorkspace((incoming) => {
       setState((prev) => JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming);
