@@ -361,6 +361,7 @@ const SEED = {
   },
   prospects: [],
   campaigns: [],
+  scheduledCampaigns: [],
   types: [
     { size: "7x14", name: "7×14 Dump (14K GVWR)", cuyd: "7.3 cu yd", daily: 155, weekly: 580, biweekly: 1120, monthly: 1880, image: "",
       desc: "Our biggest hauler. 14,000 lb GVWR, dual 7K axles, and 24\" sides that hold 7.3 cubic yards — the right pick for concrete tear-outs, roofing tear-offs, and heavy demo. Ramps and a full-height rear gate included.",
@@ -487,6 +488,9 @@ export default function App({ embed = false }) {
     });
   }, []);
   useEffect(() => { if (state && !loading) saveWorkspace(state); }, [state, loading]);
+  // send any scheduled campaigns whose date has arrived (owner session only; returns null when
+  // nothing is due, so this doesn't loop). Real delivery still waits on the messaging provider.
+  useEffect(() => { if (!state || loading || !authed) return; const next = fireDueScheduled(state); if (next) setState(next); }, [state, loading, authed]);
 
   // flash a toast; pass undoable=true to offer a one-tap Undo that restores the pre-action state.
   // (When called right after a mutation in the same handler, `state` here is still the pre-action snapshot.)
@@ -2085,6 +2089,48 @@ function computeCustomers(state) {
   return list;
 }
 
+/* next yearly occurrence of a MM-DD strictly after today (for "repeat every year" campaigns) */
+function nextYearlyDate(sendDate, t) {
+  const mmdd = sendDate.slice(4); // "-MM-DD"
+  const y = Number(t.slice(0, 4));
+  let cand = `${y}${mmdd}`;
+  if (cand <= t) cand = `${y + 1}${mmdd}`;
+  return cand;
+}
+/* Fire any scheduled campaigns whose date has arrived: log them to the send history (simulated,
+   like every other message until the SMS/email provider is connected) and, for yearly ones,
+   roll the date to next year. Returns a new state if anything fired, else null (no change → no loop). */
+function fireDueScheduled(state) {
+  const list = state.scheduledCampaigns || [];
+  if (!list.length) return null;
+  const t = today();
+  const customers = computeCustomers(state);
+  const prospects = state.prospects || [];
+  const optedOut = new Set((state.business && state.business.marketingOptOut) || []);
+  const fired = [];
+  let changed = false;
+  const updated = list.map((sc) => {
+    const due = sc.sendDate && sc.sendDate <= t;
+    const alreadyThisYear = sc.repeat === "yearly" && sc.lastFiredYear === Number(t.slice(0, 4));
+    if (!due || sc.fired || alreadyThisYear) return sc;
+    const wantsPhone = sc.channel === "text" || sc.channel === "both";
+    const wantsEmail = sc.channel === "email" || sc.channel === "both";
+    const reach = (r) => (wantsPhone && r.phone) || (wantsEmail && r.email);
+    const cust = sc.toCust ? customers.filter((c) => !optedOut.has(c.key) && reach(c)) : [];
+    const prosp = sc.toProsp ? prospects.filter((p) => reach(p)) : [];
+    fired.push({ id: "cmp" + Date.now() + Math.random().toString(36).slice(2, 6), at: new Date().toISOString(), channel: sc.channel, count: cust.length + prosp.length,
+      audience: [sc.toCust ? `${cust.length} customer${cust.length === 1 ? "" : "s"}` : null, sc.toProsp ? `${prosp.length} prospect${prosp.length === 1 ? "" : "s"}` : null].filter(Boolean).join(" + ") + " · scheduled",
+      text: sc.text });
+    changed = true;
+    // yearly: roll forward to next year; one-time: it's done, drop it from the list.
+    return sc.repeat === "yearly"
+      ? { ...sc, lastFiredYear: Number(t.slice(0, 4)), sendDate: nextYearlyDate(sc.sendDate, t) }
+      : null;
+  }).filter(Boolean);
+  if (!changed) return null;
+  return { ...state, scheduledCampaigns: updated, campaigns: [...fired, ...(state.campaigns || [])].slice(0, 50) };
+}
+
 function computeInsights(state) {
   const trailers = state.trailers || [];
   const types = state.types || [];
@@ -2470,6 +2516,10 @@ function MarketingView({ state, setState, update, flash }) {
   const [toProsp, setToProsp] = useState(true);
   const [msg, setMsg] = useState("");
   const [tplId, setTplId] = useState("");
+  const [when, setWhen] = useState("now");     // now | schedule
+  const [sendDate, setSendDate] = useState(""); // YYYY-MM-DD for scheduled sends
+  const [repeat, setRepeat] = useState("none"); // none | yearly (seasonal)
+  const scheduled = state.scheduledCampaigns || [];
 
   const optedOut = new Set(b.marketingOptOut || []);
   const wantsPhone = channel === "text" || channel === "both";
@@ -2495,6 +2545,18 @@ function MarketingView({ state, setState, update, flash }) {
     setState((s) => ({ ...s, campaigns: [camp, ...(s.campaigns || [])].slice(0, 50) }));
     flash(`Queued to ${recipients.length} contact${recipients.length === 1 ? "" : "s"} by ${channelLabel(channel)}. Real sending turns on when your text/email service is connected.`, true);
   };
+
+  const scheduleCampaign = () => {
+    if (!msg.trim()) { flash("Write a message first."); return; }
+    if (!sendDate) { flash("Pick a date to send it."); return; }
+    if (sendDate < today()) { flash("Pick a date in the future."); return; }
+    if (!toCust && !toProsp) { flash("Choose who it goes to."); return; }
+    const sc = { id: "sc" + Date.now(), created: new Date().toISOString(), sendDate, repeat, channel, toCust, toProsp, text: msg };
+    setState((s) => ({ ...s, scheduledCampaigns: [sc, ...(s.scheduledCampaigns || [])] }));
+    setMsg(""); setTplId(""); setSendDate(""); setRepeat("none"); setWhen("now");
+    flash(`Scheduled for ${fmtLong(sendDate)}${repeat === "yearly" ? " · repeats every year" : ""}. It sends automatically on that date.`, true);
+  };
+  const delScheduled = (id) => { setState((s) => ({ ...s, scheduledCampaigns: (s.scheduledCampaigns || []).filter((x) => x.id !== id) })); flash("Scheduled message cancelled.", true); };
 
   const setTpl = (id, patch) => setState((s) => ({ ...s, business: { ...s.business, messageTemplates: (s.business.messageTemplates || []).map((t) => t.id === id ? { ...t, ...patch } : t) } }));
   const addTpl = () => setState((s) => ({ ...s, business: { ...s.business, messageTemplates: [...(s.business.messageTemplates || []), { id: "t" + Date.now(), name: "New template", text: "" }] } }));
@@ -2553,10 +2615,58 @@ function MarketingView({ state, setState, update, flash }) {
         </Field>
         <Field label="Message"><textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={4} placeholder="Type your message… use {name} and {business} and they fill in per person." className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} /></Field>
         {msg.trim() && <div className="text-xs p-2.5 rounded-lg" style={{ background: T.blueSoft, color: T.blue }}><b>Preview (as {sampleName.split(" ")[0]}):</b> {preview}{!link && <span className="block mt-1 opacity-80">Tip: add your booking link in Settings → Payments &amp; messaging so it's appended automatically.</span>}</div>}
-        <button onClick={send} disabled={!recipients.length || !msg.trim()} className="w-full py-2.5 rounded-lg font-extrabold flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: T.amber, color: T.steelDk }}>
-          <Send size={16} /> Send to {recipients.length} contact{recipients.length === 1 ? "" : "s"}
-        </button>
+        <Field label="When to send">
+          <div className="flex gap-1 p-1 rounded-lg" style={{ background: T.paper }}>
+            {[["now", "Send now"], ["schedule", "Schedule"]].map(([v, l]) => seg(v, l, when, setWhen))}
+          </div>
+        </Field>
+        {when === "schedule" && (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wide block mb-1" style={{ color: T.sub }}>Date</label>
+              <input type="date" min={today()} value={sendDate} onChange={(e) => setSendDate(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={{ border: `1px solid ${T.line}` }} />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wide block mb-1" style={{ color: T.sub }}>Repeat</label>
+              <div className="flex gap-1 p-1 rounded-lg" style={{ background: T.paper }}>
+                {[["none", "One time"], ["yearly", "Every year"]].map(([v, l]) => seg(v, l, repeat, setRepeat))}
+              </div>
+            </div>
+          </div>
+        )}
+        {when === "now" ? (
+          <button onClick={send} disabled={!recipients.length || !msg.trim()} className="w-full py-2.5 rounded-lg font-extrabold flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: T.amber, color: T.steelDk }}>
+            <Send size={16} /> Send to {recipients.length} contact{recipients.length === 1 ? "" : "s"}
+          </button>
+        ) : (
+          <button onClick={scheduleCampaign} disabled={!msg.trim() || !sendDate} className="w-full py-2.5 rounded-lg font-extrabold flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: T.amber, color: T.steelDk }}>
+            <Clock size={16} /> {sendDate ? `Schedule for ${fmtLong(sendDate)}${repeat === "yearly" ? " · yearly" : ""}` : "Pick a date above"}
+          </button>
+        )}
       </Card>
+
+      {/* SCHEDULED CAMPAIGNS */}
+      {scheduled.length > 0 && (
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.amberSoft }}><CalendarClock size={16} style={{ color: T.amberDk }} /></span>
+            <h3 className="font-bold text-sm uppercase tracking-wide">Scheduled &amp; automatic · {scheduled.length}</h3>
+          </div>
+          <p className="text-xs" style={{ color: T.sub }}>These send themselves on their date. “Every year” ones (like a seasonal reminder) roll forward automatically after each send.</p>
+          <div className="space-y-2">
+            {[...scheduled].sort((a, b) => (a.sendDate || "").localeCompare(b.sendDate || "")).map((sc) => (
+              <div key={sc.id} className="p-2.5 rounded-lg" style={{ background: T.paper }}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold px-2 py-1 rounded" style={{ background: T.amberSoft, color: T.amberDk }}>{fmtLong(sc.sendDate)}{sc.repeat === "yearly" ? " · every year" : ""}</span>
+                  <button onClick={() => delScheduled(sc.id)} title="Cancel" className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: T.redSoft, color: T.red }}><Trash2 size={13} /></button>
+                </div>
+                <div className="text-xs mt-1" style={{ color: T.sub }}>{channelLabel(sc.channel)} · {[sc.toCust ? "customers" : null, sc.toProsp ? "prospects" : null].filter(Boolean).join(" + ")}</div>
+                <div className="text-[13px] mt-1">{sc.text}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* PROSPECTS */}
       <Card className="p-4 space-y-3">
