@@ -349,7 +349,7 @@ const SEED = {
     notifyReview: true, reviewLink: "", reviewMessage: "Thanks for renting with us! If everything went smoothly, would you leave us a quick review? It only takes a minute and really helps our small business. 🙏",
     ownerNotify: true, ownerNotifyChannel: "both", ownerAlertEmail: "", ownerAlertPhone: "",
     ownerAlertNewBooking: true, ownerAlertCancel: true, ownerAlertTextToBook: true, ownerAlertScheduleChange: false, ownerAlertHandoff: true,
-    textToBookAutoReply: true, bookingLink: "", textToBookMessage: "Thanks for reaching out! You can book your trailer online in about a minute here:", textToBookNotifyChannel: "both",
+    textToBookAutoReply: true, bookingLink: "", textToBookMessage: "Thanks for texting us! You can book — or change or cancel an existing rental — online in about a minute here:", textToBookNotifyChannel: "both",
     marketingRebook: false, marketingRebookMessage: "Hi! It's been a while since your last rental — need a dump trailer again? You can book online in about a minute:", marketingRebookDays: 90, marketingRebookChannel: "text", marketingOptOut: [], marketingPrefs: {},
     messageTemplates: [
       { id: "t_winback", name: "Win-back (haven't rented lately)", text: "Hi {name}, it's {business} — been a while! Need a dump trailer for a cleanout, roofing, or demo job? Book online in about a minute:" },
@@ -479,7 +479,8 @@ export default function App({ embed = false }) {
     try { if (typeof window !== "undefined" && !embed) { const eid = sessionStorage.getItem("yardhand_emp"); if (eid) { setEmployeeId(eid); setMode("employee"); } } } catch (e) { /* ignore */ }
     // hidden staff entrance: visiting /#owner or /#team opens the sign-in door. There is no public
     // link to it, so customers never see "owner access" — the owner bookmarks the URL for themselves/crew.
-    try { if (typeof window !== "undefined" && !embed) { const h = (window.location.hash || "").toLowerCase(); if (h === "#owner") setMode("owner"); else if (h === "#team") setMode("employee"); } } catch (e) { /* ignore */ }
+    // public deep links: /#manage opens "Manage my booking" (for change/cancel), /#book opens booking.
+    try { if (typeof window !== "undefined" && !embed) { const h = (window.location.hash || "").toLowerCase(); if (h === "#owner") setMode("owner"); else if (h === "#team") setMode("employee"); else if (h === "#manage") { setCustStart("manage"); setMode("customer"); } else if (h === "#book") { setCustStart("book"); setMode("customer"); } } } catch (e) { /* ignore */ }
     // realtime: pick up changes made on another device (ignore our own echoes)
     return subscribeWorkspace((incoming) => {
       setState((prev) => JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming);
@@ -679,7 +680,7 @@ function Landing({ state, typeBySize, go, owner, team, operator }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => go("manage")} className="px-3 py-2 rounded-lg text-sm font-bold hidden sm:block" style={{ color: "#D8DEE2" }}>Manage booking</button>
+            <button onClick={() => go("manage")} className="px-3 py-2 rounded-lg text-sm font-bold" style={{ color: "#D8DEE2" }}><span className="sm:hidden">Manage</span><span className="hidden sm:inline">Manage / cancel</span></button>
             <button onClick={() => go("book")} className="px-4 py-2 rounded-lg text-sm font-extrabold flex items-center gap-1.5" style={{ background: T.amber, color: T.steelDk }}>Book now <ArrowRight size={15} /></button>
           </div>
         </div>
@@ -699,8 +700,9 @@ function Landing({ state, typeBySize, go, owner, team, operator }) {
           </p>
           <div className="flex flex-wrap gap-3 mt-6">
             <button onClick={() => go("book")} className="px-5 py-3 rounded-xl text-base font-extrabold flex items-center gap-2" style={{ background: T.amber, color: T.steelDk }}>Book a trailer <ArrowRight size={17} /></button>
-            <button onClick={() => go("manage")} className="px-5 py-3 rounded-xl text-base font-bold" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>Manage my booking</button>
+            <button onClick={() => go("manage")} className="px-5 py-3 rounded-xl text-base font-bold" style={{ background: "#fff", color: T.steel, border: `1px solid ${T.line}` }}>Manage or cancel booking</button>
           </div>
+          <p className="text-sm mt-3" style={{ color: T.sub }}>Already reserved? <button onClick={() => go("manage")} className="font-bold underline" style={{ color: T.steel }}>Change or cancel your booking</button> anytime with your confirmation code.</p>
           <a href={`sms:${(b.phone || "").replace(/\D/g, "")}`} className="inline-flex items-center gap-2 mt-4 px-5 py-3 rounded-xl text-base font-bold" style={{ background: T.steelDk, color: "#fff" }}>
             <Phone size={17} style={{ color: T.amber }} /> Text to book a trailer · {b.phone}
           </a>
@@ -4713,6 +4715,7 @@ function CustomerBooking({ state, typeBySize, countAvail, findUnit, addBooking, 
             ); })}
             {currentItem && <div className="text-[11px] px-1" style={{ color: T.amberDk }}>+ the piece you're setting up now</div>}
           </div>
+          <button onClick={() => { setCart([]); set({ size: null }); setStepN(0); flash("Order cleared — starting fresh.", true); }} className="mt-2 text-xs font-bold flex items-center gap-1" style={{ color: T.red }}><Trash2 size={13} /> Clear order &amp; start over</button>
         </Card>
       )}
 
